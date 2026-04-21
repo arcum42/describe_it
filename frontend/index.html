@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>describe_it</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script defer src="/static/app.js"></script>
+  </head>
+  <body class="bg-stone-950 text-stone-100">
+    <div x-data="describeItApp()" x-init="init()" class="min-h-screen">
+      <header class="border-b border-stone-800 bg-stone-900/95 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div>
+            <p class="text-xs uppercase tracking-[0.35em] text-amber-400">describe_it</p>
+            <h1 class="text-2xl font-semibold text-stone-50">Dataset Captioning Workbench</h1>
+          </div>
+          <div class="text-sm text-stone-400">
+            <span>Backend:</span>
+            <span class="ml-2 rounded-full border border-stone-700 px-3 py-1" x-text="healthLabel"></span>
+          </div>
+        </div>
+      </header>
+
+      <main class="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+          <div class="mb-6 flex items-center justify-between">
+            <h2 class="text-lg font-medium">Projects</h2>
+            <button class="rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-amber-300">
+              New
+            </button>
+          </div>
+          <template x-if="recentProjects.length === 0">
+            <p class="text-sm text-stone-400">No projects yet. Phase 2 will add create/open flows.</p>
+          </template>
+          <ul class="space-y-3">
+            <template x-for="project in recentProjects" :key="project.path">
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">
+                <p class="font-medium" x-text="project.name"></p>
+                <p class="text-xs text-stone-400" x-text="project.path"></p>
+              </li>
+            </template>
+          </ul>
+        </aside>
+
+        <section class="space-y-6">
+          <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Grid View Placeholder</h2>
+                <span class="rounded-full border border-stone-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-stone-400">
+                  Phase 1
+                </span>
+              </div>
+              <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                <template x-for="card in gridCards" :key="card.id">
+                  <button class="group overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 text-left transition hover:-translate-y-0.5 hover:border-amber-400/50">
+                    <div class="aspect-square bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950"></div>
+                    <div class="space-y-2 px-3 py-3">
+                      <div class="flex items-center justify-between text-xs text-stone-400">
+                        <span x-text="card.label"></span>
+                        <span x-text="card.status"></span>
+                      </div>
+                      <p class="text-sm text-stone-300">Image preview placeholder</p>
+                    </div>
+                  </button>
+                </template>
+              </div>
+            </section>
+
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Editor Placeholder</h2>
+                <span class="text-xs text-stone-500">Single-image workflow lands in Phase 4</span>
+              </div>
+              <div class="space-y-4">
+                <div class="aspect-[4/3] rounded-2xl border border-dashed border-stone-700 bg-stone-950/70"></div>
+                <label class="block text-sm font-medium text-stone-300">Active Caption</label>
+                <textarea
+                  class="min-h-40 w-full rounded-2xl border border-stone-800 bg-stone-950 px-4 py-3 text-sm text-stone-200 outline-none ring-0 placeholder:text-stone-500 focus:border-amber-400"
+                  placeholder="Caption editing will live here."
+                ></textarea>
+                <div class="flex flex-wrap gap-3">
+                  <button class="rounded-xl border border-stone-700 px-4 py-2 text-sm text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                    Generate Caption
+                  </button>
+                  <button class="rounded-xl border border-stone-700 px-4 py-2 text-sm text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                    Export Dataset
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+            <div class="mb-4 flex items-center justify-between">
+              <h2 class="text-lg font-medium">Phase 1 Notes</h2>
+              <span class="text-xs uppercase tracking-[0.2em] text-stone-500">scaffold complete</span>
+            </div>
+            <ul class="grid gap-3 text-sm text-stone-300 md:grid-cols-2">
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">FastAPI serves this static frontend shell.</li>
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Alpine.js handles lightweight UI state with no JS build pipeline.</li>
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">ChromaDB remains optional and is separated into optional dependencies.</li>
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Backend routers and service modules are scaffolded for the next phase.</li>
+            </ul>
+          </section>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
