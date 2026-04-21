@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.services.import_service import import_folder_into_project
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -24,6 +25,12 @@ class UpdateProjectRequest(BaseModel):
     description: str = ""
     trigger_word: str = ""
     caption_mode: str = Field(pattern="^(description|tags)$")
+
+
+class ImportFolderRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    source_folder: str = Field(min_length=1)
+    replace_existing: bool = False
 
 
 @router.get("/recent")
@@ -77,3 +84,16 @@ def update_project_route(request: UpdateProjectRequest) -> dict[str, dict[str, s
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {"project": project.__dict__}
+
+
+@router.post("/import-folder")
+def import_folder_route(request: ImportFolderRequest) -> dict[str, object]:
+    try:
+        result = import_folder_into_project(
+            project_path=request.project_path.strip(),
+            source_folder=request.source_folder.strip(),
+            replace_existing=request.replace_existing,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"result": result.__dict__}
