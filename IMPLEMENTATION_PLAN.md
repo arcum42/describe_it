@@ -130,11 +130,23 @@ describe_it/
 - Store original image bytes in SQLite BLOBs
 - Create blank captions when no caption file exists
 
+### First test case
+
+Use the local dataset at `practice_dataset/CheerBear/` as the first real import verification set.
+
+- Create a project named `CheerBear`
+- Store it at `projects/cheerbear.db`
+- Import the full `practice_dataset/CheerBear/` folder into that project
+- Verify that matching image/text pairs are detected correctly
+- Verify that images without captions get blank caption entries
+- Keep the `CheerBear` source folder out of git; it is local test data, not project source
+
 ### Deliverables
 
 - Folder import works for common image formats
 - Original bytes are preserved untouched
 - Imported records appear in the grid view
+- `CheerBear` import succeeds as the first end-to-end Phase 3 verification
 
 ---
 
@@ -249,11 +261,11 @@ describe-it export --project path/to/project.db --output ./export
 
 ## Immediate Next Tasks
 
-1. Create the base directory structure and placeholder files
-2. Set up `requirements.txt` and `requirements-optional.txt`
-3. Add a minimal FastAPI app that serves the frontend shell and a health endpoint
-4. Add the initial `.github/instructions/describe_it.instructions.md`
-5. Verify the app starts locally on port `7860`
+1. Build the Phase 3 folder import service and API route
+2. Create the `CheerBear` project at `projects/cheerbear.db`
+3. Import `practice_dataset/CheerBear/` as the first end-to-end dataset test
+4. Show imported images and caption status in the grid view
+5. Verify image/text pairing against the source folder contents
 
 ---
 

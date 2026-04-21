@@ -1,4 +1,7 @@
 .venv/
+.describe_it/
+practice_dataset/*
+!practice_dataset/.gitkeep
 __pycache__/
 *.pyc
 *.pyo

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>describe_it</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/static/styles.css" />
@@ -28,18 +29,161 @@
         <aside class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
           <div class="mb-6 flex items-center justify-between">
             <h2 class="text-lg font-medium">Projects</h2>
-            <button class="rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium text-stone-950 hover:bg-amber-300">
-              New
+            <span class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-400">Phase 2</span>
+          </div>
+          <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+            <div>
+              <p class="text-sm font-medium text-stone-200">Create Project</p>
+              <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to the recent list.</p>
+            </div>
+            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+              Name
+              <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
+            </label>
+            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+              Path
+              <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+            </label>
+            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+              Description
+              <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
+            </label>
+            <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+              Create Project
             </button>
           </div>
-          <template x-if="recentProjects.length === 0">
-            <p class="text-sm text-stone-400">No projects yet. Phase 2 will add create/open flows.</p>
+
+          <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+            <div>
+              <p class="text-sm font-medium text-stone-200">Open Project</p>
+              <p class="text-xs text-stone-500">Register an existing project database and load its metadata.</p>
+            </div>
+            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+              Existing DB Path
+              <input x-model="openForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+            </label>
+            <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+              Open Project
+            </button>
+          </div>
+
+          <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-medium text-stone-200">Path Browser</p>
+                <p class="text-xs text-stone-500">Browse directories and `.db` files without typing full paths.</p>
+              </div>
+              <button @click="loadBrowser(browser.currentPath)" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                Refresh
+              </button>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <template x-for="root in browser.roots" :key="root">
+                <button @click="loadBrowser(root)" class="rounded-full border border-stone-700 px-3 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200" x-text="root"></button>
+              </template>
+            </div>
+
+            <div class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-400">
+              <p>Current: <span class="break-all" x-text="browser.currentPath"></span></p>
+            </div>
+
+            <div class="flex gap-2">
+              <button @click="browser.parentPath && loadBrowser(browser.parentPath)" :disabled="!browser.parentPath" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                Up
+              </button>
+              <button @click="chooseCreateDirectory(browser.currentPath)" class="rounded-xl bg-stone-200 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-950 hover:bg-stone-100">
+                Use Dir For Create
+              </button>
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-2">
+              <div>
+                <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Directories</p>
+                <div class="max-h-48 space-y-2 overflow-auto pr-1">
+                  <template x-for="directory in browser.directories" :key="directory.path">
+                    <button @click="loadBrowser(directory.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60">
+                      <span x-text="directory.name"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+              <div>
+                <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Project DB Files</p>
+                <div class="max-h-48 space-y-2 overflow-auto pr-1">
+                  <template x-if="browser.dbFiles.length === 0">
+                    <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No `.db` files in this directory.</p>
+                  </template>
+                  <template x-for="file in browser.dbFiles" :key="file.path">
+                    <button @click="chooseOpenFile(file.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60">
+                      <span x-text="file.name"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <template x-if="statusMessage">
+            <p class="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200" x-text="statusMessage"></p>
           </template>
-          <ul class="space-y-3">
+          <template x-if="errorMessage">
+            <p class="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200" x-text="errorMessage"></p>
+          </template>
+
+          <template x-if="currentProject">
+            <div class="mt-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Current Project</p>
+              <p class="mt-2 font-medium text-stone-100" x-text="currentProject.name"></p>
+              <p class="mt-1 break-all text-xs text-stone-400" x-text="currentProject.path"></p>
+              <p class="mt-3 text-sm text-stone-300" x-text="currentProject.description || 'No description yet.'"></p>
+              <div class="mt-4 space-y-3 border-t border-stone-800 pt-4">
+                <p class="text-sm font-medium text-stone-200">Edit Metadata</p>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Name
+                  <input x-model="metadataForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Description
+                  <textarea x-model="metadataForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"></textarea>
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Trigger Word
+                  <input x-model="metadataForm.trigger_word" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional_trigger" />
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Caption Mode
+                  <select x-model="metadataForm.caption_mode" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                    <option value="description">Description</option>
+                    <option value="tags">Tags</option>
+                  </select>
+                </label>
+                <button @click="saveMetadata()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                  Save Metadata
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <div class="mt-6 flex items-center justify-between">
+            <h3 class="text-sm font-medium text-stone-200">Recent Projects</h3>
+            <span class="text-xs text-stone-500" x-text="`${recentProjects.length} tracked`"></span>
+          </div>
+          <template x-if="recentProjects.length === 0">
+            <p class="mt-3 text-sm text-stone-400">No projects yet. Create one above or open an existing database.</p>
+          </template>
+          <ul class="mt-3 space-y-3">
             <template x-for="project in recentProjects" :key="project.path">
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">
-                <p class="font-medium" x-text="project.name"></p>
-                <p class="text-xs text-stone-400" x-text="project.path"></p>
+              <li>
+                <button @click="openRecentProject(project.path)" class="w-full rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-left transition hover:border-amber-400/50">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="font-medium" x-text="project.name"></p>
+                      <p class="text-xs text-stone-400" x-text="project.path"></p>
+                    </div>
+                    <span class="rounded-full border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-500">Open</span>
+                  </div>
+                </button>
               </li>
             </template>
           </ul>
@@ -51,9 +195,14 @@
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">Grid View Placeholder</h2>
                 <span class="rounded-full border border-stone-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-stone-400">
-                  Phase 1
+                  Phase 2
                 </span>
               </div>
+              <template x-if="currentProject">
+                <div class="mb-4 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300">
+                  Working project: <span class="font-medium text-stone-100" x-text="currentProject.name"></span>
+                </div>
+              </template>
               <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                 <template x-for="card in gridCards" :key="card.id">
                   <button class="group overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 text-left transition hover:-translate-y-0.5 hover:border-amber-400/50">
@@ -103,7 +252,7 @@
               <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">FastAPI serves this static frontend shell.</li>
               <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Alpine.js handles lightweight UI state with no JS build pipeline.</li>
               <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">ChromaDB remains optional and is separated into optional dependencies.</li>
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Backend routers and service modules are scaffolded for the next phase.</li>
+              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Recent-project tracking and project create/open flows are now active.</li>
             </ul>
           </section>
         </section>
