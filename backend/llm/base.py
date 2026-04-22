@@ -7,3 +7,5 @@ from dataclasses import dataclass
 class BackendInfo:
     name: str
     available: bool = False
+    models: list[str] | None = None
+    error: str | None = None

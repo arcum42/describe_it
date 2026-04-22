@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.services.app_state_service import get_project_session_state, update_project_session_state
 from backend.services.import_service import import_folder_into_project
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
@@ -33,9 +34,29 @@ class ImportFolderRequest(BaseModel):
     replace_existing: bool = False
 
 
+class UpdateSessionStateRequest(BaseModel):
+    last_project_path: str = ""
+    last_project_directory: str = ""
+    reopen_last_project: bool = True
+
+
 @router.get("/recent")
 def recent_projects() -> dict[str, list[dict[str, str]]]:
     return {"projects": [entry.__dict__ for entry in list_recent_projects()]}
+
+
+@router.get("/session-state")
+def get_session_state() -> dict[str, object]:
+    return get_project_session_state()
+
+
+@router.post("/session-state")
+def update_session_state(request: UpdateSessionStateRequest) -> dict[str, object]:
+    return update_project_session_state(
+        last_project_path=request.last_project_path,
+        last_project_directory=request.last_project_directory,
+        reopen_last_project=request.reopen_last_project,
+    )
 
 
 @router.get("/browser")

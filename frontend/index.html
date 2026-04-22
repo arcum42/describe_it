@@ -6,9 +6,9 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="/static/styles.css" />
     <script defer src="/static/app.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
     <div x-data="describeItApp()" x-init="init()" class="min-h-screen">
@@ -18,9 +18,24 @@
             <p class="text-xs uppercase tracking-[0.35em] text-amber-400">describe_it</p>
             <h1 class="text-2xl font-semibold text-stone-50">Dataset Captioning Workbench</h1>
           </div>
-          <div class="text-sm text-stone-400">
-            <span>Backend:</span>
-            <span class="ml-2 rounded-full border border-stone-700 px-3 py-1" x-text="healthLabel"></span>
+          <div class="flex items-center gap-3 text-sm text-stone-400">
+            <div>
+              <span>Backend:</span>
+              <span class="ml-2 rounded-full border border-stone-700 px-3 py-1" x-text="healthLabel"></span>
+            </div>
+            <button
+              @click="uiSection === 'settings' ? openWorkspace() : openSettings()"
+              class="flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200"
+              :class="uiSection === 'settings' ? 'border-amber-500 text-amber-200' : ''"
+              aria-label="Toggle settings view"
+              title="Toggle settings view"
+            >
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5A3.5 3.5 0 1 0 12 15.5z" />
+                <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h0a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5h0a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v0a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z" />
+              </svg>
+              <span x-text="uiSection === 'settings' ? 'Back' : 'Settings'"></span>
+            </button>
           </div>
         </div>
       </header>
@@ -29,34 +44,80 @@
         <aside class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
           <div class="mb-6 flex items-center justify-between">
             <h2 class="text-lg font-medium">Projects</h2>
-            <span class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-400">Phase 2</span>
+            <span class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-400">Phase 4</span>
           </div>
-          <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-            <div>
-              <p class="text-sm font-medium text-stone-200">Create Project</p>
-              <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to the recent list.</p>
+          <template x-if="!currentProject">
+            <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <div>
+                <p class="text-sm font-medium text-stone-200">Create Project</p>
+                <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to the recent list.</p>
+              </div>
+              <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                Name
+                <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
+              </label>
+              <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                Path
+                <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+              </label>
+              <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                Description
+                <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
+              </label>
+              <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                Create Project
+              </button>
             </div>
-            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-              Name
-              <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
-            </label>
-            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-              Path
-              <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
-            </label>
-            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-              Description
-              <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
-            </label>
-            <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
-              Create Project
-            </button>
-          </div>
+          </template>
+
+          <template x-if="currentProject">
+            <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <p class="text-sm font-medium text-stone-200">Current Project</p>
+                  <p class="text-xs text-stone-500">Project metadata and session controls.</p>
+                </div>
+                <button @click="closeProject()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                  Close
+                </button>
+              </div>
+              <div>
+                <p class="font-medium text-stone-100" x-text="currentProject.name"></p>
+                <p class="mt-1 break-all text-xs text-stone-400" x-text="currentProject.path"></p>
+                <p class="mt-3 text-sm text-stone-300" x-text="currentProject.description || 'No description yet.'"></p>
+              </div>
+              <div class="space-y-3 border-t border-stone-800 pt-4">
+                <p class="text-sm font-medium text-stone-200">Edit Metadata</p>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Name
+                  <input x-model="metadataForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Description
+                  <textarea x-model="metadataForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"></textarea>
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Trigger Word
+                  <input x-model="metadataForm.trigger_word" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional_trigger" />
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Caption Mode
+                  <select x-model="metadataForm.caption_mode" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                    <option value="description">Description</option>
+                    <option value="tags">Tags</option>
+                  </select>
+                </label>
+                <button @click="saveMetadata()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                  Save Metadata
+                </button>
+              </div>
+            </div>
+          </template>
 
           <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
             <div>
               <p class="text-sm font-medium text-stone-200">Open Project</p>
-              <p class="text-xs text-stone-500">Register an existing project database and load its metadata.</p>
+              <p class="text-xs text-stone-500">Open an existing project database, or browse for one below.</p>
             </div>
             <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
               Existing DB Path
@@ -65,31 +126,10 @@
             <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
               Open Project
             </button>
-          </div>
-
-          <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-            <div>
-              <p class="text-sm font-medium text-stone-200">Import Folder</p>
-              <p class="text-xs text-stone-500">Import image/text pairs into the current project.</p>
-            </div>
-            <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-              Source Folder
-              <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/CheerBear" />
-            </label>
-            <label class="flex items-center gap-2 text-sm text-stone-300">
-              <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
-              Replace existing images in project
-            </label>
-            <button @click="importFolder()" :disabled="isSubmitting || !currentProject" class="w-full rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
-              Import Folder
-            </button>
-          </div>
-
-          <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
             <div class="flex items-center justify-between gap-3">
               <div>
                 <p class="text-sm font-medium text-stone-200">Path Browser</p>
-                <p class="text-xs text-stone-500">Browse directories and `.db` files without typing full paths.</p>
+                <p class="text-xs text-stone-500">Browse directories and `.db` files to fill the open path.</p>
               </div>
               <button @click="loadBrowser(browser.currentPath)" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
                 Refresh
@@ -110,9 +150,14 @@
               <button @click="browser.parentPath && loadBrowser(browser.parentPath)" :disabled="!browser.parentPath" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                 Up
               </button>
-              <button @click="chooseCreateDirectory(browser.currentPath)" class="rounded-xl bg-stone-200 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-950 hover:bg-stone-100">
-                Use Dir For Create
-              </button>
+              <template x-if="!currentProject">
+                <button @click="chooseCreateDirectory(browser.currentPath)" class="rounded-xl bg-stone-200 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-950 hover:bg-stone-100">
+                  Use Dir For Create
+                </button>
+              </template>
+              <template x-if="currentProject">
+                <span class="rounded-xl border border-stone-800 px-3 py-2 text-xs text-stone-500">Select a `.db` file to fill the open field.</span>
+              </template>
             </div>
 
             <div class="grid gap-3 md:grid-cols-2">
@@ -150,36 +195,28 @@
           </template>
 
           <template x-if="currentProject">
-            <div class="mt-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-              <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Current Project</p>
-              <p class="mt-2 font-medium text-stone-100" x-text="currentProject.name"></p>
-              <p class="mt-1 break-all text-xs text-stone-400" x-text="currentProject.path"></p>
-              <p class="mt-3 text-sm text-stone-300" x-text="currentProject.description || 'No description yet.'"></p>
-              <div class="mt-4 space-y-3 border-t border-stone-800 pt-4">
-                <p class="text-sm font-medium text-stone-200">Edit Metadata</p>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Name
-                  <input x-model="metadataForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
-                </label>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Description
-                  <textarea x-model="metadataForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"></textarea>
-                </label>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Trigger Word
-                  <input x-model="metadataForm.trigger_word" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional_trigger" />
-                </label>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Caption Mode
-                  <select x-model="metadataForm.caption_mode" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
-                    <option value="description">Description</option>
-                    <option value="tags">Tags</option>
-                  </select>
-                </label>
-                <button @click="saveMetadata()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
-                  Save Metadata
-                </button>
+            <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <div>
+                <p class="text-sm font-medium text-stone-200">Import Folder</p>
+                <p class="text-xs text-stone-500">Import image/text pairs into the current project.</p>
               </div>
+              <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                Source Folder
+                <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Replace existing images in project
+              </label>
+              <button @click="importFolder()" :disabled="isSubmitting || !currentProject" class="w-full rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                Import Folder
+              </button>
+            </div>
+          </template>
+
+          <template x-if="!currentProject">
+            <div class="mt-4 rounded-xl border border-stone-800 bg-stone-950/40 px-4 py-3 text-sm text-stone-500">
+              Create a new project or open an existing one to start importing and editing images.
             </div>
           </template>
 
@@ -187,40 +224,52 @@
             <h3 class="text-sm font-medium text-stone-200">Recent Projects</h3>
             <span class="text-xs text-stone-500" x-text="`${recentProjects.length} tracked`"></span>
           </div>
-          <template x-if="recentProjects.length === 0">
-            <p class="mt-3 text-sm text-stone-400">No projects yet. Create one above or open an existing database.</p>
-          </template>
-          <ul class="mt-3 space-y-3">
+          <div class="mt-3 space-y-2">
             <template x-for="project in recentProjects" :key="project.path">
-              <li>
-                <button @click="openRecentProject(project.path)" class="w-full rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-left transition hover:border-amber-400/50">
-                  <div class="flex items-start justify-between gap-3">
-                    <div>
-                      <p class="font-medium" x-text="project.name"></p>
-                      <p class="text-xs text-stone-400" x-text="project.path"></p>
-                    </div>
-                    <span class="rounded-full border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-500">Open</span>
-                  </div>
-                </button>
-              </li>
+              <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-950/60 px-4 py-3 text-left text-sm text-stone-200 transition hover:border-amber-400/60">
+                <p class="font-medium text-stone-100" x-text="project.name"></p>
+                <p class="mt-1 break-all text-xs text-stone-500" x-text="project.path"></p>
+              </button>
             </template>
-          </ul>
+            <template x-if="recentProjects.length === 0">
+              <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-4 py-3 text-sm text-stone-500">No recent projects yet.</p>
+            </template>
+          </div>
         </aside>
 
         <section class="space-y-6">
-          <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
-            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
-              <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-lg font-medium">Grid View</h2>
-                <span class="rounded-full border border-stone-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-stone-400">
-                  Phase 4
-                </span>
-              </div>
-              <template x-if="currentProject">
-                <div class="mb-4 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300">
-                  Working project: <span class="font-medium text-stone-100" x-text="currentProject.name"></span>
+          <template x-if="uiSection === 'workspace'">
+            <div class="space-y-6">
+              <div class="flex items-center justify-between rounded-2xl border border-stone-800 bg-stone-900 p-3 shadow-2xl shadow-black/20">
+                <div class="inline-flex gap-2 rounded-xl border border-stone-800 bg-stone-950/60 p-1">
+                  <button
+                    @click="mainView = 'grid'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'grid' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Grid
+                  </button>
+                  <button
+                    @click="selectedImage && (mainView = 'editor')"
+                    :disabled="!selectedImage"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="mainView === 'editor' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Editor
+                  </button>
+                  <button
+                    @click="mainView = 'llm'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'llm' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    LLM
+                  </button>
                 </div>
-              </template>
+                <span class="text-xs text-stone-500" x-text="mainView === 'grid' ? 'Browse and pick an image' : (mainView === 'editor' ? 'Single image editing mode' : 'Preset management and prompt strategy')"></span>
+              </div>
+
+              <template x-if="mainView === 'grid'">
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <template x-if="currentProject">
                 <div class="mb-4 grid gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300 md:grid-cols-3">
                   <div>
@@ -239,8 +288,10 @@
               </template>
               <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                 <template x-for="card in gridCards" :key="card.id">
-                  <button @click="selectImage(card.id)" class="group overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 text-left transition hover:-translate-y-0.5 hover:border-amber-400/50" :class="selectedImage && selectedImage.id === card.id ? 'border-amber-400 ring-1 ring-amber-400/50' : ''">
-                    <div class="aspect-square bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950"></div>
+                  <button @click="selectImage(card.id, true)" class="group overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 text-left transition hover:-translate-y-0.5 hover:border-amber-400/50" :class="selectedImage && selectedImage.id === card.id ? 'border-amber-400 ring-1 ring-amber-400/50' : ''">
+                    <div class="aspect-square overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950">
+                      <img :src="imageSrc(card.id)" :alt="card.label" class="h-full w-full object-cover" loading="lazy" />
+                    </div>
                     <div class="space-y-2 px-3 py-3">
                       <div class="flex items-center justify-between text-xs text-stone-400">
                         <span x-text="card.label"></span>
@@ -256,9 +307,11 @@
                   </p>
                 </template>
               </div>
-            </section>
+                </section>
+              </template>
 
-            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <template x-if="mainView === 'editor'">
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">Single Image Editor</h2>
                 <span class="text-xs text-stone-500">Manual caption + candidate workflow</span>
@@ -276,6 +329,77 @@
                     <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
                       <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
                     </button>
+                  </div>
+
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <p class="text-sm font-medium text-stone-200">LLM Caption Generator</p>
+                      <button @click="loadLLMBackends()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        Refresh Models
+                      </button>
+                    </div>
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Backend
+                        <select x-model="llm.backend" @change="onLLMBackendChanged()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <template x-for="backend in llm.backends" :key="backend.name">
+                            <option :value="backend.name" :disabled="!backend.available" x-text="backend.available ? backend.name : `${backend.name} (offline)`"></option>
+                          </template>
+                        </select>
+                      </label>
+
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Model
+                        <select x-model="llm.model" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <template x-for="modelName in (selectedLLMBackend() ? selectedLLMBackend().models : [])" :key="modelName">
+                            <option :value="modelName" x-text="modelName"></option>
+                          </template>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Preset
+                      <select x-model="llm.selectedPresetId" @change="onSelectedPresetChanged()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                        <option value="">Manual prompt mode</option>
+                        <template x-for="preset in llm.presets" :key="preset.id">
+                          <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name})`"></option>
+                        </template>
+                      </select>
+                    </label>
+
+                    <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Extra Instructions
+                      <textarea x-model="llm.extraInstructions" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional style guidance for generation"></textarea>
+                    </label>
+
+                    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                      <label class="flex items-center gap-2 text-sm text-stone-300">
+                        <input type="checkbox" x-model="llm.makeActive" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Set generated caption as active
+                      </label>
+                      <span class="text-xs text-stone-500" x-text="`Timeout: ${settings.llmTimeoutSeconds}s`"></span>
+                      <button
+                        @click="generateCaptionWithLLM()"
+                        :disabled="isSubmitting || !!llm.selectedPresetId || !llm.backend || !llm.model"
+                        class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Generate Manual Caption
+                      </button>
+                      <button
+                        @click="generateCaptionWithPreset()"
+                        :disabled="isSubmitting || !llm.selectedPresetId"
+                        class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        Generate With Preset
+                      </button>
+                    </div>
+                    <template x-if="llm.backends.length === 0">
+                      <p class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
+                        No LLM backend is reachable yet. Start Ollama or LM Studio, then refresh models.
+                      </p>
+                    </template>
                   </div>
 
                   <div>
@@ -326,24 +450,156 @@
               </template>
               <template x-if="!selectedImage">
                 <div class="rounded-2xl border border-dashed border-stone-700 bg-stone-950/70 px-4 py-8 text-center text-sm text-stone-500">
-                  Select an image from the grid to start editing captions.
+                  Select an image from the grid tab to start editing captions.
                 </div>
               </template>
-            </section>
-          </div>
-
-          <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
-            <div class="mb-4 flex items-center justify-between">
-              <h2 class="text-lg font-medium">Phase 1 Notes</h2>
-              <span class="text-xs uppercase tracking-[0.2em] text-stone-500">scaffold complete</span>
+                </section>
+              </template>
             </div>
-            <ul class="grid gap-3 text-sm text-stone-300 md:grid-cols-2">
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">FastAPI serves this static frontend shell.</li>
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Alpine.js handles lightweight UI state with no JS build pipeline.</li>
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">ChromaDB remains optional and is separated into optional dependencies.</li>
-              <li class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">Recent-project tracking and project create/open flows are now active.</li>
-            </ul>
-          </section>
+          </template>
+
+          <template x-if="uiSection === 'workspace' && mainView === 'llm'">
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">LLM Presets</h2>
+                <button @click="loadLLMBackends(); loadLLMPresets()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                  Refresh
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <div class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-xs text-stone-500">
+                  Presets are global for this installation and shared across projects.
+                </div>
+                <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500">Presets</p>
+                    <div class="max-h-72 space-y-2 overflow-auto pr-1">
+                      <template x-for="preset in llm.presets" :key="preset.id">
+                        <button @click="applyPresetToForm(preset)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="llm.presetForm.id === preset.id ? 'border-amber-500 ring-1 ring-amber-500/50' : ''">
+                          <p class="font-medium text-stone-100" x-text="preset.name"></p>
+                          <p class="mt-1 text-xs text-stone-500" x-text="`${preset.backend} / ${preset.model_name}`"></p>
+                        </button>
+                      </template>
+                      <template x-if="llm.presets.length === 0">
+                        <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No presets yet.</p>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500" x-text="llm.presetForm.id ? 'Edit Preset' : 'Create Preset'"></p>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Preset Name
+                        <input x-model="llm.presetForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Description Default" />
+                      </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Backend
+                          <select x-model="llm.presetForm.backend" @change="onPresetBackendChanged()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <template x-for="backend in llm.backends" :key="backend.name">
+                              <option :value="backend.name" :disabled="!backend.available" x-text="backend.available ? backend.name : `${backend.name} (offline)`"></option>
+                            </template>
+                          </select>
+                        </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                          Model
+                          <select x-model="llm.presetForm.modelName" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <template x-for="modelName in availableModelsForBackend(llm.presetForm.backend)" :key="modelName">
+                              <option :value="modelName" x-text="modelName"></option>
+                            </template>
+                          </select>
+                        </label>
+                      </div>
+
+                      <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Prompt Template
+                        <textarea x-model="llm.presetForm.systemPrompt" class="mt-2 min-h-40 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="You are a captioning assistant for {project_name}. Current caption: {active_caption}"></textarea>
+                      </label>
+
+                      <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
+                        Supported placeholders: {project_name}, {project_description}, {project_trigger_word}, {project_caption_mode}, {filename}, {active_caption}, {caption_1}, {caption_2}, ...
+                      </div>
+
+                    <div class="mt-4 flex flex-wrap gap-3">
+                      <button @click="createPreset()" :disabled="isSubmitting" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                        Create
+                      </button>
+                      <button @click="updatePreset()" :disabled="isSubmitting || !llm.presetForm.id" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Update
+                      </button>
+                      <button @click="deletePreset()" :disabled="isSubmitting || !llm.presetForm.id" class="rounded-xl border border-red-700 px-4 py-2 text-sm font-medium text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Delete
+                      </button>
+                      <button @click="resetPresetForm()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        New Draft
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </template>
+
+          <template x-if="uiSection === 'settings'">
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Settings</h2>
+                <span class="text-xs text-stone-500">Workspace preferences</span>
+              </div>
+
+              <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                <p class="text-sm font-medium text-stone-200">LLM</p>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Generation Timeout (seconds)
+                  <input
+                    type="number"
+                    min="10"
+                    max="900"
+                    step="1"
+                    x-model.number="settings.llmTimeoutSeconds"
+                    class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"
+                  />
+                </label>
+                <p class="text-xs text-stone-500">Used for caption generation requests to Ollama and LM Studio. Larger models may need higher values.</p>
+
+                <label class="flex items-center gap-2 text-sm text-stone-300">
+                  <input type="checkbox" x-model="settings.usePresetByDefault" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Use preset by default for generation
+                </label>
+
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Default Preset
+                  <select x-model="settings.defaultPresetId" :disabled="llm.presets.length === 0" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-50">
+                    <option value="">No default preset</option>
+                    <template x-for="preset in llm.presets" :key="preset.id">
+                      <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name})`"></option>
+                    </template>
+                  </select>
+                </label>
+                <template x-if="llm.presets.length === 0">
+                  <p class="text-xs text-stone-500">No presets available yet. Create one in the LLM tab to use preset defaults.</p>
+                </template>
+
+                <p class="text-sm font-medium text-stone-200">Project Session</p>
+                <label class="flex items-center gap-2 text-sm text-stone-300">
+                  <input type="checkbox" x-model="settings.reopenLastProjectOnStartup" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Reopen last project on startup
+                </label>
+
+                <div class="flex flex-wrap gap-3">
+                  <button @click="saveSettings()" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300">
+                    Save Settings
+                  </button>
+                  <button @click="openWorkspace()" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200">
+                    Back To Workspace
+                  </button>
+                </div>
+              </div>
+            </section>
+          </template>
         </section>
       </main>
     </div>

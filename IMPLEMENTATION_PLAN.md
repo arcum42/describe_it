@@ -10,6 +10,16 @@ Turn the overview into an executable implementation roadmap, starting with a min
 - Plain HTML + vanilla JS + Alpine.js frontend
 - Optional ChromaDB integration
 
+## Current Status (April 2026)
+
+- Phase 1: complete
+- Phase 2: complete
+- Phase 3: complete
+- Phase 4: complete
+- Phase 5: in progress (single-image generation slice implemented)
+- Phase 6: not started
+- Phase 7: not started
+
 ---
 
 ## Guiding Principles
@@ -23,6 +33,8 @@ Turn the overview into an executable implementation roadmap, starting with a min
 ---
 
 ## Phase 1: Project Layout And Bootstrap
+
+Status: complete
 
 This is the first implementation step.
 
@@ -88,6 +100,13 @@ describe_it/
 - Browser opens to a simple shell UI with placeholders for project picker, grid view, and image editor
 - Base and optional dependencies are separated cleanly
 
+### Completed Notes
+
+- FastAPI app bootstrap and static frontend hosting are implemented.
+- Health endpoint is live and used by the UI.
+- Project instruction file exists under `.github/instructions/`.
+- Baseline dependency files and local run flow are in place.
+
 ### Notes
 
 - `requirements.txt` should contain only the baseline needed to run the app
@@ -97,6 +116,8 @@ describe_it/
 ---
 
 ## Phase 2: Project And Database Foundation
+
+Status: complete
 
 ### Objectives
 
@@ -119,9 +140,17 @@ describe_it/
 - Open an existing project `.db`
 - Save and load project metadata
 
+### Completed Notes
+
+- SQLAlchemy models for projects, images, captions, prompts, and presets are implemented.
+- Create/open/update project flows are available via API and UI.
+- Recent project registry and bounded path browser are implemented.
+
 ---
 
 ## Phase 3: Import And Image Storage
+
+Status: complete
 
 ### Objectives
 
@@ -132,25 +161,33 @@ describe_it/
 
 ### First test case
 
-Use the local dataset at `practice_dataset/CheerBear/` as the first real import verification set.
+Use a local dataset under `practice_dataset/` as the first real import verification set.
 
-- Create a project named `CheerBear`
-- Store it at `projects/cheerbear.db`
-- Import the full `practice_dataset/CheerBear/` folder into that project
+- Create a project named `Practice Dataset`
+- Store it at `projects/practice_dataset.db`
+- Import the full selected folder (for example `practice_dataset/sample_set/`) into that project
 - Verify that matching image/text pairs are detected correctly
 - Verify that images without captions get blank caption entries
-- Keep the `CheerBear` source folder out of git; it is local test data, not project source
+- Keep source dataset folders out of git; they are local test data, not project source
 
 ### Deliverables
 
 - Folder import works for common image formats
 - Original bytes are preserved untouched
 - Imported records appear in the grid view
-- `CheerBear` import succeeds as the first end-to-end Phase 3 verification
+- Practice dataset import succeeds as the first end-to-end Phase 3 verification
+
+### Completed Notes
+
+- Folder import stores image bytes in SQLite BLOB fields and keeps source files untouched.
+- Matching `.txt` captions are imported; missing captions are represented as blank captions.
+- A folder under `practice_dataset/` was used as the first real import verification set.
 
 ---
 
 ## Phase 4: Core Editing UI
+
+Status: complete
 
 ### Objectives
 
@@ -173,9 +210,18 @@ Use the local dataset at `practice_dataset/CheerBear/` as the first real import 
 - Edit active caption and save it
 - Switch between caption candidates
 
+### Completed Notes
+
+- Grid and single-image editor flows are implemented.
+- Include/exclude toggling, active caption editing, candidate creation, and active-candidate switching are implemented.
+- Main workspace now supports section switching between Grid and Editor.
+- Project/sidebar UX was cleaned up (conditional create/current project, close project, integrated path browser).
+
 ---
 
 ## Phase 5: LLM Integration
+
+Status: in progress
 
 ### Objectives
 
@@ -196,9 +242,27 @@ Use the local dataset at `practice_dataset/CheerBear/` as the first real import 
 - Generate captions for selected or all images
 - Preserve manual captions while adding generated alternatives
 
+### Completed In This Phase So Far
+
+- LLM backend discovery endpoint is implemented (`/api/llm/backends`) with model listing.
+- Single-image generation endpoint is implemented (`/api/llm/generate-caption`).
+- Ollama and LM Studio clients are wired for generation requests.
+- Generated captions are stored as new caption candidates with source metadata.
+- Error handling for upstream HTTP and timeout failures is implemented to avoid server crashes.
+- User-configurable generation timeout is implemented and persisted in frontend settings.
+- A dedicated Settings view (gear button in header) is implemented, separate from main workspace views.
+
+### Remaining For Phase 5
+
+- Batch generation for selected/all images.
+- Prompt preset strategies tied to caption mode (description vs tags).
+- Optional per-backend settings (for example separate timeout/base URL controls).
+
 ---
 
 ## Phase 6: Export
+
+Status: not started
 
 ### Objectives
 
@@ -214,6 +278,8 @@ Use the local dataset at `practice_dataset/CheerBear/` as the first real import 
 ---
 
 ## Phase 7: Optional ChromaDB / RAG Layer
+
+Status: not started
 
 This should remain optional and not block the base application.
 
@@ -240,6 +306,8 @@ This should remain optional and not block the base application.
 
 ## CLI Plan
 
+Status: planned
+
 The CLI should reuse backend services directly rather than going through HTTP.
 
 ### Initial commands
@@ -262,8 +330,8 @@ describe-it export --project path/to/project.db --output ./export
 ## Immediate Next Tasks
 
 1. Build the Phase 3 folder import service and API route
-2. Create the `CheerBear` project at `projects/cheerbear.db`
-3. Import `practice_dataset/CheerBear/` as the first end-to-end dataset test
+2. Create a practice project at `projects/practice_dataset.db`
+3. Import a folder under `practice_dataset/` as the first end-to-end dataset test
 4. Show imported images and caption status in the grid view
 5. Verify image/text pairing against the source folder contents
 

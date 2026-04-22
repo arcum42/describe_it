@@ -27,7 +27,7 @@ def _load_image_for_project(session, project_path: Path, image_id: int) -> Image
     return image
 
 
-def create_caption_candidate(*, project_path: str, image_id: int, text: str, make_active: bool) -> dict[str, object]:
+def create_caption_candidate(*, project_path: str, image_id: int, text: str, make_active: bool, source: str = "manual") -> dict[str, object]:
     resolved_project_path = _resolve_path(project_path)
     if not resolved_project_path.exists():
         raise ValueError(f"Project file does not exist: {resolved_project_path}")
@@ -41,7 +41,7 @@ def create_caption_candidate(*, project_path: str, image_id: int, text: str, mak
             for caption in active_captions:
                 caption.is_active = False
 
-        caption = CaptionRecord(image_id=image.id, text=text, is_active=make_active, source="manual")
+        caption = CaptionRecord(image_id=image.id, text=text, is_active=make_active, source=source)
         session.add(caption)
         session.commit()
 
