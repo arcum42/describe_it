@@ -264,8 +264,15 @@
                   >
                     LLM
                   </button>
+                  <button
+                    @click="mainView = 'batch'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'batch' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Batch
+                  </button>
                 </div>
-                <span class="text-xs text-stone-500" x-text="mainView === 'grid' ? 'Browse and pick an image' : (mainView === 'editor' ? 'Single image editing mode' : 'Preset management and prompt strategy')"></span>
+                <span class="text-xs text-stone-500" x-text="mainView === 'grid' ? 'Browse and pick an image' : (mainView === 'editor' ? 'Single image editing mode' : (mainView === 'llm' ? 'Preset management and prompt strategy' : 'Batch generation workflow'))"></span>
               </div>
 
               <template x-if="mainView === 'grid'">
@@ -549,6 +556,236 @@
                       <button @click="resetPresetForm()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                         New Draft
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </template>
+
+          <template x-if="uiSection === 'workspace' && mainView === 'batch'">
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Batch Generation</h2>
+                <span class="text-xs text-stone-500">Process multiple images with progress tracking</span>
+              </div>
+
+              <div class="space-y-4">
+                <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <div class="grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Target
+                      <select x-model="batch.target" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60">
+                        <option value="included">Included images</option>
+                        <option value="uncaptioned">Included images without captions</option>
+                        <option value="all">All images in project</option>
+                      </select>
+                    </label>
+
+                    <label class="flex items-center gap-2 pt-6 text-sm text-stone-300">
+                      <input type="checkbox" x-model="batch.usePreset" :disabled="batchIsActive()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+                      Use preset for batch generation
+                    </label>
+                  </div>
+
+                  <div class="mt-3 grid gap-3 md:grid-cols-3">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Output Mode
+                      <select x-model="batch.outputMode" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60">
+                        <option value="new_candidate">Add As New Candidate</option>
+                        <option value="replace_active">Replace Active Caption</option>
+                        <option value="append_active">Append To Active Caption</option>
+                      </select>
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Retry Count
+                      <input type="number" min="0" max="5" step="1" x-model.number="batch.retryCount" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60" />
+                    </label>
+                    <label class="flex items-center gap-2 pt-6 text-sm text-stone-300">
+                      <input type="checkbox" x-model="batch.skipOnFailure" :disabled="batchIsActive()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+                      Skip failed images
+                    </label>
+                  </div>
+
+                  <div x-show="batch.usePreset" class="mt-3">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Preset
+                      <select x-model="llm.selectedPresetId" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60">
+                        <option value="">Choose a preset</option>
+                        <template x-for="preset in llm.presets" :key="preset.id">
+                          <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name})`"></option>
+                        </template>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div x-show="!batch.usePreset" class="mt-3 space-y-3">
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Backend
+                        <select x-model="llm.backend" @change="onLLMBackendChanged()" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60">
+                          <template x-for="backend in llm.backends" :key="backend.name">
+                            <option :value="backend.name" :disabled="!backend.available" x-text="backend.available ? backend.name : `${backend.name} (offline)`"></option>
+                          </template>
+                        </select>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Model
+                        <select x-model="llm.model" :disabled="batchIsActive()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60">
+                          <template x-for="modelInfo in availableModelsForBackend(llm.backend)" :key="modelInfo.name">
+                            <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
+                          </template>
+                        </select>
+                      </label>
+                    </div>
+
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Extra Instructions
+                      <textarea x-model="llm.extraInstructions" :disabled="batchIsActive()" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-60" placeholder="Optional style guidance for batch generation"></textarea>
+                    </label>
+                  </div>
+
+                  <div class="mt-4 flex flex-wrap items-center gap-3">
+                    <label class="flex items-center gap-2 text-sm text-stone-300">
+                      <input type="checkbox" x-model="llm.makeActive" :disabled="batchIsActive()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+                      Set generated caption as active
+                    </label>
+                    <span class="text-xs text-stone-500" x-text="`Timeout: ${settings.llmTimeoutSeconds}s`"></span>
+                    <button @click="startBatchGeneration()" :disabled="batchIsActive() || isSubmitting || !currentProject" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                      Start Batch
+                    </button>
+                    <button @click="pauseBatchGeneration()" :disabled="!batchCanPause()" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Pause
+                    </button>
+                    <button @click="resumeBatchGeneration()" :disabled="!batchCanResume()" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Resume
+                    </button>
+                    <button @click="cancelBatchGeneration()" :disabled="!batchCanCancel()" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+
+                <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <div class="mb-2 flex items-center justify-between text-sm text-stone-300">
+                    <span>Progress</span>
+                    <span x-text="`${batch.completed} / ${batch.total} (${batchProgressPercent()}%)`"></span>
+                  </div>
+                  <div class="h-3 overflow-hidden rounded-full bg-stone-800">
+                    <div class="h-full bg-amber-400 transition-all" :style="`width: ${batchProgressPercent()}%`"></div>
+                  </div>
+                  <div class="mt-2 flex flex-wrap gap-4 text-xs text-stone-500">
+                    <span x-text="`Succeeded: ${batch.succeeded}`"></span>
+                    <span x-text="`Failed: ${batch.failed}`"></span>
+                    <span x-show="batch.status === 'running'" class="text-amber-300">Running...</span>
+                    <span x-show="batch.status === 'queued'" class="text-amber-300">Queued...</span>
+                    <span x-show="batch.status === 'paused'" class="text-amber-300">Paused</span>
+                    <span x-show="batch.status === 'failed'" class="text-red-300">Failed (resume available)</span>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Current Image</p>
+                    <template x-if="batch.currentImageId">
+                      <div class="space-y-2">
+                        <div class="aspect-square overflow-hidden rounded-xl border border-stone-800 bg-stone-900">
+                          <img :src="batchCurrentImageSrc()" :alt="batch.currentFilename" class="h-full w-full object-cover" />
+                        </div>
+                        <p class="break-all text-xs text-stone-400" x-text="batch.currentFilename"></p>
+                      </div>
+                    </template>
+                    <template x-if="!batch.currentImageId">
+                      <p class="text-sm text-stone-500">No image processed yet.</p>
+                    </template>
+                  </div>
+
+                  <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Latest Generated Text</p>
+                    <div class="min-h-40 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200">
+                      <p x-text="batch.currentGeneratedText || 'No generated text yet.'"></p>
+                    </div>
+                    <template x-if="batch.lastError">
+                      <p class="mt-2 text-xs text-red-300" x-text="`Last error: ${batch.lastError}`"></p>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-2 flex items-center justify-between">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Job History</p>
+                      <button @click="loadBatchHistory()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        Refresh
+                      </button>
+                    </div>
+                    <label class="mb-2 block text-[10px] uppercase tracking-[0.2em] text-stone-500">
+                      Filter
+                      <select x-model="batch.historyStatusFilter" class="mt-1 w-full rounded-lg border border-stone-800 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                        <option value="all">All statuses</option>
+                        <option value="queued">Queued</option>
+                        <option value="running">Running</option>
+                        <option value="paused">Paused</option>
+                        <option value="failed">Failed</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </label>
+                    <div class="max-h-56 space-y-2 overflow-auto pr-1">
+                      <template x-for="job in filteredBatchHistory()" :key="job.id">
+                        <button @click="selectBatchJob(job.id)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-xs text-stone-200 hover:border-amber-400/60" :class="batch.jobId === job.id ? 'border-amber-500 ring-1 ring-amber-500/40' : ''">
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="truncate" x-text="job.id"></span>
+                            <span class="text-stone-400" x-text="job.status"></span>
+                          </div>
+                          <p class="mt-1 text-stone-500" x-text="`${job.completed}/${job.total} | ok ${job.succeeded} | fail ${job.failed}`"></p>
+                        </button>
+                      </template>
+                      <template x-if="filteredBatchHistory().length === 0">
+                        <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No batch jobs yet.</p>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-2 flex items-center justify-between gap-3">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Per-Image Results</p>
+                      <a :href="batchResultsExportUrl()" x-show="batch.jobId" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        Export CSV
+                      </a>
+                    </div>
+                    <div class="max-h-64 overflow-auto rounded-xl border border-stone-800">
+                      <table class="w-full text-left text-xs text-stone-300">
+                        <thead class="bg-stone-900 text-stone-500">
+                          <tr>
+                            <th class="px-3 py-2">Image</th>
+                            <th class="px-3 py-2">Status</th>
+                            <th class="px-3 py-2">Attempts</th>
+                            <th class="px-3 py-2">Generated Text</th>
+                            <th class="px-3 py-2">Error</th>
+                            <th class="px-3 py-2">Started</th>
+                            <th class="px-3 py-2">Finished</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <template x-for="result in batch.results" :key="`${result.job_id}-${result.image_id}`">
+                            <tr class="border-t border-stone-800">
+                              <td class="px-3 py-2" x-text="result.filename"></td>
+                              <td class="px-3 py-2" x-text="result.status"></td>
+                              <td class="px-3 py-2" x-text="result.attempts"></td>
+                              <td class="max-w-72 px-3 py-2 text-stone-400" :title="result.generated_text || ''" x-text="batchResultTextPreview(result.generated_text)"></td>
+                              <td class="px-3 py-2 break-all" x-text="result.error || '-' "></td>
+                              <td class="whitespace-nowrap px-3 py-2 text-stone-400" x-text="formatBatchTimestamp(result.started_at)"></td>
+                              <td class="whitespace-nowrap px-3 py-2 text-stone-400" x-text="formatBatchTimestamp(result.finished_at)"></td>
+                            </tr>
+                          </template>
+                          <template x-if="batch.results.length === 0">
+                            <tr>
+                              <td colspan="7" class="px-3 py-3 text-stone-500">No results for selected job.</td>
+                            </tr>
+                          </template>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>

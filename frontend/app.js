@@ -51,6 +51,27 @@ function describeItApp() {
         systemPrompt: '',
       },
     },
+    batch: {
+      target: 'included',
+      usePreset: true,
+      outputMode: 'new_candidate',
+      skipOnFailure: true,
+      retryCount: 0,
+      jobId: '',
+      status: 'idle',
+      total: 0,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      currentImageId: null,
+      currentFilename: '',
+      currentGeneratedText: '',
+      lastError: '',
+      history: [],
+      historyStatusFilter: 'all',
+      results: [],
+    },
+    batchPollTimer: null,
     settings: {
       llmTimeoutSeconds: 120,
       usePresetByDefault: false,
@@ -224,6 +245,7 @@ function describeItApp() {
       this.resetPresetForm();
       this.loadImageSummary();
       this.loadImages();
+      this.loadLatestBatchJob();
     },
     closeProject() {
       this.currentProject = null;
@@ -251,6 +273,15 @@ function describeItApp() {
       this.saveProjectSessionState();
       this.statusMessage = 'Closed current project.';
       this.errorMessage = '';
+      if (this.batchPollTimer) {
+        clearInterval(this.batchPollTimer);
+        this.batchPollTimer = null;
+      }
+      this.batch.jobId = '';
+      this.batch.status = 'idle';
+      this.batch.history = [];
+      this.batch.historyStatusFilter = 'all';
+      this.batch.results = [];
       this.loadBrowser(this.projectSession.lastProjectDirectory || null);
     },
     async loadHealth() {
@@ -600,6 +631,338 @@ function describeItApp() {
       const preset = this.llm.presets.find((item) => String(item.id) === String(this.llm.selectedPresetId));
       if (preset) {
         this.applyPresetToForm(preset);
+      }
+    },
+    batchIsActive() {
+      return ['queued', 'running', 'paused', 'failed'].includes(this.batch.status);
+    },
+    batchCanPause() {
+      return this.batch.status === 'running' || this.batch.status === 'queued';
+    },
+    batchCanResume() {
+      return this.batch.status === 'paused' || this.batch.status === 'failed';
+    },
+    batchCanCancel() {
+      return this.batch.status === 'running' || this.batch.status === 'queued' || this.batch.status === 'paused' || this.batch.status === 'failed';
+    },
+    batchProgressPercent() {
+      if (!this.batch.total) {
+        return 0;
+      }
+      return Math.round((this.batch.completed / this.batch.total) * 100);
+    },
+    batchCurrentImageSrc() {
+      if (!this.batch.currentImageId) {
+        return '';
+      }
+      return this.imageSrc(this.batch.currentImageId);
+    },
+    batchResultsExportUrl() {
+      if (!this.batch.jobId) {
+        return '';
+      }
+      return `/api/llm/batch-jobs/${this.batch.jobId}/results/export`;
+    },
+    filteredBatchHistory() {
+      if (this.batch.historyStatusFilter === 'all') {
+        return this.batch.history;
+      }
+      return this.batch.history.filter((job) => job.status === this.batch.historyStatusFilter);
+    },
+    formatBatchTimestamp(value) {
+      if (!value) {
+        return '-';
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        return String(value);
+      }
+      return parsed.toLocaleString();
+    },
+    batchResultTextPreview(value, maxLength = 120) {
+      if (!value) {
+        return '-';
+      }
+      if (value.length <= maxLength) {
+        return value;
+      }
+      return `${value.slice(0, maxLength - 1)}...`;
+    },
+    _applyBatchJob(job) {
+      this.batch.jobId = job.id || '';
+      this.batch.status = job.status || 'idle';
+      this.batch.total = Number(job.total || 0);
+      this.batch.completed = Number(job.completed || 0);
+      this.batch.succeeded = Number(job.succeeded || 0);
+      this.batch.failed = Number(job.failed || 0);
+      this.batch.currentImageId = job.current_image_id || null;
+      this.batch.currentFilename = job.current_filename || '';
+      this.batch.currentGeneratedText = job.current_generated_text || '';
+      this.batch.lastError = job.last_error || '';
+      if (job.target) {
+        this.batch.target = job.target;
+      }
+      if (typeof job.use_preset === 'boolean') {
+        this.batch.usePreset = job.use_preset;
+      }
+      if (job.output_mode) {
+        this.batch.outputMode = job.output_mode;
+      }
+      if (typeof job.skip_on_failure === 'boolean') {
+        this.batch.skipOnFailure = job.skip_on_failure;
+      }
+      if (typeof job.retry_count === 'number') {
+        this.batch.retryCount = job.retry_count;
+      }
+    },
+    _startBatchPolling(jobId) {
+      if (this.batchPollTimer) {
+        clearInterval(this.batchPollTimer);
+      }
+      this.batchPollTimer = setInterval(() => {
+        this.pollBatchJob(jobId);
+      }, 1200);
+    },
+    _stopBatchPollingIfTerminal(status) {
+      if (['completed', 'cancelled', 'paused', 'failed'].includes(status)) {
+        if (this.batchPollTimer) {
+          clearInterval(this.batchPollTimer);
+          this.batchPollTimer = null;
+        }
+      }
+    },
+    async loadLatestBatchJob() {
+      if (!this.currentProject?.path) {
+        return;
+      }
+      try {
+        const url = new URL('/api/llm/batch-jobs', window.location.origin);
+        url.searchParams.set('project_path', this.currentProject.path);
+        const response = await fetch(url);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to load batch jobs');
+        }
+        const latest = (payload.jobs || [])[0];
+        this.batch.history = payload.jobs || [];
+        if (!latest) {
+          this.batch.results = [];
+          return;
+        }
+        this._applyBatchJob(latest);
+        await this.loadBatchResults(latest.id);
+        if (this.batchCanCancel()) {
+          this._startBatchPolling(latest.id);
+        }
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    async loadBatchHistory() {
+      if (!this.currentProject?.path) {
+        this.batch.history = [];
+        return;
+      }
+      try {
+        const url = new URL('/api/llm/batch-jobs', window.location.origin);
+        url.searchParams.set('project_path', this.currentProject.path);
+        const response = await fetch(url);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to load batch jobs');
+        }
+        this.batch.history = payload.jobs || [];
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    async loadBatchResults(jobId = null) {
+      const targetJobId = jobId || this.batch.jobId;
+      if (!targetJobId) {
+        this.batch.results = [];
+        return;
+      }
+      try {
+        const response = await fetch(`/api/llm/batch-jobs/${targetJobId}/results?limit=500`);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to load batch results');
+        }
+        this.batch.results = payload.results || [];
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    async selectBatchJob(jobId) {
+      this.batch.jobId = jobId;
+      await this.pollBatchJob(jobId);
+      await this.loadBatchHistory();
+      await this.loadBatchResults(jobId);
+      if (this.batchCanCancel()) {
+        this._startBatchPolling(jobId);
+      }
+    },
+    async pollBatchJob(jobId = null) {
+      const targetJobId = jobId || this.batch.jobId;
+      if (!targetJobId) {
+        return;
+      }
+      try {
+        const response = await fetch(`/api/llm/batch-jobs/${targetJobId}`);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to poll batch job');
+        }
+        const job = payload.job;
+        this._applyBatchJob(job);
+        this._stopBatchPollingIfTerminal(job.status);
+        await this.loadBatchResults(job.id);
+
+        if (job.status === 'completed') {
+          this.statusMessage = `Batch complete: ${job.succeeded}/${job.total} succeeded, ${job.failed} failed.`;
+          await this.loadImages();
+          await this.loadImageSummary();
+          await this.loadBatchHistory();
+        }
+        if (job.status === 'cancelled') {
+          this.statusMessage = `Batch cancelled: ${job.completed}/${job.total} processed (${job.succeeded} succeeded, ${job.failed} failed).`;
+          await this.loadImages();
+          await this.loadImageSummary();
+          await this.loadBatchHistory();
+        }
+        if (job.status === 'failed') {
+          this.errorMessage = job.last_error || 'Batch failed.';
+          this.statusMessage = `Batch failed after ${job.completed}/${job.total} images. You can resume to continue.`;
+          await this.loadBatchHistory();
+        }
+        if (job.status === 'paused') {
+          this.statusMessage = `Batch paused at ${job.completed}/${job.total}.`;
+          await this.loadBatchHistory();
+        }
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    cancelBatchGeneration() {
+      if (!this.batch.jobId) {
+        return;
+      }
+      fetch('/api/llm/batch-jobs/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: this.batch.jobId }),
+      })
+        .then((response) => response.json())
+        .then((payload) => {
+          if (payload?.job) {
+            this._applyBatchJob(payload.job);
+          }
+          this.statusMessage = 'Cancelling batch after current image...';
+          this.loadBatchHistory();
+        })
+        .catch((error) => {
+          this.errorMessage = error.message;
+        });
+    },
+    pauseBatchGeneration() {
+      if (!this.batch.jobId) {
+        return;
+      }
+      fetch('/api/llm/batch-jobs/pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: this.batch.jobId }),
+      })
+        .then((response) => response.json())
+        .then((payload) => {
+          if (payload?.job) {
+            this._applyBatchJob(payload.job);
+          }
+          this.statusMessage = 'Pause requested. Job will pause after current image.';
+          this.loadBatchHistory();
+        })
+        .catch((error) => {
+          this.errorMessage = error.message;
+        });
+    },
+    resumeBatchGeneration() {
+      if (!this.batch.jobId) {
+        return;
+      }
+      fetch('/api/llm/batch-jobs/resume', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: this.batch.jobId }),
+      })
+        .then((response) => response.json())
+        .then((payload) => {
+          if (payload?.job) {
+            this._applyBatchJob(payload.job);
+            this._startBatchPolling(this.batch.jobId);
+          }
+          this.statusMessage = 'Batch resumed.';
+          this.loadBatchHistory();
+        })
+        .catch((error) => {
+          this.errorMessage = error.message;
+        });
+    },
+    async startBatchGeneration() {
+      if (!this.currentProject?.path) {
+        this.errorMessage = 'Open a project first.';
+        return;
+      }
+
+      this.errorMessage = '';
+      this.statusMessage = '';
+      if (this.batch.usePreset && !this.llm.selectedPresetId) {
+        this.errorMessage = 'Choose a preset before starting batch generation.';
+        return;
+      }
+      if (!this.batch.usePreset && (!this.llm.backend || !this.llm.model)) {
+        this.errorMessage = 'Select backend and model before starting manual batch generation.';
+        return;
+      }
+
+      this.batch.lastError = '';
+      this.batch.currentGeneratedText = '';
+      this.batch.currentFilename = '';
+      this.batch.currentImageId = null;
+
+      this.isSubmitting = true;
+      try {
+        const response = await fetch('/api/llm/batch-jobs/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            target: this.batch.target,
+            use_preset: this.batch.usePreset,
+            preset_id: this.batch.usePreset && this.llm.selectedPresetId ? Number(this.llm.selectedPresetId) : null,
+            backend: this.batch.usePreset ? '' : this.llm.backend,
+            model: this.batch.usePreset ? '' : this.llm.model,
+            extra_instructions: this.batch.usePreset ? '' : this.llm.extraInstructions,
+            timeout_seconds: this.settings.llmTimeoutSeconds,
+            make_active: this.llm.makeActive,
+            output_mode: this.batch.outputMode,
+            skip_on_failure: this.batch.skipOnFailure,
+            retry_count: Number(this.batch.retryCount || 0),
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to start batch job');
+        }
+        const job = payload.job;
+        this._applyBatchJob(job);
+        this._startBatchPolling(job.id);
+        await this.loadBatchHistory();
+        await this.loadBatchResults(job.id);
+        this.statusMessage = 'Batch job started.';
+      } catch (error) {
+        this.errorMessage = error.message;
+      } finally {
+        this.isSubmitting = false;
       }
     },
     applyPresetPreference() {

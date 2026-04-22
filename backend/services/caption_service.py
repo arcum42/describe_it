@@ -107,3 +107,62 @@ def update_active_caption_text(*, project_path: str, image_id: int, text: str) -
             "source": active.source,
             "created_at": active.created_at.isoformat(),
         }
+
+
+def apply_generated_caption(
+    *,
+    project_path: str,
+    image_id: int,
+    generated_text: str,
+    mode: str,
+    source: str,
+    make_active: bool,
+) -> dict[str, object]:
+    normalized_mode = mode.strip().lower()
+    if normalized_mode == "new_candidate":
+        return create_caption_candidate(
+            project_path=project_path,
+            image_id=image_id,
+            text=generated_text,
+            make_active=make_active,
+            source=source,
+        )
+
+    resolved_project_path = _resolve_path(project_path)
+    if not resolved_project_path.exists():
+        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        image = _load_image_for_project(session, resolved_project_path, image_id)
+        active = session.scalar(select(CaptionRecord).where(CaptionRecord.image_id == image.id, CaptionRecord.is_active.is_(True)).limit(1))
+
+        if active is None:
+            active = CaptionRecord(image_id=image.id, text="", is_active=True, source=source)
+            session.add(active)
+
+        if normalized_mode == "replace_active":
+            active.text = generated_text
+            active.source = source
+        elif normalized_mode == "append_active":
+            base = (active.text or "").strip()
+            incoming = generated_text.strip()
+            if base and incoming:
+                active.text = f"{base}\n{incoming}"
+            elif incoming:
+                active.text = incoming
+            else:
+                active.text = base
+            active.source = source
+        else:
+            raise ValueError(f"Unsupported output mode: {mode}")
+
+        session.commit()
+        return {
+            "id": active.id,
+            "image_id": active.image_id,
+            "text": active.text,
+            "is_active": active.is_active,
+            "source": active.source,
+            "created_at": active.created_at.isoformat(),
+        }

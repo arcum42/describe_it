@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from backend.services.batch_service import batch_service
 from backend.services.app_state_service import get_global_settings, update_global_settings
 from backend.services.llm_service import (
     create_preset,
@@ -55,6 +57,25 @@ class GenerateWithPresetRequest(BaseModel):
     preset_id: int
     make_active: bool = True
     timeout_seconds: int = Field(default=120, ge=10, le=900)
+
+
+class CreateBatchJobRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    target: str = Field(default="included", pattern="^(included|uncaptioned|all)$")
+    use_preset: bool = True
+    preset_id: int | None = Field(default=None, ge=1)
+    backend: str = ""
+    model: str = ""
+    extra_instructions: str = ""
+    timeout_seconds: int = Field(default=120, ge=10, le=900)
+    make_active: bool = True
+    output_mode: str = Field(default="new_candidate", pattern="^(new_candidate|replace_active|append_active)$")
+    skip_on_failure: bool = True
+    retry_count: int = Field(default=0, ge=0, le=5)
+
+
+class BatchJobCommandRequest(BaseModel):
+    job_id: str = Field(min_length=1)
 
 
 @router.get("/backends")
@@ -168,3 +189,87 @@ def generate_with_preset(request: GenerateWithPresetRequest) -> dict[str, object
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/batch-jobs")
+def list_batch_jobs(project_path: str) -> dict[str, list[dict[str, object]]]:
+    try:
+        jobs = batch_service.list_jobs_for_project(project_path=project_path.strip())
+        return {"jobs": jobs}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/batch-jobs/{job_id}")
+def get_batch_job(job_id: str) -> dict[str, object]:
+    try:
+        return {"job": batch_service.get_job(job_id=job_id)}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/batch-jobs/create")
+def create_batch_job(request: CreateBatchJobRequest) -> dict[str, object]:
+    try:
+        job = batch_service.create_job(
+            project_path=request.project_path.strip(),
+            target=request.target,
+            use_preset=request.use_preset,
+            preset_id=request.preset_id,
+            backend=request.backend,
+            model=request.model,
+            extra_instructions=request.extra_instructions,
+            timeout_seconds=request.timeout_seconds,
+            make_active=request.make_active,
+            output_mode=request.output_mode,
+            skip_on_failure=request.skip_on_failure,
+            retry_count=request.retry_count,
+        )
+        return {"job": job}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/batch-jobs/pause")
+def pause_batch_job(request: BatchJobCommandRequest) -> dict[str, object]:
+    try:
+        return {"job": batch_service.pause_job(job_id=request.job_id.strip())}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/batch-jobs/resume")
+def resume_batch_job(request: BatchJobCommandRequest) -> dict[str, object]:
+    try:
+        return {"job": batch_service.resume_job(job_id=request.job_id.strip())}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.post("/batch-jobs/cancel")
+def cancel_batch_job(request: BatchJobCommandRequest) -> dict[str, object]:
+    try:
+        return {"job": batch_service.cancel_job(job_id=request.job_id.strip())}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/batch-jobs/{job_id}/results")
+def batch_job_results(job_id: str, limit: int = 500) -> dict[str, object]:
+    try:
+        return {"results": batch_service.get_job_results(job_id=job_id, limit=limit)}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/batch-jobs/{job_id}/results/export")
+def batch_job_results_export(job_id: str) -> Response:
+    try:
+        csv_text = batch_service.export_job_results_csv(job_id=job_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="batch-job-{job_id}-results.csv"'},
+    )

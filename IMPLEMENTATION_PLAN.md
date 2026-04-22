@@ -16,7 +16,7 @@ Turn the overview into an executable implementation roadmap, starting with a min
 - Phase 2: complete
 - Phase 3: complete
 - Phase 4: complete
-- Phase 5: in progress (single-image generation slice implemented)
+- Phase 5: in progress (single-image and resilient batch generation implemented)
 - Phase 6: not started
 - Phase 7: not started
 
@@ -251,12 +251,20 @@ Status: in progress
 - Error handling for upstream HTTP and timeout failures is implemented to avoid server crashes.
 - User-configurable generation timeout is implemented and persisted in frontend settings.
 - A dedicated Settings view (gear button in header) is implemented, separate from main workspace views.
+- Vision capability detection is implemented from provider metadata (Ollama show metadata and LM Studio model capabilities).
+- Model picker UX now supports vision-only filtering, show-all toggle, and visual vision markers.
+- Preset workflows are implemented: list/create/update/delete presets and generate using selected preset.
+- Debug controls are implemented in settings, with conditional debug panel visibility.
+- Server-side batch orchestration is implemented: create/list/get/pause/resume/cancel, plus live polling support.
+- Batch processing options are implemented: output mode, retry count, and skip-on-failure behavior.
+- Batch jobs and per-image results are persisted in app state storage and recovered across backend restart.
+- Batch UI now includes job history, status filtering, per-image result table, and CSV export.
 
 ### Remaining For Phase 5
 
-- Batch generation for selected/all images.
-- Prompt preset strategies tied to caption mode (description vs tags).
+- Prompt preset strategies explicitly tied to caption mode (description vs tags).
 - Optional per-backend settings (for example separate timeout/base URL controls).
+- Operational hardening pass (clear terminal-state messaging, stronger cancellation semantics, richer failure diagnostics).
 
 ---
 
@@ -329,11 +337,11 @@ describe-it export --project path/to/project.db --output ./export
 
 ## Immediate Next Tasks
 
-1. Build the Phase 3 folder import service and API route
-2. Create a practice project at `projects/practice_dataset.db`
-3. Import a folder under `practice_dataset/` as the first end-to-end dataset test
-4. Show imported images and caption status in the grid view
-5. Verify image/text pairing against the source folder contents
+1. Close remaining Phase 5 items: caption-mode-aware preset strategies and optional per-backend controls
+2. Start Phase 6 export implementation (image + active caption pairs, trigger-word application, non-destructive output)
+3. Add regression checks for batch resume/restart recovery, results integrity, and CSV export behavior
+4. Update end-user docs for the Batch tab flow and failure/retry behavior
+5. Run a full smoke pass across project lifecycle: create/open/import/edit/generate/batch/export
 
 ---
 

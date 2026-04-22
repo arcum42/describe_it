@@ -129,6 +129,42 @@ def generate_caption_for_image(
     make_active: bool = True,
     timeout_seconds: int = 120,
 ) -> dict[str, object]:
+    generated = generate_text_for_image_manual(
+        project_path=project_path,
+        image_id=image_id,
+        backend=backend,
+        model=model,
+        extra_instructions=extra_instructions,
+        timeout_seconds=timeout_seconds,
+    )
+
+    selected_backend = str(generated.get("backend") or "")
+    selected_model = str(generated.get("model") or "")
+    generated_text = str(generated.get("text") or "")
+    source = f"llm:{selected_backend}:{selected_model}"
+    caption = create_caption_candidate(
+        project_path=project_path,
+        image_id=image_id,
+        text=generated_text,
+        make_active=make_active,
+        source=source,
+    )
+    return {
+        "caption": caption,
+        "backend": selected_backend,
+        "model": selected_model,
+    }
+
+
+def generate_text_for_image_manual(
+    *,
+    project_path: str,
+    image_id: int,
+    backend: str,
+    model: str,
+    extra_instructions: str = "",
+    timeout_seconds: int = 120,
+) -> dict[str, object]:
     selected_backend = _normalize_backend_name(backend)
     selected_model = model.strip()
     if not selected_model:
@@ -162,17 +198,8 @@ def generate_caption_for_image(
             media_type=media_type,
             timeout_seconds=timeout_seconds,
         )
-
-    source = f"llm:{selected_backend}:{selected_model}"
-    caption = create_caption_candidate(
-        project_path=project_path,
-        image_id=image_id,
-        text=generated_text,
-        make_active=make_active,
-        source=source,
-    )
     return {
-        "caption": caption,
+        "text": generated_text,
         "backend": selected_backend,
         "model": selected_model,
     }
@@ -184,6 +211,43 @@ def generate_caption_with_preset(
     image_id: int,
     preset_id: int,
     make_active: bool = True,
+    timeout_seconds: int = 120,
+) -> dict[str, object]:
+    generated = generate_text_for_image_with_preset(
+        project_path=project_path,
+        image_id=image_id,
+        preset_id=preset_id,
+        timeout_seconds=timeout_seconds,
+    )
+
+    backend = str(generated.get("backend") or "")
+    preset_model_name = str(generated.get("model") or "")
+    preset_name = str(generated.get("preset", {}).get("name") or f"Preset {preset_id}")
+    generated_text = str(generated.get("text") or "")
+    source = f"llm:preset:{preset_id}:{backend}:{preset_model_name}"
+    caption = create_caption_candidate(
+        project_path=project_path,
+        image_id=image_id,
+        text=generated_text,
+        make_active=make_active,
+        source=source,
+    )
+    return {
+        "caption": caption,
+        "backend": backend,
+        "model": preset_model_name,
+        "preset": {
+            "id": preset_id,
+            "name": preset_name,
+        },
+    }
+
+
+def generate_text_for_image_with_preset(
+    *,
+    project_path: str,
+    image_id: int,
+    preset_id: int,
     timeout_seconds: int = 120,
 ) -> dict[str, object]:
     if timeout_seconds < 10:
@@ -232,17 +296,8 @@ def generate_caption_with_preset(
             media_type=media_type,
             timeout_seconds=timeout_seconds,
         )
-
-    source = f"llm:preset:{preset_id}:{backend}:{preset_model_name}"
-    caption = create_caption_candidate(
-        project_path=project_path,
-        image_id=image_id,
-        text=generated_text,
-        make_active=make_active,
-        source=source,
-    )
     return {
-        "caption": caption,
+        "text": generated_text,
         "backend": backend,
         "model": preset_model_name,
         "preset": {
