@@ -5,7 +5,7 @@ import json
 import urllib.error
 import urllib.request
 
-from backend.llm.base import BackendInfo
+from backend.llm.base import BackendInfo, ModelInfo
 
 
 class OllamaClient:
@@ -49,11 +49,41 @@ class OllamaClient:
         except urllib.error.URLError as error:
             raise ValueError(f"Ollama is unreachable at {self.base_url}: {error.reason}") from error
 
-    def list_models(self) -> list[str]:
+    def _model_capabilities(self, model_name: str) -> list[str]:
+        try:
+            payload = self._post("/api/show", {"model": model_name}, timeout_seconds=8)
+        except ValueError:
+            return []
+
+        capabilities = payload.get("capabilities")
+        if not isinstance(capabilities, list):
+            return []
+
+        normalized: list[str] = []
+        for capability in capabilities:
+            if isinstance(capability, str):
+                value = capability.strip().lower()
+                if value:
+                    normalized.append(value)
+        return normalized
+
+    def list_models(self) -> list[ModelInfo]:
         payload = self._get("/api/tags")
         models = payload.get("models") or []
         names = [model.get("name", "") for model in models if isinstance(model, dict)]
-        return [name for name in names if name]
+        model_infos: list[ModelInfo] = []
+        for name in names:
+            if not name:
+                continue
+            capabilities = self._model_capabilities(name)
+            model_infos.append(
+                ModelInfo(
+                    name=name,
+                    vision_capable="vision" in capabilities,
+                    capabilities=capabilities,
+                )
+            )
+        return model_infos
 
     def get_backend_info(self) -> BackendInfo:
         try:

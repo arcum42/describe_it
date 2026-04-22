@@ -46,6 +46,7 @@ class UpdateSettingsRequest(BaseModel):
     llm_timeout_seconds: int = Field(ge=10, le=900)
     llm_use_preset_by_default: bool = False
     llm_default_preset_id: int | None = Field(default=None, ge=1)
+    ui_show_debug_section: bool = False
 
 
 class GenerateWithPresetRequest(BaseModel):
@@ -64,7 +65,14 @@ def available_backends() -> dict[str, list[dict[str, object]]]:
             {
                 "name": backend.name,
                 "available": backend.available,
-                "models": backend.models or [],
+                "models": [
+                    {
+                        "name": model.name,
+                        "vision_capable": model.vision_capable,
+                        "capabilities": model.capabilities or [],
+                    }
+                    for model in (backend.models or [])
+                ],
                 "error": backend.error,
             }
             for backend in backends
@@ -99,6 +107,7 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         llm_timeout_seconds=request.llm_timeout_seconds,
         llm_use_preset_by_default=request.llm_use_preset_by_default,
         llm_default_preset_id=request.llm_default_preset_id,
+        ui_show_debug_section=request.ui_show_debug_section,
     )
 
 

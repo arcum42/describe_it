@@ -9,6 +9,7 @@ from backend.config import get_settings
 DEFAULT_LLM_TIMEOUT_SECONDS = 120
 DEFAULT_REOPEN_LAST_PROJECT = True
 DEFAULT_USE_PRESET_BY_DEFAULT = False
+DEFAULT_SHOW_DEBUG_SECTION = False
 
 
 def _db_path() -> Path:
@@ -146,6 +147,7 @@ def get_global_settings() -> dict[str, object]:
         raw_timeout = _get_setting(connection, "llm_timeout_seconds")
         raw_use_preset = _get_setting(connection, "llm_use_preset_by_default")
         raw_default_preset_id = _get_setting(connection, "llm_default_preset_id")
+        raw_show_debug_section = _get_setting(connection, "ui_show_debug_section")
 
     if raw_timeout is None:
         timeout_value = DEFAULT_LLM_TIMEOUT_SECONDS
@@ -167,10 +169,17 @@ def get_global_settings() -> dict[str, object]:
         else raw_use_preset.lower() in {"1", "true", "yes", "on"}
     )
 
+    show_debug_section = (
+        DEFAULT_SHOW_DEBUG_SECTION
+        if raw_show_debug_section is None
+        else raw_show_debug_section.lower() in {"1", "true", "yes", "on"}
+    )
+
     return {
         "llm_timeout_seconds": timeout_value,
         "llm_use_preset_by_default": use_preset_by_default,
         "llm_default_preset_id": default_preset_id,
+        "ui_show_debug_section": show_debug_section,
     }
 
 
@@ -179,6 +188,7 @@ def update_global_settings(
     llm_timeout_seconds: int,
     llm_use_preset_by_default: bool,
     llm_default_preset_id: int | None,
+    ui_show_debug_section: bool,
 ) -> dict[str, object]:
     timeout_value = min(900, max(10, int(llm_timeout_seconds)))
     with _connect() as connection:
@@ -186,6 +196,7 @@ def update_global_settings(
         _set_setting(connection, "llm_timeout_seconds", str(timeout_value))
         _set_setting(connection, "llm_use_preset_by_default", "true" if llm_use_preset_by_default else "false")
         _set_setting(connection, "llm_default_preset_id", "" if llm_default_preset_id is None else str(llm_default_preset_id))
+        _set_setting(connection, "ui_show_debug_section", "true" if ui_show_debug_section else "false")
         connection.commit()
     return get_global_settings()
 

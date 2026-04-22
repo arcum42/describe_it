@@ -38,6 +38,7 @@ function describeItApp() {
       backends: [],
       backend: '',
       model: '',
+      showAllModels: false,
       extraInstructions: '',
       makeActive: true,
       presets: [],
@@ -55,6 +56,7 @@ function describeItApp() {
       usePresetByDefault: false,
       defaultPresetId: '',
       reopenLastProjectOnStartup: true,
+      showDebugSection: false,
     },
     projectSession: {
       lastProjectPath: '',
@@ -94,11 +96,13 @@ function describeItApp() {
         this.settings.llmTimeoutSeconds = this.normalizeTimeout(payload.llm_timeout_seconds);
         this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
         this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
+        this.settings.showDebugSection = payload.ui_show_debug_section === true;
         this.applyPresetPreference();
       } catch (error) {
         this.settings.llmTimeoutSeconds = 120;
         this.settings.usePresetByDefault = false;
         this.settings.defaultPresetId = '';
+        this.settings.showDebugSection = false;
       }
     },
     async saveSettings() {
@@ -112,6 +116,7 @@ function describeItApp() {
             llm_timeout_seconds: this.settings.llmTimeoutSeconds,
             llm_use_preset_by_default: this.settings.usePresetByDefault,
             llm_default_preset_id: defaultPresetId,
+            ui_show_debug_section: this.settings.showDebugSection,
           }),
         });
         const payload = await response.json();
@@ -121,6 +126,7 @@ function describeItApp() {
         this.settings.llmTimeoutSeconds = this.normalizeTimeout(payload.llm_timeout_seconds);
         this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
         this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
+        this.settings.showDebugSection = payload.ui_show_debug_section === true;
         this.projectSession.reopenLastProject = this.settings.reopenLastProjectOnStartup;
         await this.saveProjectSessionState();
         this.applyPresetPreference();
@@ -385,9 +391,31 @@ function describeItApp() {
     selectedLLMBackend() {
       return this.llm.backends.find((item) => item.name === this.llm.backend) || null;
     },
+    modelCapabilityLabel(backendName, modelName) {
+      const backend = this.llm.backends.find((item) => item.name === backendName);
+      const model = backend?.models?.find((item) => item.name === modelName);
+      if (!model) {
+        return '';
+      }
+      return model.vision_capable ? '👁️' : '';
+    },
+    modelOptionLabel(modelInfo) {
+      if (!modelInfo) {
+        return '';
+      }
+      return modelInfo.vision_capable ? `${modelInfo.name}  👁️` : modelInfo.name;
+    },
     availableModelsForBackend(backendName) {
       const backend = this.llm.backends.find((item) => item.name === backendName);
-      return backend?.models ?? [];
+      const models = backend?.models ?? [];
+      if (this.llm.showAllModels) {
+        return models;
+      }
+      return models.filter((model) => model.vision_capable);
+    },
+    onModelVisibilityFilterChanged() {
+      this.pickDefaultLLMSelection();
+      this.onPresetBackendChanged();
     },
     pickDefaultLLMSelection() {
       const available = this.llm.backends.filter((item) => item.available);
@@ -399,10 +427,18 @@ function describeItApp() {
       if (!available.some((item) => item.name === this.llm.backend)) {
         this.llm.backend = available[0].name;
       }
-      const backend = this.selectedLLMBackend();
-      const models = backend?.models ?? [];
-      if (!models.includes(this.llm.model)) {
-        this.llm.model = models[0] ?? '';
+
+      let models = this.availableModelsForBackend(this.llm.backend);
+      if (models.length === 0) {
+        const fallbackBackend = available.find((item) => this.availableModelsForBackend(item.name).length > 0);
+        if (fallbackBackend) {
+          this.llm.backend = fallbackBackend.name;
+          models = this.availableModelsForBackend(this.llm.backend);
+        }
+      }
+
+      if (!models.some((item) => item.name === this.llm.model)) {
+        this.llm.model = models[0]?.name ?? '';
       }
     },
     async loadLLMBackends() {
@@ -421,14 +457,13 @@ function describeItApp() {
       }
     },
     onLLMBackendChanged() {
-      const backend = this.selectedLLMBackend();
-      const models = backend?.models ?? [];
-      this.llm.model = models[0] ?? '';
+      const models = this.availableModelsForBackend(this.llm.backend);
+      this.llm.model = models[0]?.name ?? '';
     },
     onPresetBackendChanged() {
       const models = this.availableModelsForBackend(this.llm.presetForm.backend);
-      if (!models.includes(this.llm.presetForm.modelName)) {
-        this.llm.presetForm.modelName = models[0] ?? '';
+      if (!models.some((item) => item.name === this.llm.presetForm.modelName)) {
+        this.llm.presetForm.modelName = models[0]?.name ?? '';
       }
     },
     resetPresetForm() {
