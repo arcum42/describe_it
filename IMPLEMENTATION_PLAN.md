@@ -16,8 +16,8 @@ Turn the overview into an executable implementation roadmap, starting with a min
 - Phase 2: complete
 - Phase 3: complete
 - Phase 4: complete
-- Phase 5: in progress (single-image and resilient batch generation implemented)
-- Phase 6: not started
+- Phase 5: complete
+- Phase 6: complete
 - Phase 7: not started
 
 ---
@@ -221,7 +221,7 @@ Status: complete
 
 ## Phase 5: LLM Integration
 
-Status: in progress
+Status: complete
 
 ### Objectives
 
@@ -260,17 +260,18 @@ Status: in progress
 - Batch jobs and per-image results are persisted in app state storage and recovered across backend restart.
 - Batch UI now includes job history, status filtering, per-image result table, and CSV export.
 
-### Remaining For Phase 5
+### Phase 5 Completion Notes
 
-- Prompt preset strategies explicitly tied to caption mode (description vs tags).
-- Optional per-backend settings (for example separate timeout/base URL controls).
-- Operational hardening pass (clear terminal-state messaging, stronger cancellation semantics, richer failure diagnostics).
+- Presets now support explicit caption mode strategy (`auto`, `description`, `tags`) and generation respects the selected strategy.
+- Optional per-backend runtime settings are implemented and persisted: base URL and timeout overrides for Ollama and LM Studio.
+- Backend discovery and generation now use the configured backend runtime settings.
+- Batch flow includes persistent jobs/results, restart recovery, job history filtering, per-image result inspection, and CSV export.
 
 ---
 
 ## Phase 6: Export
 
-Status: not started
+Status: complete
 
 ### Objectives
 
@@ -282,6 +283,32 @@ Status: not started
 
 - Flat export folder with image + `.txt` pairs
 - Optional dataset metadata output
+
+### Completed In This Phase So Far
+
+- Export API route is implemented at `/api/projects/export`.
+- Export preview route is implemented at `/api/projects/export-preview`.
+- Included-image export to folder is implemented as image + active-caption `.txt` pairs.
+- Trigger word application is implemented as optional behavior and is skipped when trigger word is unset.
+- Export flow is wired into the sidebar UI with explicit options:
+	- Export only included images
+	- Apply project trigger word (if set)
+	- Configurable output folder
+- Optional metadata manifest export (`export_manifest.json`) is implemented.
+- Collision handling controls are implemented:
+	- overwrite existing files
+	- clean output folder before export
+- Export preview is implemented in UI and API with destination/collision/count visibility.
+- Export can target a new subfolder in the selected destination path.
+- Regression checks were added for:
+	- trigger-word positive application path
+	- overwrite vs clean-output behavior and collision handling
+	- preview and export count consistency
+- End-user export guide is published in `PHASE_6_EXPORT_GUIDE.md` with comprehensive workflow examples and troubleshooting.
+
+### Phase 6 Complete
+
+Phase 6 deliverables are finalized: flat export folder with image/txt pairs, optional metadata manifest, non-destructive collision controls, preview functionality, and new-subfolder export option. Export regression tests pass. All features are ready for production use.
 
 ---
 
@@ -337,11 +364,11 @@ describe-it export --project path/to/project.db --output ./export
 
 ## Immediate Next Tasks
 
-1. Close remaining Phase 5 items: caption-mode-aware preset strategies and optional per-backend controls
-2. Start Phase 6 export implementation (image + active caption pairs, trigger-word application, non-destructive output)
-3. Add regression checks for batch resume/restart recovery, results integrity, and CSV export behavior
-4. Update end-user docs for the Batch tab flow and failure/retry behavior
-5. Run a full smoke pass across project lifecycle: create/open/import/edit/generate/batch/export
+1. Add regression checks for batch resume/restart recovery, results integrity, and CSV export behavior.
+2. Add UI affordances for backend settings validation (URL sanity checks and connection test button).
+3. Update end-user docs for preset mode strategy, backend runtime settings, and batch workflows.
+4. Run a full end-to-end smoke pass across project lifecycle: create/open/import/edit/generate/batch/export.
+5. Consider Phase 7 (ChromaDB/RAG) if needed, or focus on hardening/polish before public release.
 
 ---
 

@@ -156,7 +156,12 @@
                 </button>
               </template>
               <template x-if="currentProject">
-                <span class="rounded-xl border border-stone-800 px-3 py-2 text-xs text-stone-500">Select a `.db` file to fill the open field.</span>
+                <div class="flex flex-wrap gap-2">
+                  <button @click="chooseExportDirectory(browser.currentPath)" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                    Use Dir For Export
+                  </button>
+                  <span class="rounded-xl border border-stone-800 px-3 py-2 text-xs text-stone-500">Select a `.db` file to fill the open field.</span>
+                </div>
               </template>
             </div>
 
@@ -211,6 +216,62 @@
               <button @click="importFolder()" :disabled="isSubmitting || !currentProject" class="w-full rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
                 Import Folder
               </button>
+            </div>
+
+            <div class="mt-4 space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <div>
+                <p class="text-sm font-medium text-stone-200">Export Dataset</p>
+                <p class="text-xs text-stone-500">Export image and active-caption pairs with preview, metadata, and collision controls.</p>
+              </div>
+              <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                Output Folder
+                <input x-model="exportForm.output_folder" @input="clearExportPreview()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="exports" />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.create_new_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Export into a new subfolder
+              </label>
+              <label x-show="exportForm.create_new_folder" class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                New Folder Name (Optional)
+                <input x-model="exportForm.new_folder_name" @input="clearExportPreview()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="my_export_run" />
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.included_only" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Export only included images
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.apply_trigger_word" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Apply project trigger word (if set)
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.include_metadata" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Write export metadata manifest (`export_manifest.json`)
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.overwrite_existing" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Overwrite existing files in destination
+              </label>
+              <label class="flex items-center gap-2 text-sm text-stone-300">
+                <input type="checkbox" x-model="exportForm.clean_output_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Clean destination folder before export
+              </label>
+              <template x-if="exportPreview">
+                <div class="space-y-2 rounded-xl border border-stone-800 bg-stone-900 px-3 py-3 text-xs text-stone-300">
+                  <p class="font-medium text-stone-100">Preview</p>
+                  <p>Destination: <span class="break-all" x-text="exportPreview.output_folder"></span></p>
+                  <p x-text="`${exportPreview.images_to_export} image(s) ready, ${exportPreview.excluded_images} excluded, ${exportPreview.blank_captions} blank caption(s).`"></p>
+                  <p x-show="exportPreview.would_overwrite" class="text-amber-300" x-text="`${exportPreview.existing_target_files} target file(s) already exist.`"></p>
+                  <p x-show="!exportPreview.trigger_word_will_apply && exportForm.apply_trigger_word" class="text-stone-400">Trigger word is enabled but not set on this project.</p>
+                </div>
+              </template>
+              <div class="grid gap-2 sm:grid-cols-2">
+                <button @click="requestExportPreview()" :disabled="isSubmitting || !currentProject" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                  Preview Export
+                </button>
+                <button @click="exportProjectDataset()" :disabled="isSubmitting || !currentProject" class="w-full rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                  Export Dataset
+                </button>
+              </div>
             </div>
           </template>
 
@@ -379,7 +440,7 @@
                       <select x-model="llm.selectedPresetId" @change="onSelectedPresetChanged()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
                         <option value="">Manual prompt mode</option>
                         <template x-for="preset in llm.presets" :key="preset.id">
-                          <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name})`"></option>
+                          <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name}, ${preset.caption_mode_strategy || 'auto'})`"></option>
                         </template>
                       </select>
                     </label>
@@ -494,7 +555,7 @@
                         <button @click="applyPresetToForm(preset)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="llm.presetForm.id === preset.id ? 'border-amber-500 ring-1 ring-amber-500/50' : ''">
                           <p class="font-medium text-stone-100" x-text="preset.name"></p>
                           <div class="mt-1 flex items-center justify-between text-xs text-stone-500">
-                            <span x-text="`${preset.backend} / ${preset.model_name}`"></span>
+                            <span x-text="`${preset.backend} / ${preset.model_name} / ${preset.caption_mode_strategy || 'auto'}`"></span>
                             <span class="text-stone-300" x-text="modelCapabilityLabel(preset.backend, preset.model_name)"></span>
                           </div>
                         </button>
@@ -528,6 +589,15 @@
                             <template x-for="modelInfo in availableModelsForBackend(llm.presetForm.backend)" :key="modelInfo.name">
                               <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
                             </template>
+                          </select>
+                        </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                          Caption Mode Strategy
+                          <select x-model="llm.presetForm.captionModeStrategy" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="auto">Auto (use project caption mode)</option>
+                            <option value="description">Force description mode</option>
+                            <option value="tags">Force tags mode</option>
                           </select>
                         </label>
                       </div>
@@ -825,7 +895,7 @@
                   <select x-model="settings.defaultPresetId" :disabled="llm.presets.length === 0" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-50">
                     <option value="">No default preset</option>
                     <template x-for="preset in llm.presets" :key="preset.id">
-                      <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name})${modelCapabilityLabel(preset.backend, preset.model_name) ? ` ${modelCapabilityLabel(preset.backend, preset.model_name)}` : ''}`"></option>
+                      <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name}, ${preset.caption_mode_strategy || 'auto'})${modelCapabilityLabel(preset.backend, preset.model_name) ? ` ${modelCapabilityLabel(preset.backend, preset.model_name)}` : ''}`"></option>
                     </template>
                   </select>
                 </label>
@@ -844,6 +914,26 @@
                   <input type="checkbox" x-model="settings.showDebugSection" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Show debug section
                 </label>
+
+                <p class="text-sm font-medium text-stone-200">Backend Runtime</p>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Ollama Base URL
+                    <input x-model="settings.ollamaBaseUrl" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
+                  </label>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    LM Studio Base URL
+                    <input x-model="settings.lmstudioBaseUrl" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
+                  </label>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Ollama Timeout Override (optional)
+                    <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                  </label>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    LM Studio Timeout Override (optional)
+                    <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                  </label>
+                </div>
 
                 <template x-if="settings.showDebugSection">
                   <div class="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs text-stone-300">

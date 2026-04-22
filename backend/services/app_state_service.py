@@ -7,6 +7,10 @@ from backend.config import get_settings
 
 
 DEFAULT_LLM_TIMEOUT_SECONDS = 120
+DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+DEFAULT_LMSTUDIO_BASE_URL = "http://127.0.0.1:1234"
+DEFAULT_OLLAMA_TIMEOUT_SECONDS: int | None = None
+DEFAULT_LMSTUDIO_TIMEOUT_SECONDS: int | None = None
 DEFAULT_REOPEN_LAST_PROJECT = True
 DEFAULT_USE_PRESET_BY_DEFAULT = False
 DEFAULT_SHOW_DEBUG_SECTION = False
@@ -32,6 +36,7 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
             name TEXT NOT NULL UNIQUE,
             backend TEXT NOT NULL,
             model_name TEXT NOT NULL,
+            caption_mode_strategy TEXT NOT NULL DEFAULT 'auto',
             system_prompt TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -42,7 +47,24 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
         );
         """
     )
+    preset_columns = {
+        row["name"] for row in connection.execute("PRAGMA table_info(llm_presets)").fetchall()
+    }
+    if "caption_mode_strategy" not in preset_columns:
+        connection.execute(
+            "ALTER TABLE llm_presets ADD COLUMN caption_mode_strategy TEXT NOT NULL DEFAULT 'auto'"
+        )
     connection.commit()
+
+
+def _parse_optional_timeout(raw_value: str | None) -> int | None:
+    if raw_value in {None, "", "null"}:
+        return None
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None
+    return min(900, max(10, value))
 
 
 def _get_setting(connection: sqlite3.Connection, key: str) -> str | None:
@@ -63,7 +85,7 @@ def list_global_presets() -> list[dict[str, object]]:
     with _connect() as connection:
         _ensure_schema(connection)
         rows = connection.execute(
-            "SELECT id, name, backend, model_name, system_prompt FROM llm_presets ORDER BY name ASC, id ASC"
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt FROM llm_presets ORDER BY name ASC, id ASC"
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -72,7 +94,7 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     with _connect() as connection:
         _ensure_schema(connection)
         row = connection.execute(
-            "SELECT id, name, backend, model_name, system_prompt FROM llm_presets WHERE id = ?",
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt FROM llm_presets WHERE id = ?",
             (preset_id,),
         ).fetchone()
     if row is None:
@@ -80,13 +102,23 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     return dict(row)
 
 
-def create_global_preset(*, name: str, backend: str, model_name: str, system_prompt: str) -> dict[str, object]:
+def create_global_preset(
+    *,
+    name: str,
+    backend: str,
+    model_name: str,
+    caption_mode_strategy: str,
+    system_prompt: str,
+) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
     if not clean_name:
         raise ValueError("Preset name is required.")
     if not clean_model_name:
         raise ValueError("Preset model is required.")
+    strategy = caption_mode_strategy.strip().lower()
+    if strategy not in {"auto", "description", "tags"}:
+        raise ValueError("Preset caption mode strategy must be one of: auto, description, tags.")
 
     with _connect() as connection:
         _ensure_schema(connection)
@@ -95,8 +127,8 @@ def create_global_preset(*, name: str, backend: str, model_name: str, system_pro
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         cursor = connection.execute(
-            "INSERT INTO llm_presets(name, backend, model_name, system_prompt) VALUES(?, ?, ?, ?)",
-            (clean_name, backend, clean_model_name, system_prompt),
+            "INSERT INTO llm_presets(name, backend, model_name, caption_mode_strategy, system_prompt) VALUES(?, ?, ?, ?, ?)",
+            (clean_name, backend, clean_model_name, strategy, system_prompt),
         )
         connection.commit()
         preset_id = int(cursor.lastrowid)
@@ -104,13 +136,24 @@ def create_global_preset(*, name: str, backend: str, model_name: str, system_pro
     return get_global_preset(preset_id=preset_id)
 
 
-def update_global_preset(*, preset_id: int, name: str, backend: str, model_name: str, system_prompt: str) -> dict[str, object]:
+def update_global_preset(
+    *,
+    preset_id: int,
+    name: str,
+    backend: str,
+    model_name: str,
+    caption_mode_strategy: str,
+    system_prompt: str,
+) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
     if not clean_name:
         raise ValueError("Preset name is required.")
     if not clean_model_name:
         raise ValueError("Preset model is required.")
+    strategy = caption_mode_strategy.strip().lower()
+    if strategy not in {"auto", "description", "tags"}:
+        raise ValueError("Preset caption mode strategy must be one of: auto, description, tags.")
 
     with _connect() as connection:
         _ensure_schema(connection)
@@ -123,8 +166,8 @@ def update_global_preset(*, preset_id: int, name: str, backend: str, model_name:
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         connection.execute(
-            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, system_prompt = ? WHERE id = ?",
-            (clean_name, backend, clean_model_name, system_prompt, preset_id),
+            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, caption_mode_strategy = ?, system_prompt = ? WHERE id = ?",
+            (clean_name, backend, clean_model_name, strategy, system_prompt, preset_id),
         )
         connection.commit()
 
@@ -148,6 +191,10 @@ def get_global_settings() -> dict[str, object]:
         raw_use_preset = _get_setting(connection, "llm_use_preset_by_default")
         raw_default_preset_id = _get_setting(connection, "llm_default_preset_id")
         raw_show_debug_section = _get_setting(connection, "ui_show_debug_section")
+        raw_ollama_base_url = _get_setting(connection, "ollama_base_url")
+        raw_lmstudio_base_url = _get_setting(connection, "lmstudio_base_url")
+        raw_ollama_timeout = _get_setting(connection, "ollama_timeout_seconds")
+        raw_lmstudio_timeout = _get_setting(connection, "lmstudio_timeout_seconds")
 
     if raw_timeout is None:
         timeout_value = DEFAULT_LLM_TIMEOUT_SECONDS
@@ -175,11 +222,25 @@ def get_global_settings() -> dict[str, object]:
         else raw_show_debug_section.lower() in {"1", "true", "yes", "on"}
     )
 
+    ollama_base_url = (raw_ollama_base_url or "").strip() or DEFAULT_OLLAMA_BASE_URL
+    lmstudio_base_url = (raw_lmstudio_base_url or "").strip() or DEFAULT_LMSTUDIO_BASE_URL
+
+    ollama_timeout_seconds = _parse_optional_timeout(raw_ollama_timeout)
+    if ollama_timeout_seconds is None:
+        ollama_timeout_seconds = DEFAULT_OLLAMA_TIMEOUT_SECONDS
+    lmstudio_timeout_seconds = _parse_optional_timeout(raw_lmstudio_timeout)
+    if lmstudio_timeout_seconds is None:
+        lmstudio_timeout_seconds = DEFAULT_LMSTUDIO_TIMEOUT_SECONDS
+
     return {
         "llm_timeout_seconds": timeout_value,
         "llm_use_preset_by_default": use_preset_by_default,
         "llm_default_preset_id": default_preset_id,
         "ui_show_debug_section": show_debug_section,
+        "ollama_base_url": ollama_base_url,
+        "lmstudio_base_url": lmstudio_base_url,
+        "ollama_timeout_seconds": ollama_timeout_seconds,
+        "lmstudio_timeout_seconds": lmstudio_timeout_seconds,
     }
 
 
@@ -189,14 +250,26 @@ def update_global_settings(
     llm_use_preset_by_default: bool,
     llm_default_preset_id: int | None,
     ui_show_debug_section: bool,
+    ollama_base_url: str,
+    lmstudio_base_url: str,
+    ollama_timeout_seconds: int | None,
+    lmstudio_timeout_seconds: int | None,
 ) -> dict[str, object]:
     timeout_value = min(900, max(10, int(llm_timeout_seconds)))
+    clean_ollama_base_url = ollama_base_url.strip() or DEFAULT_OLLAMA_BASE_URL
+    clean_lmstudio_base_url = lmstudio_base_url.strip() or DEFAULT_LMSTUDIO_BASE_URL
+    clean_ollama_timeout = None if ollama_timeout_seconds is None else min(900, max(10, int(ollama_timeout_seconds)))
+    clean_lmstudio_timeout = None if lmstudio_timeout_seconds is None else min(900, max(10, int(lmstudio_timeout_seconds)))
     with _connect() as connection:
         _ensure_schema(connection)
         _set_setting(connection, "llm_timeout_seconds", str(timeout_value))
         _set_setting(connection, "llm_use_preset_by_default", "true" if llm_use_preset_by_default else "false")
         _set_setting(connection, "llm_default_preset_id", "" if llm_default_preset_id is None else str(llm_default_preset_id))
         _set_setting(connection, "ui_show_debug_section", "true" if ui_show_debug_section else "false")
+        _set_setting(connection, "ollama_base_url", clean_ollama_base_url)
+        _set_setting(connection, "lmstudio_base_url", clean_lmstudio_base_url)
+        _set_setting(connection, "ollama_timeout_seconds", "" if clean_ollama_timeout is None else str(clean_ollama_timeout))
+        _set_setting(connection, "lmstudio_timeout_seconds", "" if clean_lmstudio_timeout is None else str(clean_lmstudio_timeout))
         connection.commit()
     return get_global_settings()
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.services.app_state_service import get_project_session_state, update_project_session_state
+from backend.services.export_service import export_project_dataset, preview_project_export
 from backend.services.import_service import import_folder_into_project
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
@@ -38,6 +39,27 @@ class UpdateSessionStateRequest(BaseModel):
     last_project_path: str = ""
     last_project_directory: str = ""
     reopen_last_project: bool = True
+
+
+class ExportProjectRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    output_folder: str = Field(min_length=1)
+    included_only: bool = True
+    apply_trigger_word: bool = False
+    include_metadata: bool = False
+    overwrite_existing: bool = False
+    clean_output_folder: bool = False
+    create_new_folder: bool = False
+    new_folder_name: str = ""
+
+
+class ExportPreviewRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    output_folder: str = Field(min_length=1)
+    included_only: bool = True
+    apply_trigger_word: bool = False
+    create_new_folder: bool = False
+    new_folder_name: str = ""
 
 
 @router.get("/recent")
@@ -114,6 +136,41 @@ def import_folder_route(request: ImportFolderRequest) -> dict[str, object]:
             project_path=request.project_path.strip(),
             source_folder=request.source_folder.strip(),
             replace_existing=request.replace_existing,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"result": result.__dict__}
+
+
+@router.post("/export")
+def export_project_route(request: ExportProjectRequest) -> dict[str, object]:
+    try:
+        result = export_project_dataset(
+            project_path=request.project_path.strip(),
+            output_folder=request.output_folder.strip(),
+            included_only=request.included_only,
+            apply_trigger_word=request.apply_trigger_word,
+            include_metadata=request.include_metadata,
+            overwrite_existing=request.overwrite_existing,
+            clean_output_folder=request.clean_output_folder,
+            create_new_folder=request.create_new_folder,
+            new_folder_name=request.new_folder_name,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"result": result.__dict__}
+
+
+@router.post("/export-preview")
+def export_project_preview_route(request: ExportPreviewRequest) -> dict[str, object]:
+    try:
+        result = preview_project_export(
+            project_path=request.project_path.strip(),
+            output_folder=request.output_folder.strip(),
+            included_only=request.included_only,
+            apply_trigger_word=request.apply_trigger_word,
+            create_new_folder=request.create_new_folder,
+            new_folder_name=request.new_folder_name,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

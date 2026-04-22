@@ -22,6 +22,17 @@ function describeItApp() {
       source_folder: 'practice_dataset/sample_set',
       replace_existing: false,
     },
+    exportForm: {
+      output_folder: 'exports',
+      included_only: true,
+      apply_trigger_word: false,
+      include_metadata: false,
+      overwrite_existing: false,
+      clean_output_folder: false,
+      create_new_folder: false,
+      new_folder_name: '',
+    },
+    exportPreview: null,
     imageSummary: {
       count: 0,
       non_empty_caption_count: 0,
@@ -48,6 +59,7 @@ function describeItApp() {
         name: '',
         backend: 'ollama',
         modelName: '',
+        captionModeStrategy: 'auto',
         systemPrompt: '',
       },
     },
@@ -78,6 +90,10 @@ function describeItApp() {
       defaultPresetId: '',
       reopenLastProjectOnStartup: true,
       showDebugSection: false,
+      ollamaBaseUrl: 'http://127.0.0.1:11434',
+      lmstudioBaseUrl: 'http://127.0.0.1:1234',
+      ollamaTimeoutSeconds: '',
+      lmstudioTimeoutSeconds: '',
     },
     projectSession: {
       lastProjectPath: '',
@@ -107,6 +123,16 @@ function describeItApp() {
       }
       return Math.min(900, Math.max(10, parsed));
     },
+    normalizeOptionalTimeout(value) {
+      if (value === '' || value === null || value === undefined) {
+        return '';
+      }
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed)) {
+        return '';
+      }
+      return Math.min(900, Math.max(10, parsed));
+    },
     async loadSettings() {
       try {
         const response = await fetch('/api/llm/settings');
@@ -118,17 +144,29 @@ function describeItApp() {
         this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
         this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
         this.settings.showDebugSection = payload.ui_show_debug_section === true;
+        this.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
+        this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
+        this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
+        this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
         this.applyPresetPreference();
       } catch (error) {
         this.settings.llmTimeoutSeconds = 120;
         this.settings.usePresetByDefault = false;
         this.settings.defaultPresetId = '';
         this.settings.showDebugSection = false;
+        this.settings.ollamaBaseUrl = 'http://127.0.0.1:11434';
+        this.settings.lmstudioBaseUrl = 'http://127.0.0.1:1234';
+        this.settings.ollamaTimeoutSeconds = '';
+        this.settings.lmstudioTimeoutSeconds = '';
       }
     },
     async saveSettings() {
       this.settings.llmTimeoutSeconds = this.normalizeTimeout(this.settings.llmTimeoutSeconds);
+      this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.ollamaTimeoutSeconds);
+      this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.lmstudioTimeoutSeconds);
       const defaultPresetId = this.settings.defaultPresetId ? Number(this.settings.defaultPresetId) : null;
+      const ollamaTimeoutSeconds = this.settings.ollamaTimeoutSeconds === '' ? null : Number(this.settings.ollamaTimeoutSeconds);
+      const lmstudioTimeoutSeconds = this.settings.lmstudioTimeoutSeconds === '' ? null : Number(this.settings.lmstudioTimeoutSeconds);
       try {
         const response = await fetch('/api/llm/settings', {
           method: 'POST',
@@ -138,6 +176,10 @@ function describeItApp() {
             llm_use_preset_by_default: this.settings.usePresetByDefault,
             llm_default_preset_id: defaultPresetId,
             ui_show_debug_section: this.settings.showDebugSection,
+            ollama_base_url: this.settings.ollamaBaseUrl,
+            lmstudio_base_url: this.settings.lmstudioBaseUrl,
+            ollama_timeout_seconds: ollamaTimeoutSeconds,
+            lmstudio_timeout_seconds: lmstudioTimeoutSeconds,
           }),
         });
         const payload = await response.json();
@@ -148,6 +190,10 @@ function describeItApp() {
         this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
         this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
         this.settings.showDebugSection = payload.ui_show_debug_section === true;
+        this.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
+        this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
+        this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
+        this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
         this.projectSession.reopenLastProject = this.settings.reopenLastProjectOnStartup;
         await this.saveProjectSessionState();
         this.applyPresetPreference();
@@ -344,6 +390,62 @@ function describeItApp() {
       this.statusMessage = `Open path set to ${path}`;
       this.errorMessage = '';
     },
+    chooseExportDirectory(path) {
+      this.exportForm.output_folder = path;
+      this.projectSession.lastProjectDirectory = path;
+      this.saveProjectSessionState();
+      this.exportPreview = null;
+      this.statusMessage = `Export folder set to ${path}`;
+      this.errorMessage = '';
+    },
+    clearExportPreview() {
+      this.exportPreview = null;
+    },
+    normalizeExportFormOptions() {
+      if (this.exportForm.clean_output_folder && this.exportForm.overwrite_existing) {
+        this.exportForm.overwrite_existing = false;
+      }
+      if (!this.exportForm.create_new_folder) {
+        this.exportForm.new_folder_name = '';
+      }
+    },
+    async requestExportPreview() {
+      if (!this.currentProject?.path) {
+        this.errorMessage = 'Open or create a project first.';
+        return;
+      }
+      if (!this.exportForm.output_folder.trim()) {
+        this.errorMessage = 'Select an export output folder first.';
+        return;
+      }
+
+      this.normalizeExportFormOptions();
+      this.errorMessage = '';
+      this.statusMessage = '';
+      try {
+        const response = await fetch('/api/projects/export-preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            output_folder: this.exportForm.output_folder,
+            included_only: this.exportForm.included_only,
+            apply_trigger_word: this.exportForm.apply_trigger_word,
+            create_new_folder: this.exportForm.create_new_folder,
+            new_folder_name: this.exportForm.new_folder_name,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Export preview failed');
+        }
+        this.exportPreview = payload.result;
+        this.statusMessage = `Preview ready: ${this.exportPreview.images_to_export} image(s) will be exported.`;
+      } catch (error) {
+        this.exportPreview = null;
+        this.errorMessage = error.message;
+      }
+    },
     async createProject() {
       this.errorMessage = '';
       this.statusMessage = '';
@@ -503,6 +605,7 @@ function describeItApp() {
         name: '',
         backend: this.llm.backends.some((item) => item.name === 'ollama') ? 'ollama' : (this.llm.backends[0]?.name ?? ''),
         modelName: '',
+        captionModeStrategy: 'auto',
         systemPrompt: '',
       };
       this.onPresetBackendChanged();
@@ -513,6 +616,7 @@ function describeItApp() {
         name: preset.name,
         backend: preset.backend,
         modelName: preset.model_name,
+        captionModeStrategy: preset.caption_mode_strategy || 'auto',
         systemPrompt: preset.system_prompt ?? '',
       };
       this.llm.selectedPresetId = String(preset.id);
@@ -548,6 +652,7 @@ function describeItApp() {
             name: this.llm.presetForm.name,
             backend: this.llm.presetForm.backend,
             model_name: this.llm.presetForm.modelName,
+            caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
             system_prompt: this.llm.presetForm.systemPrompt,
           }),
         });
@@ -581,6 +686,7 @@ function describeItApp() {
             name: this.llm.presetForm.name,
             backend: this.llm.presetForm.backend,
             model_name: this.llm.presetForm.modelName,
+            caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
             system_prompt: this.llm.presetForm.systemPrompt,
           }),
         });
@@ -1296,6 +1402,56 @@ function describeItApp() {
         this.statusMessage = `Imported ${result.imported_images} images (${result.captions_from_files} with captions, ${result.blank_captions} blank).`;
         await this.loadImages();
         await this.loadImageSummary();
+      } catch (error) {
+        this.errorMessage = error.message;
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+    async exportProjectDataset() {
+      if (!this.currentProject?.path) {
+        this.errorMessage = 'Open or create a project first.';
+        return;
+      }
+      if (!this.exportForm.output_folder.trim()) {
+        this.errorMessage = 'Select an export output folder first.';
+        return;
+      }
+      this.normalizeExportFormOptions();
+      if (this.exportForm.clean_output_folder && this.exportForm.overwrite_existing) {
+        this.errorMessage = 'Choose either clean output folder or overwrite existing files.';
+        return;
+      }
+
+      this.errorMessage = '';
+      this.statusMessage = '';
+      this.isSubmitting = true;
+      try {
+        const response = await fetch('/api/projects/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            output_folder: this.exportForm.output_folder,
+            included_only: this.exportForm.included_only,
+            apply_trigger_word: this.exportForm.apply_trigger_word,
+            include_metadata: this.exportForm.include_metadata,
+            overwrite_existing: this.exportForm.overwrite_existing,
+            clean_output_folder: this.exportForm.clean_output_folder,
+            create_new_folder: this.exportForm.create_new_folder,
+            new_folder_name: this.exportForm.new_folder_name,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Export failed');
+        }
+        const result = payload.result;
+        const collisionSuffix = result.skipped_due_to_collision ? `, ${result.skipped_due_to_collision} skipped due to collisions` : '';
+        const blobSuffix = result.skipped_missing_blob ? `, ${result.skipped_missing_blob} missing image data` : '';
+        const metadataSuffix = result.metadata_written && result.metadata_file ? ' Metadata manifest written.' : '';
+        this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}`;
+        this.exportPreview = null;
       } catch (error) {
         this.errorMessage = error.message;
       } finally {

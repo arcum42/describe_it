@@ -33,6 +33,7 @@ class CreatePresetRequest(BaseModel):
     name: str = Field(min_length=1)
     backend: str = Field(min_length=1)
     model_name: str = Field(min_length=1)
+    caption_mode_strategy: str = Field(default="auto", pattern="^(auto|description|tags)$")
     system_prompt: str = ""
 
 
@@ -49,6 +50,10 @@ class UpdateSettingsRequest(BaseModel):
     llm_use_preset_by_default: bool = False
     llm_default_preset_id: int | None = Field(default=None, ge=1)
     ui_show_debug_section: bool = False
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    lmstudio_base_url: str = "http://127.0.0.1:1234"
+    ollama_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
+    lmstudio_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
 
 
 class GenerateWithPresetRequest(BaseModel):
@@ -129,6 +134,10 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         llm_use_preset_by_default=request.llm_use_preset_by_default,
         llm_default_preset_id=request.llm_default_preset_id,
         ui_show_debug_section=request.ui_show_debug_section,
+        ollama_base_url=request.ollama_base_url,
+        lmstudio_base_url=request.lmstudio_base_url,
+        ollama_timeout_seconds=request.ollama_timeout_seconds,
+        lmstudio_timeout_seconds=request.lmstudio_timeout_seconds,
     )
 
 
@@ -147,6 +156,7 @@ def create_preset_route(request: CreatePresetRequest) -> dict[str, object]:
             name=request.name,
             backend=request.backend,
             model_name=request.model_name,
+            caption_mode_strategy=request.caption_mode_strategy,
             system_prompt=request.system_prompt,
         )
         return {"preset": preset}
@@ -162,6 +172,7 @@ def update_preset_route(request: UpdatePresetRequest) -> dict[str, object]:
             name=request.name,
             backend=request.backend,
             model_name=request.model_name,
+            caption_mode_strategy=request.caption_mode_strategy,
             system_prompt=request.system_prompt,
         )
         return {"preset": preset}
