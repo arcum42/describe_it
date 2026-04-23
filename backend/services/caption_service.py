@@ -176,7 +176,7 @@ def delete_caption(*, project_path: str, image_id: int, caption_id: int) -> dict
         }
 
 
-def apply_generated_caption(
+def _apply_generated_caption(
     *,
     project_path: str,
     image_id: int,

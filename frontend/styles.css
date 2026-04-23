@@ -10,6 +10,15 @@ textarea {
   resize: vertical;
 }
 
+/* Checkbox label utility */
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #d6d3d1; /* stone-300 */
+}
+
 /* Native select: hide OS chevron, show custom SVG chevron */
 select {
   appearance: none;

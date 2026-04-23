@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.config import get_settings
-from backend.services.caption_service import apply_generated_caption
+from backend.services.caption_service import _apply_generated_caption
 from backend.services.image_service import list_project_images
 from backend.services.llm_service import generate_text_for_image_manual, generate_text_for_image_with_preset
 
@@ -392,7 +392,7 @@ class BatchService:
             try:
                 generated_text, backend, model = self._generate_for_image(job, image_id)
                 source = f"llm:{backend}:{model}" if not job.use_preset else f"llm:preset:{job.preset_id}:{backend}:{model}"
-                apply_generated_caption(
+                _apply_generated_caption(
                     project_path=job.project_path,
                     image_id=image_id,
                     generated_text=generated_text,

@@ -6,8 +6,8 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260423b" />
-    <script defer src="/static/app.js?v=20260423b"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260423d" />
+    <script defer src="/static/app.js?v=20260423d"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -317,7 +317,10 @@
                     Export
                   </button>
                 </div>
-                <span class="text-xs text-stone-500" x-text="mainView === 'grid' ? 'Browse and pick an image' : mainView === 'editor' ? 'Single image editing mode' : mainView === 'llm' ? 'Preset management and prompt strategy' : mainView === 'batch' ? 'Batch generation workflow' : mainView === 'import' ? 'Import images into project' : 'Export dataset'"></span>
+                <span class="text-xs text-stone-500"
+                  x-show="(mainView === 'editor' && selectedImage) || (mainView === 'batch' && batchIsActive())"
+                  x-text="mainView === 'editor' && selectedImage ? selectedImage.filename : mainView === 'batch' ? 'Batch job running…' : ''"
+                ></span>
               </div>
 
               <template x-if="mainView === 'grid'">
@@ -412,7 +415,7 @@
                     </div>
 
                     <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2">
-                      <label class="flex items-center gap-2 text-sm text-stone-300">
+                      <label class="field-checkbox">
                         <input type="checkbox" x-model="llm.showAllModels" @change="onModelVisibilityFilterChanged()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                         Show all models (including text-only)
                       </label>
@@ -434,12 +437,14 @@
                       <textarea x-model="llm.extraInstructions" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional style guidance for generation"></textarea>
                     </label>
 
-                    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-                      <label class="flex items-center gap-2 text-sm text-stone-300">
+                    <div class="mt-3 flex flex-wrap items-center gap-3">
+                      <label class="field-checkbox">
                         <input type="checkbox" x-model="llm.makeActive" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                         Set generated caption as active
                       </label>
                       <span class="text-xs text-stone-500" x-text="`Timeout: ${settings.llmTimeoutSeconds}s`"></span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-3">
                       <button
                         @click="generateCaptionWithLLM()"
                         :disabled="isSubmitting || !!llm.selectedPresetId || !llm.backend || !llm.model"
@@ -479,7 +484,7 @@
                   <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <p class="text-sm font-medium text-stone-200">Caption Candidates</p>
                     <p class="mt-1 text-xs text-stone-500">Use the controls on each caption to set active, edit, or delete.</p>
-                    <div class="mt-3 max-h-48 space-y-2 overflow-auto pr-1">
+                    <div class="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
                       <template x-for="caption in selectedImage.captions" :key="caption.id">
                         <div class="w-full rounded-xl border px-3 py-2 text-left text-sm transition" :class="caption.is_active ? 'border-amber-500 bg-amber-500/10 text-amber-100' : 'border-stone-800 bg-stone-900 text-stone-300'">
                           <div class="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.2em]">
@@ -556,7 +561,7 @@
                   Source Folder
                   <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Replace existing images in project
                 </label>
@@ -581,7 +586,7 @@
                     <button @click="showBrowser = true" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200" title="Browse for a folder in the sidebar">Browse</button>
                   </div>
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.create_new_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Export into a new subfolder
                 </label>
@@ -589,23 +594,23 @@
                   New Folder Name (Optional)
                   <input x-model="exportForm.new_folder_name" @input="clearExportPreview()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="my_export_run" />
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.included_only" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Export only included images
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.apply_trigger_word" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Apply project trigger word (if set)
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.include_metadata" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Write export metadata manifest (export_manifest.json)
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.overwrite_existing" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Overwrite existing files in destination
                 </label>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
+                <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.clean_output_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Clean destination folder before export
                 </label>
@@ -812,7 +817,7 @@
                   </div>
 
                   <div class="mt-4 flex flex-wrap items-center gap-3">
-                    <label class="flex items-center gap-2 text-sm text-stone-300">
+                    <label class="field-checkbox">
                       <input type="checkbox" x-model="llm.makeActive" :disabled="batchIsActive()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
                       Set generated caption as active
                     </label>
@@ -966,100 +971,124 @@
                 <span class="text-xs text-stone-500">Workspace preferences</span>
               </div>
 
-              <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                <p class="text-sm font-medium text-stone-200">LLM</p>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Generation Timeout (seconds)
-                  <input
-                    type="number"
-                    min="10"
-                    max="900"
-                    step="1"
-                    x-model.number="settings.llmTimeoutSeconds"
-                    class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"
-                  />
-                </label>
-                <p class="text-xs text-stone-500">Used for caption generation requests to Ollama and LM Studio. Larger models may need higher values.</p>
+              <div class="space-y-3">
 
-                <label class="flex items-center gap-2 text-sm text-stone-300">
-                  <input type="checkbox" x-model="settings.usePresetByDefault" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
-                  Use preset by default for generation
-                </label>
+                <!-- LLM Defaults -->
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">LLM Defaults</p>
+                  <div class="space-y-3">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Generation Timeout (seconds)
+                      <input
+                        type="number"
+                        min="10"
+                        max="900"
+                        step="1"
+                        x-model.number="settings.llmTimeoutSeconds"
+                        class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"
+                      />
+                    </label>
+                    <p class="text-xs text-stone-500">Used for caption generation requests to Ollama and LM Studio. Larger models may need higher values.</p>
 
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Default Preset
-                  <select x-model="settings.defaultPresetId" :disabled="llm.presets.length === 0" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-50">
-                    <option value="">No default preset</option>
-                    <template x-for="preset in llm.presets" :key="preset.id">
-                      <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name}, ${preset.caption_mode_strategy || 'auto'})${modelCapabilityLabel(preset.backend, preset.model_name) ? ` ${modelCapabilityLabel(preset.backend, preset.model_name)}` : ''}`"></option>
-                    </template>
-                  </select>
-                </label>
-                <template x-if="llm.presets.length === 0">
-                  <p class="text-xs text-stone-500">No presets available yet. Create one in the LLM tab to use preset defaults.</p>
-                </template>
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="settings.usePresetByDefault" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Use preset by default for generation
+                    </label>
 
-                <p class="text-sm font-medium text-stone-200">Project Session</p>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
-                  <input type="checkbox" x-model="settings.reopenLastProjectOnStartup" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
-                  Reopen last project on startup
-                </label>
-
-                <p class="text-sm font-medium text-stone-200">Debug</p>
-                <label class="flex items-center gap-2 text-sm text-stone-300">
-                  <input type="checkbox" x-model="settings.showDebugSection" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
-                  Show debug section
-                </label>
-
-                <p class="text-sm font-medium text-stone-200">Backend Runtime</p>
-                <div class="grid gap-3 md:grid-cols-2">
-                  <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                    Ollama Base URL
-                    <div class="mt-2 flex items-center gap-2">
-                      <input x-model="settings.ollamaBaseUrl" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
-                      <button
-                        @click="testConnection('ollama')"
-                        :disabled="connectionTest.ollamaTesting"
-                        class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
-                        x-text="connectionTest.ollamaTesting ? 'Testing…' : 'Test'"
-                      ></button>
-                    </div>
-                    <template x-if="connectionTest.ollama !== null">
-                      <p
-                        class="mt-1 text-[11px]"
-                        :class="connectionTest.ollama.ok ? 'text-emerald-400' : 'text-red-400'"
-                        x-text="connectionTest.ollama.message"
-                      ></p>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Default Preset
+                      <select x-model="settings.defaultPresetId" :disabled="llm.presets.length === 0" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none disabled:opacity-50">
+                        <option value="">No default preset</option>
+                        <template x-for="preset in llm.presets" :key="preset.id">
+                          <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name}, ${preset.caption_mode_strategy || 'auto'})${modelCapabilityLabel(preset.backend, preset.model_name) ? ` ${modelCapabilityLabel(preset.backend, preset.model_name)}` : ''}`"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <template x-if="llm.presets.length === 0">
+                      <p class="text-xs text-stone-500">No presets available yet. Create one in the LLM tab to use preset defaults.</p>
                     </template>
                   </div>
-                  <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                    LM Studio Base URL
-                    <div class="mt-2 flex items-center gap-2">
-                      <input x-model="settings.lmstudioBaseUrl" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
-                      <button
-                        @click="testConnection('lmstudio')"
-                        :disabled="connectionTest.lmstudioTesting"
-                        class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
-                        x-text="connectionTest.lmstudioTesting ? 'Testing…' : 'Test'"
-                      ></button>
+                </div>
+
+                <!-- Ollama -->
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">Ollama</p>
+                  <div class="space-y-3">
+                    <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Base URL
+                      <div class="mt-2 flex items-center gap-2">
+                        <input x-model="settings.ollamaBaseUrl" @input="connectionTest.ollama = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
+                        <button
+                          @click="testConnection('ollama')"
+                          :disabled="connectionTest.ollamaTesting"
+                          class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                          x-text="connectionTest.ollamaTesting ? 'Testing…' : 'Test'"
+                        ></button>
+                      </div>
+                      <template x-if="connectionTest.ollama !== null">
+                        <p
+                          class="mt-1 text-[11px]"
+                          :class="connectionTest.ollama.ok ? 'text-emerald-400' : 'text-red-400'"
+                          x-text="connectionTest.ollama.message"
+                        ></p>
+                      </template>
                     </div>
-                    <template x-if="connectionTest.lmstudio !== null">
-                      <p
-                        class="mt-1 text-[11px]"
-                        :class="connectionTest.lmstudio.ok ? 'text-emerald-400' : 'text-red-400'"
-                        x-text="connectionTest.lmstudio.message"
-                      ></p>
-                    </template>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Timeout Override (optional)
+                      <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                    </label>
                   </div>
-                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                    Ollama Timeout Override (optional)
-                    <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
-                  </label>
-                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                    LM Studio Timeout Override (optional)
-                    <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                </div>
+
+                <!-- LM Studio -->
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">LM Studio</p>
+                  <div class="space-y-3">
+                    <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Base URL
+                      <div class="mt-2 flex items-center gap-2">
+                        <input x-model="settings.lmstudioBaseUrl" @input="connectionTest.lmstudio = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
+                        <button
+                          @click="testConnection('lmstudio')"
+                          :disabled="connectionTest.lmstudioTesting"
+                          class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                          x-text="connectionTest.lmstudioTesting ? 'Testing…' : 'Test'"
+                        ></button>
+                      </div>
+                      <template x-if="connectionTest.lmstudio !== null">
+                        <p
+                          class="mt-1 text-[11px]"
+                          :class="connectionTest.lmstudio.ok ? 'text-emerald-400' : 'text-red-400'"
+                          x-text="connectionTest.lmstudio.message"
+                        ></p>
+                      </template>
+                    </div>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Timeout Override (optional)
+                      <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Project Behaviour -->
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">Project Behaviour</p>
+                  <label class="field-checkbox">
+                    <input type="checkbox" x-model="settings.reopenLastProjectOnStartup" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Reopen last project on startup
                   </label>
                 </div>
+
+                <!-- Debug (collapsible) -->
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <button
+                    @click="settings.showDebugSection = !settings.showDebugSection"
+                    class="flex w-full items-center justify-between text-xs font-semibold uppercase tracking-[0.2em] text-stone-400 hover:text-stone-200"
+                  >
+                    <span>Debug</span>
+                    <span x-text="settings.showDebugSection ? '▲' : '▼'" class="text-[10px]"></span>
+                  </button>
+                  <div x-show="settings.showDebugSection" class="mt-3 space-y-3">
 
                 <div class="rounded-xl border border-emerald-700/50 bg-emerald-950/30 p-3">
                   <div class="mb-3 flex items-center justify-between">
@@ -1095,30 +1124,31 @@
                   </template>
                 </div>
 
-                <template x-if="settings.showDebugSection">
-                  <div class="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs text-stone-300">
-                    <div class="mb-2 flex items-center justify-between">
-                      <p class="uppercase tracking-[0.2em] text-stone-500">Backend Diagnostics</p>
-                      <button @click="loadLLMBackends()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
-                        Refresh
-                      </button>
-                    </div>
-                    <div class="space-y-2">
-                      <template x-for="backend in llm.backends" :key="backend.name">
-                        <div class="rounded-lg border border-stone-800 bg-stone-950/70 px-3 py-2">
-                          <div class="flex items-center justify-between gap-3">
-                            <p class="font-medium text-stone-100" x-text="backend.name"></p>
-                            <p class="text-stone-400" x-text="backend.available ? 'online' : 'offline'"></p>
+                    <div class="rounded-xl border border-stone-700 bg-stone-900/80 p-3 text-xs text-stone-300">
+                      <div class="mb-2 flex items-center justify-between">
+                        <p class="uppercase tracking-[0.2em] text-stone-500">Backend Diagnostics</p>
+                        <button @click="loadLLMBackends()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                          Refresh
+                        </button>
+                      </div>
+                      <div class="space-y-2">
+                        <template x-for="backend in llm.backends" :key="backend.name">
+                          <div class="rounded-lg border border-stone-800 bg-stone-950/70 px-3 py-2">
+                            <div class="flex items-center justify-between gap-3">
+                              <p class="font-medium text-stone-100" x-text="backend.name"></p>
+                              <p class="text-stone-400" x-text="backend.available ? 'online' : 'offline'"></p>
+                            </div>
+                            <p class="mt-1 text-stone-500" x-text="`models: ${backend.models.length}, vision: ${backend.models.filter((model) => model.vision_capable).length}`"></p>
+                            <template x-if="backend.error">
+                              <p class="mt-1 break-all text-red-300" x-text="backend.error"></p>
+                            </template>
                           </div>
-                          <p class="mt-1 text-stone-500" x-text="`models: ${backend.models.length}, vision: ${backend.models.filter((model) => model.vision_capable).length}`"></p>
-                          <template x-if="backend.error">
-                            <p class="mt-1 break-all text-red-300" x-text="backend.error"></p>
-                          </template>
-                        </div>
-                      </template>
+                        </template>
+                      </div>
                     </div>
-                  </div>
-                </template>
+
+                  </div><!-- end debug content -->
+                </div><!-- end debug section -->
 
                 <div class="flex flex-wrap gap-3">
                   <button @click="saveSettings()" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300">
