@@ -12,6 +12,22 @@ from backend.db.base import Base
 def _ensure_project_schema(database_path: Path) -> None:
     connection = sqlite3.connect(database_path)
     try:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                format TEXT NOT NULL DEFAULT 'markdown',
+                tags TEXT NOT NULL DEFAULT '',
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(project_id) REFERENCES projects(id)
+            )
+            """
+        )
         columns = {
             row[1]
             for row in connection.execute("PRAGMA table_info(projects)").fetchall()

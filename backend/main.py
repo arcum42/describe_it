@@ -7,7 +7,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
-from backend.routers import captions, health, images, llm, projects
+from backend.routers import captions, global_notes, health, images, llm, notes, projects
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
@@ -20,6 +20,8 @@ app.include_router(projects.router)
 app.include_router(images.router)
 app.include_router(captions.router)
 app.include_router(llm.router)
+app.include_router(notes.router)
+app.include_router(global_notes.router)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 

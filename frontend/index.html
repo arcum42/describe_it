@@ -6,8 +6,8 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260423i" />
-    <script defer src="/static/app.js?v=20260423i"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260423m" />
+    <script defer src="/static/app.js?v=20260423m"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -309,6 +309,13 @@
                     Batch
                   </button>
                   <button
+                    @click="mainView = 'notes'; refreshNotes()"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'notes' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Notes
+                  </button>
+                  <button
                     @click="mainView = 'import'"
                     :disabled="!currentProject"
                     class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-40"
@@ -475,6 +482,17 @@
                           Reference file path (pre-read before generation)
                           <input type="text" x-model="llm.tools.contextFile" placeholder="/path/to/notes.txt" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
                         </label>
+                        <div class="space-y-2">
+                          <p class="text-xs text-stone-500">Notes context (injected from the Notes tab)</p>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.includeProjectNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include all active project notes
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.includeGlobalNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include all active global notes
+                          </label>
+                        </div>
                       </div>
                     </div>
 
@@ -609,6 +627,210 @@
             </div>
           </template>
 
+          <template x-if="uiSection === 'workspace' && mainView === 'notes'">
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Notes</h2>
+                <button @click="refreshNotes()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                  Refresh
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-3">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="inline-flex rounded-xl border border-stone-800 bg-stone-950/80 p-1">
+                      <button
+                        @click="notes.scope = 'project'; onNotesScopeChanged()"
+                        class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                        :class="notes.scope === 'project' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                      >
+                        Project Notes
+                      </button>
+                      <button
+                        @click="notes.scope = 'global'; onNotesScopeChanged()"
+                        class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                        :class="notes.scope === 'global' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                      >
+                        Global Notes
+                      </button>
+                    </div>
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="notes.includeArchived" @change="onNotesArchivedFilterChanged()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Include archived
+                    </label>
+                  </div>
+                  <template x-if="notes.scope === 'project' && !currentProject">
+                    <p class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">Open a project to view project notes. Global notes remain available.</p>
+                  </template>
+                </div>
+
+                <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-3 flex items-center justify-between">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Notes List</p>
+                      <button @click="newNoteDraft()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        New
+                      </button>
+                    </div>
+                    <div class="max-h-80 space-y-2 overflow-auto pr-1">
+                      <template x-for="note in notesActiveItems()" :key="`${notes.scope}-${note.id}`">
+                        <button @click="selectNote(note)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="notes.selectedNoteId === note.id ? 'border-amber-500 ring-1 ring-amber-500/50' : ''">
+                          <div class="flex items-center justify-between gap-2">
+                            <p class="truncate font-medium text-stone-100" x-text="note.title || '(untitled note)'"></p>
+                            <span x-show="note.is_archived" class="rounded-full border border-stone-700 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-stone-400">archived</span>
+                          </div>
+                          <p class="mt-1 text-xs text-stone-500" x-text="`${note.format}${note.tags ? ` • ${note.tags}` : ''}`"></p>
+                        </button>
+                      </template>
+                      <template x-if="notesActiveItems().length === 0">
+                        <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No notes in this scope yet.</p>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500" x-text="notes.editor.id ? 'Edit Note' : 'Create Note'"></p>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                        Title
+                        <input x-model="notes.editor.title" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional title" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Format
+                        <select x-model="notes.editor.format" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <option value="markdown">Markdown</option>
+                          <option value="text">Text</option>
+                        </select>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Tags
+                        <input x-model="notes.editor.tags" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="comma,separated,tags" />
+                      </label>
+                    </div>
+                    <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Content
+                      <textarea x-model="notes.editor.content" class="mt-2 min-h-56 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Write note content (text or markdown)"></textarea>
+                    </label>
+                    <label class="mt-3 field-checkbox">
+                      <input type="checkbox" x-model="notes.editor.is_archived" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Archived
+                    </label>
+                    <div class="mt-4 flex flex-wrap gap-3">
+                      <button @click="saveNote()" :disabled="isSubmitting || (notes.scope === 'project' && !currentProject)" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                        Save Note
+                      </button>
+                      <button @click="deleteNote()" :disabled="isSubmitting || !notes.editor.id" class="rounded-xl border border-red-700 px-4 py-2 text-sm font-medium text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Delete Note
+                      </button>
+                      <button @click="newNoteDraft()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        New Draft
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-2xl border border-stone-800 bg-stone-950/40 p-4">
+                  <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Optional Assistant</p>
+                      <p class="text-sm font-medium text-stone-200">LLM Note Assistant</p>
+                    </div>
+                    <p class="text-xs text-stone-500">Generate draft text from a prompt, then save as a note.</p>
+                  </div>
+
+                  <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Backend
+                      <select x-model="notes.llm.backend" @change="onNotesLLMBackendChanged()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                        <template x-for="backend in llm.backends.filter((item) => item.available)" :key="`notes-llm-backend-${backend.name}`">
+                          <option :value="backend.name" x-text="backend.name"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Model
+                      <select x-model="notes.llm.model" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                        <template x-for="modelInfo in availableModelsForNoteLLM()" :key="`notes-llm-model-${modelInfo.name}`">
+                          <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
+                        </template>
+                      </select>
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Save Format
+                      <select x-model="notes.llm.outputFormat" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 pr-8 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                        <option value="markdown">Markdown</option>
+                        <option value="text">Text</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Prompt
+                    <textarea x-model="notes.llm.prompt" class="mt-2 min-h-32 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Ask for a reusable style guide, taxonomy summary, cleanup checklist, prompt template, etc."></textarea>
+                  </label>
+
+                  <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      New Note Title (optional)
+                      <input x-model="notes.llm.title" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Auto-derived from prompt if blank" />
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      New Note Tags (optional)
+                      <input x-model="notes.llm.tags" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="workflow,style,reference" />
+                    </label>
+                  </div>
+
+                  <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Context URL (optional)
+                      <input x-model="notes.llm.contextUrl" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="https://example.com/reference" />
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Context File (optional)
+                      <input x-model="notes.llm.contextFile" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/path/to/context.txt" />
+                    </label>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="notes.llm.webSearch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Enable web_search tool
+                    </label>
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="notes.llm.webFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Enable web_fetch tool
+                    </label>
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="notes.llm.includeProjectNotes" :disabled="!currentProject" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+                      Include project notes context
+                    </label>
+                    <label class="field-checkbox">
+                      <input type="checkbox" x-model="notes.llm.includeGlobalNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                      Include global notes context
+                    </label>
+                    <label class="field-checkbox md:col-span-2 lg:col-span-2">
+                      <input type="checkbox" x-model="notes.llm.useSelectedImage" :disabled="!selectedImage" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+                      Attach selected image from Editor tab (optional)
+                    </label>
+                  </div>
+                  <template x-if="notes.llm.useSelectedImage && selectedImage">
+                    <p class="mt-2 text-xs text-stone-500" x-text="`Image context: ${selectedImage.filename}`"></p>
+                  </template>
+
+                  <div class="mt-4 flex flex-wrap gap-3">
+                    <button @click="generateNoteWithLLM(false)" :disabled="isSubmitting || !notes.llm.backend || !notes.llm.model" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Generate Draft
+                    </button>
+                    <button @click="generateNoteWithLLM(true)" :disabled="isSubmitting || !notes.llm.backend || !notes.llm.model" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                      Generate + Save New Note
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </template>
+
           <template x-if="uiSection === 'workspace' && mainView === 'import'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
@@ -664,6 +886,10 @@
                 <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.include_metadata" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                   Write export metadata manifest (export_manifest.json)
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.include_project_notes" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Export project notes as files (notes/ folder)
                 </label>
                 <label class="field-checkbox">
                   <input type="checkbox" x-model="exportForm.overwrite_existing" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
@@ -779,6 +1005,14 @@
                           <label class="field-checkbox">
                             <input type="checkbox" x-model="llm.presetForm.toolWebFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                             Enable web_fetch
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.includeProjectNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include project notes as context
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.includeGlobalNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include global notes as context
                           </label>
                         </div>
                       </div>

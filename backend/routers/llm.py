@@ -16,6 +16,7 @@ from backend.services.llm_service import (
     generate_caption_for_image,
     generate_caption_with_preset,
     generate_caption_with_tools,
+    generate_note_text_with_tools,
     list_backends,
     list_presets,
     update_preset,
@@ -48,6 +49,8 @@ class CreatePresetRequest(BaseModel):
     tool_web_fetch: bool = False
     context_url_template: str = ""
     context_file_template: str = ""
+    include_project_notes: bool = False
+    include_global_notes: bool = False
 
 
 class UpdatePresetRequest(CreatePresetRequest):
@@ -90,6 +93,26 @@ class GenerateCaptionWithToolsRequest(BaseModel):
     tools_enabled: list[str] = Field(default_factory=list)
     context_urls: list[str] = Field(default_factory=list)
     context_files: list[str] = Field(default_factory=list)
+    include_project_notes: bool = False
+    project_note_ids: list[int] = Field(default_factory=list)
+    include_global_notes: bool = False
+    global_note_ids: list[int] = Field(default_factory=list)
+
+
+class GenerateNoteTextRequest(BaseModel):
+    backend: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    project_path: str | None = None
+    image_id: int | None = None
+    timeout_seconds: int = Field(default=120, ge=10, le=900)
+    tools_enabled: list[str] = Field(default_factory=list)
+    context_urls: list[str] = Field(default_factory=list)
+    context_files: list[str] = Field(default_factory=list)
+    include_project_notes: bool = False
+    project_note_ids: list[int] = Field(default_factory=list)
+    include_global_notes: bool = False
+    global_note_ids: list[int] = Field(default_factory=list)
 
 
 class CreateBatchJobRequest(BaseModel):
@@ -199,6 +222,10 @@ def generate_caption_with_tools_route(request: GenerateCaptionWithToolsRequest) 
             tools_enabled=request.tools_enabled,
             context_urls=request.context_urls,
             context_files=request.context_files,
+            include_project_notes=request.include_project_notes,
+            project_note_ids=request.project_note_ids,
+            include_global_notes=request.include_global_notes,
+            global_note_ids=request.global_note_ids,
         )
     except ValueError as error:
         logger.exception(
@@ -209,6 +236,38 @@ def generate_caption_with_tools_route(request: GenerateCaptionWithToolsRequest) 
     except Exception as error:
         logger.exception(
             "generate-caption-with-tools unexpected error: backend=%s model=%s",
+            request.backend, request.model,
+        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {error}") from error
+
+
+@router.post("/generate-note-text")
+def generate_note_text_route(request: GenerateNoteTextRequest) -> dict[str, object]:
+    try:
+        return generate_note_text_with_tools(
+            backend=request.backend.strip(),
+            model=request.model.strip(),
+            prompt=request.prompt,
+            project_path=(request.project_path or "").strip() or None,
+            image_id=request.image_id,
+            timeout_seconds=request.timeout_seconds,
+            tools_enabled=request.tools_enabled,
+            context_urls=request.context_urls,
+            context_files=request.context_files,
+            include_project_notes=request.include_project_notes,
+            project_note_ids=request.project_note_ids,
+            include_global_notes=request.include_global_notes,
+            global_note_ids=request.global_note_ids,
+        )
+    except ValueError as error:
+        logger.exception(
+            "generate-note-text failed: backend=%s model=%s tools=%s",
+            request.backend, request.model, request.tools_enabled,
+        )
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        logger.exception(
+            "generate-note-text unexpected error: backend=%s model=%s",
             request.backend, request.model,
         )
         raise HTTPException(status_code=500, detail=f"Unexpected error: {error}") from error
@@ -256,6 +315,8 @@ def create_preset_route(request: CreatePresetRequest) -> dict[str, object]:
             tool_web_fetch=request.tool_web_fetch,
             context_url_template=request.context_url_template,
             context_file_template=request.context_file_template,
+            include_project_notes=request.include_project_notes,
+            include_global_notes=request.include_global_notes,
         )
         return {"preset": preset}
     except ValueError as error:
@@ -276,6 +337,8 @@ def update_preset_route(request: UpdatePresetRequest) -> dict[str, object]:
             tool_web_fetch=request.tool_web_fetch,
             context_url_template=request.context_url_template,
             context_file_template=request.context_file_template,
+            include_project_notes=request.include_project_notes,
+            include_global_notes=request.include_global_notes,
         )
         return {"preset": preset}
     except ValueError as error:

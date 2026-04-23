@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 from pathlib import Path
 import re
@@ -24,6 +24,8 @@ class ExportResult:
     trigger_word_applied: bool
     metadata_written: bool
     metadata_file: str | None
+    exported_notes: int = field(default=0)
+    notes_folder: str | None = field(default=None)
 
 
 @dataclass
@@ -197,6 +199,54 @@ def preview_project_export(
     )
 
 
+def _slug(text: str) -> str:
+    """Make a filesystem-safe slug from text (max 40 chars)."""
+    normalized = text.strip().lower()
+    normalized = re.sub(r"[^a-z0-9]+", "-", normalized).strip("-")
+    return normalized[:40] or "note"
+
+
+def _export_project_notes(*, project_path: str, output_folder: Path) -> tuple[int, str | None]:
+    """Write non-archived project notes as files under output_folder/notes/.
+
+    Returns (count_written, notes_folder_path_str) or (0, None) if no notes.
+    """
+    try:
+        from backend.services.note_service import list_notes  # local import to avoid circularity
+        notes = list_notes(project_path=project_path, include_archived=False)
+    except Exception:  # noqa: BLE001
+        return 0, None
+
+    if not notes:
+        return 0, None
+
+    notes_dir = output_folder / "notes"
+    notes_dir.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+    for note in notes:
+        ext = ".md" if note.format == "markdown" else ".txt"
+        slug = _slug(note.title) if note.title else "note"
+        filename = f"{slug}-{note.id}{ext}"
+        header_lines = [
+            f"title: {note.title}",
+            f"id: {note.id}",
+            f"format: {note.format}",
+        ]
+        if note.tags:
+            header_lines.append(f"tags: {note.tags}")
+        header_lines += [
+            f"created_at: {note.created_at}",
+            f"updated_at: {note.updated_at}",
+        ]
+        header = "\n".join(f"# {line}" for line in header_lines)
+        file_content = f"{header}\n\n{note.content}"
+        (notes_dir / filename).write_text(file_content, encoding="utf-8")
+        written += 1
+
+    return written, str(notes_dir)
+
+
 def export_project_dataset(
     *,
     project_path: str,
@@ -208,6 +258,7 @@ def export_project_dataset(
     clean_output_folder: bool = False,
     create_new_folder: bool = False,
     new_folder_name: str = "",
+    include_project_notes: bool = True,
 ) -> ExportResult:
     resolved_project_path = _resolve_path(project_path)
     if not resolved_project_path.exists():
@@ -306,6 +357,15 @@ def export_project_dataset(
         metadata_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         metadata_file = str(metadata_path)
 
+    # Export project notes
+    exported_notes = 0
+    notes_folder: str | None = None
+    if include_project_notes:
+        exported_notes, notes_folder = _export_project_notes(
+            project_path=str(resolved_project_path),
+            output_folder=resolved_output_folder,
+        )
+
     return ExportResult(
         output_folder=str(resolved_output_folder),
         exported_images=exported_images,
@@ -315,4 +375,6 @@ def export_project_dataset(
         trigger_word_applied=trigger_word_applied,
         metadata_written=include_metadata,
         metadata_file=metadata_file,
+        exported_notes=exported_notes,
+        notes_folder=notes_folder,
     )

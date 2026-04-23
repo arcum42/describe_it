@@ -53,6 +53,7 @@ class ExportProjectRequest(BaseModel):
     clean_output_folder: bool = False
     create_new_folder: bool = False
     new_folder_name: str = ""
+    include_project_notes: bool = True
 
 
 class ExportPreviewRequest(BaseModel):
@@ -159,6 +160,7 @@ def export_project_route(request: ExportProjectRequest) -> dict[str, object]:
             clean_output_folder=request.clean_output_folder,
             create_new_folder=request.create_new_folder,
             new_folder_name=request.new_folder_name,
+            include_project_notes=request.include_project_notes,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

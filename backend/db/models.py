@@ -20,6 +20,7 @@ class ProjectRecord(Base):
     context_file_path: Mapped[str] = mapped_column(String(2048), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
     images: Mapped[list["ImageRecord"]] = relationship(back_populates="project")
+    notes: Mapped[list["NoteRecord"]] = relationship(back_populates="project")
     prompts: Mapped[list["PromptRecord"]] = relationship(back_populates="project")
     presets: Mapped[list["PresetRecord"]] = relationship(back_populates="project")
 
@@ -72,3 +73,18 @@ class PresetRecord(Base):
     model_name: Mapped[str] = mapped_column(String(255), default="")
     prompt_id: Mapped[int | None] = mapped_column(ForeignKey("prompts.id"), nullable=True)
     project: Mapped[ProjectRecord] = relationship(back_populates="presets")
+
+
+class NoteRecord(Base):
+    __tablename__ = "notes"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    title: Mapped[str] = mapped_column(String(255), default="")
+    content: Mapped[str] = mapped_column(Text, default="")
+    format: Mapped[str] = mapped_column(String(32), default="markdown")
+    tags: Mapped[str] = mapped_column(String(1024), default="")
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
+    project: Mapped[ProjectRecord] = relationship(back_populates="notes")

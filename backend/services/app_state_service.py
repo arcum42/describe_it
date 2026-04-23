@@ -72,6 +72,14 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE llm_presets ADD COLUMN context_file_template TEXT NOT NULL DEFAULT ''"
         )
+    if "include_project_notes" not in preset_columns:
+        connection.execute(
+            "ALTER TABLE llm_presets ADD COLUMN include_project_notes INTEGER NOT NULL DEFAULT 0"
+        )
+    if "include_global_notes" not in preset_columns:
+        connection.execute(
+            "ALTER TABLE llm_presets ADD COLUMN include_global_notes INTEGER NOT NULL DEFAULT 0"
+        )
     connection.commit()
 
 
@@ -113,13 +121,15 @@ def list_global_presets() -> list[dict[str, object]]:
     with _connect() as connection:
         _ensure_schema(connection)
         rows = connection.execute(
-            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template FROM llm_presets ORDER BY name ASC, id ASC"
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes FROM llm_presets ORDER BY name ASC, id ASC"
         ).fetchall()
     presets: list[dict[str, object]] = []
     for row in rows:
         preset = dict(row)
         preset["tool_web_search"] = bool(preset.get("tool_web_search"))
         preset["tool_web_fetch"] = bool(preset.get("tool_web_fetch"))
+        preset["include_project_notes"] = bool(preset.get("include_project_notes"))
+        preset["include_global_notes"] = bool(preset.get("include_global_notes"))
         presets.append(preset)
     return presets
 
@@ -128,7 +138,7 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     with _connect() as connection:
         _ensure_schema(connection)
         row = connection.execute(
-            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template FROM llm_presets WHERE id = ?",
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes FROM llm_presets WHERE id = ?",
             (preset_id,),
         ).fetchone()
     if row is None:
@@ -136,6 +146,8 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     preset = dict(row)
     preset["tool_web_search"] = bool(preset.get("tool_web_search"))
     preset["tool_web_fetch"] = bool(preset.get("tool_web_fetch"))
+    preset["include_project_notes"] = bool(preset.get("include_project_notes"))
+    preset["include_global_notes"] = bool(preset.get("include_global_notes"))
     return preset
 
 
@@ -150,6 +162,8 @@ def create_global_preset(
     tool_web_fetch: bool,
     context_url_template: str,
     context_file_template: str,
+    include_project_notes: bool = False,
+    include_global_notes: bool = False,
 ) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
@@ -168,7 +182,7 @@ def create_global_preset(
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         cursor = connection.execute(
-            "INSERT INTO llm_presets(name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO llm_presets(name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 clean_name,
                 backend,
@@ -179,6 +193,8 @@ def create_global_preset(
                 1 if tool_web_fetch else 0,
                 context_url_template,
                 context_file_template,
+                1 if include_project_notes else 0,
+                1 if include_global_notes else 0,
             ),
         )
         connection.commit()
@@ -199,6 +215,8 @@ def update_global_preset(
     tool_web_fetch: bool,
     context_url_template: str,
     context_file_template: str,
+    include_project_notes: bool = False,
+    include_global_notes: bool = False,
 ) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
@@ -221,7 +239,7 @@ def update_global_preset(
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         connection.execute(
-            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, caption_mode_strategy = ?, system_prompt = ?, tool_web_search = ?, tool_web_fetch = ?, context_url_template = ?, context_file_template = ? WHERE id = ?",
+            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, caption_mode_strategy = ?, system_prompt = ?, tool_web_search = ?, tool_web_fetch = ?, context_url_template = ?, context_file_template = ?, include_project_notes = ?, include_global_notes = ? WHERE id = ?",
             (
                 clean_name,
                 backend,
@@ -232,6 +250,8 @@ def update_global_preset(
                 1 if tool_web_fetch else 0,
                 context_url_template,
                 context_file_template,
+                1 if include_project_notes else 0,
+                1 if include_global_notes else 0,
                 preset_id,
             ),
         )

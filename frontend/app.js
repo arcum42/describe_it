@@ -33,6 +33,7 @@ function describeItApp() {
       clean_output_folder: false,
       create_new_folder: false,
       new_folder_name: '',
+      include_project_notes: true,
     },
     exportPreview: null,
     imageSummary: {
@@ -72,6 +73,8 @@ function describeItApp() {
         toolWebFetch: false,
         contextUrlTemplate: '',
         contextFileTemplate: '',
+        includeProjectNotes: false,
+        includeGlobalNotes: false,
       },
       tools: {
         showPanel: false,
@@ -79,6 +82,8 @@ function describeItApp() {
         webFetch: false,
         contextUrl: '',
         contextFile: '',
+        includeProjectNotes: false,
+        includeGlobalNotes: false,
       },
     },
     batch: {
@@ -102,6 +107,36 @@ function describeItApp() {
       results: [],
     },
     batchPollTimer: null,
+    notes: {
+      scope: 'project',
+      includeArchived: false,
+      projectItems: [],
+      globalItems: [],
+      selectedNoteId: null,
+      editor: {
+        id: null,
+        title: '',
+        content: '',
+        format: 'markdown',
+        tags: '',
+        is_archived: false,
+      },
+      llm: {
+        prompt: '',
+        useSelectedImage: false,
+        backend: '',
+        model: '',
+        outputFormat: 'markdown',
+        title: '',
+        tags: '',
+        webSearch: false,
+        webFetch: false,
+        contextUrl: '',
+        contextFile: '',
+        includeProjectNotes: false,
+        includeGlobalNotes: false,
+      },
+    },
     settings: {
       llmTimeoutSeconds: 120,
       usePresetByDefault: false,
@@ -150,6 +185,7 @@ function describeItApp() {
         this.loadLLMBackends(true),
         this.loadSettings(true),
         this.loadLLMPresets(true),
+        this.loadGlobalNotes(true),
         this.loadProjectSessionState(true),
         this.checkRAGStatus(),
       ]);
@@ -403,6 +439,7 @@ function describeItApp() {
       this.loadImageSummary();
       this.loadImages();
       this.loadLatestBatchJob();
+      this.loadProjectNotes();
     },
     closeProject() {
       const activeCaption = this.selectedImage?.captions?.find((c) => c.is_active);
@@ -448,7 +485,327 @@ function describeItApp() {
       this.batch.history = [];
       this.batch.historyStatusFilter = 'all';
       this.batch.results = [];
+      this.notes.projectItems = [];
+      this.notes.selectedNoteId = null;
+      this.newNoteDraft();
       this.loadBrowser(this.projectSession.lastProjectDirectory || null);
+    },
+    notesActiveItems() {
+      return this.notes.scope === 'global' ? this.notes.globalItems : this.notes.projectItems;
+    },
+    newNoteDraft() {
+      this.notes.selectedNoteId = null;
+      this.notes.editor = {
+        id: null,
+        title: '',
+        content: '',
+        format: 'markdown',
+        tags: '',
+        is_archived: false,
+      };
+    },
+    selectNote(note) {
+      if (!note) {
+        this.newNoteDraft();
+        return;
+      }
+      this.notes.selectedNoteId = note.id;
+      this.notes.editor = {
+        id: note.id,
+        title: note.title ?? '',
+        content: note.content ?? '',
+        format: note.format ?? 'markdown',
+        tags: note.tags ?? '',
+        is_archived: note.is_archived === true,
+      };
+    },
+    async loadProjectNotes(isStartup = false) {
+      if (!this.currentProject?.path) {
+        this.notes.projectItems = [];
+        if (this.notes.scope === 'project') {
+          this.newNoteDraft();
+        }
+        return;
+      }
+      try {
+        const url = new URL('/api/notes', window.location.origin);
+        url.searchParams.set('project_path', this.currentProject.path);
+        url.searchParams.set('include_archived', this.notes.includeArchived ? 'true' : 'false');
+        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to load project notes'));
+        }
+        this.notes.projectItems = payload.notes ?? [];
+        const selected = this.notes.projectItems.find((item) => item.id === this.notes.selectedNoteId);
+        if (selected) {
+          this.selectNote(selected);
+        } else if (this.notes.scope === 'project') {
+          this.newNoteDraft();
+        }
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    async loadGlobalNotes(isStartup = false) {
+      try {
+        const url = new URL('/api/global-notes', window.location.origin);
+        url.searchParams.set('include_archived', this.notes.includeArchived ? 'true' : 'false');
+        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to load global notes'));
+        }
+        this.notes.globalItems = payload.notes ?? [];
+        const selected = this.notes.globalItems.find((item) => item.id === this.notes.selectedNoteId);
+        if (selected) {
+          this.selectNote(selected);
+        } else if (this.notes.scope === 'global') {
+          this.newNoteDraft();
+        }
+      } catch (error) {
+        this.errorMessage = error.message;
+      }
+    },
+    async refreshNotes() {
+      if (this.notes.scope === 'global') {
+        await this.loadGlobalNotes();
+      } else {
+        await this.loadProjectNotes();
+      }
+    },
+    async onNotesScopeChanged() {
+      this.newNoteDraft();
+      await this.refreshNotes();
+    },
+    async onNotesArchivedFilterChanged() {
+      await this.refreshNotes();
+    },
+    async saveNote() {
+      if (this.notes.scope === 'project' && !this.currentProject?.path) {
+        this.errorMessage = 'Open a project to create project notes.';
+        return;
+      }
+      await this.withSubmitting(async () => {
+        const isUpdate = !!this.notes.editor.id;
+        const endpoint = this.notes.scope === 'global'
+          ? (isUpdate ? '/api/global-notes/update' : '/api/global-notes/create')
+          : (isUpdate ? '/api/notes/update' : '/api/notes/create');
+
+        const body = {
+          title: this.notes.editor.title,
+          content: this.notes.editor.content,
+          format: this.notes.editor.format,
+          tags: this.notes.editor.tags,
+        };
+        if (isUpdate) {
+          body.is_archived = this.notes.editor.is_archived;
+          if (this.notes.scope === 'global') {
+            body.note_id = this.notes.editor.id;
+          } else {
+            body.note_id = this.notes.editor.id;
+            body.project_path = this.currentProject.path;
+          }
+        } else if (this.notes.scope === 'project') {
+          body.project_path = this.currentProject.path;
+        }
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to save note'));
+        }
+        const savedNote = payload.note;
+        await this.refreshNotes();
+        this.selectNote(savedNote);
+        this.statusMessage = isUpdate ? 'Note updated.' : 'Note created.';
+      });
+    },
+    async deleteNote() {
+      if (!this.notes.editor.id) {
+        this.errorMessage = 'Select a note to delete.';
+        return;
+      }
+      if (!window.confirm('Delete this note? This cannot be undone.')) {
+        return;
+      }
+      if (this.notes.scope === 'project' && !this.currentProject?.path) {
+        this.errorMessage = 'Open a project to delete project notes.';
+        return;
+      }
+      await this.withSubmitting(async () => {
+        const endpoint = this.notes.scope === 'global' ? '/api/global-notes/delete' : '/api/notes/delete';
+        const body = this.notes.scope === 'global'
+          ? { note_id: this.notes.editor.id }
+          : { project_path: this.currentProject.path, note_id: this.notes.editor.id };
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to delete note'));
+        }
+        await this.refreshNotes();
+        this.newNoteDraft();
+        this.statusMessage = 'Note deleted.';
+      });
+    },
+    selectedNoteLLMBackend() {
+      return this.llm.backends.find((item) => item.name === this.notes.llm.backend) || null;
+    },
+    selectedNoteLLMModel() {
+      const backend = this.selectedNoteLLMBackend();
+      if (!backend) {
+        return null;
+      }
+      return backend.models?.find((item) => item.name === this.notes.llm.model) || null;
+    },
+    availableModelsForNoteLLM() {
+      if (!this.notes.llm.backend) {
+        return [];
+      }
+      return this.availableModelsForBackend(this.notes.llm.backend);
+    },
+    onNotesLLMBackendChanged() {
+      const models = this.availableModelsForNoteLLM();
+      this.notes.llm.model = models[0]?.name ?? '';
+    },
+    syncNotesLLMSelection() {
+      if (!this.llm.backends.length) {
+        this.notes.llm.backend = '';
+        this.notes.llm.model = '';
+        return;
+      }
+      if (!this.notes.llm.backend || !this.llm.backends.some((item) => item.name === this.notes.llm.backend)) {
+        this.notes.llm.backend = this.llm.backend || this.llm.backends[0].name;
+      }
+      const models = this.availableModelsForNoteLLM();
+      if (!models.some((item) => item.name === this.notes.llm.model)) {
+        this.notes.llm.model = models[0]?.name ?? '';
+      }
+    },
+    buildGeneratedNoteTitle() {
+      const explicit = this.notes.llm.title.trim();
+      if (explicit) {
+        return explicit;
+      }
+      const source = this.notes.llm.prompt.trim();
+      if (!source) {
+        return 'LLM Note';
+      }
+      const oneLine = source.replace(/\s+/g, ' ').trim();
+      return oneLine.length > 72 ? `${oneLine.slice(0, 72).trimEnd()}...` : oneLine;
+    },
+    async generateNoteWithLLM(saveAsNewNote = false) {
+      if (!this.notes.llm.prompt.trim()) {
+        this.errorMessage = 'Enter a prompt for note generation.';
+        return;
+      }
+      this.syncNotesLLMSelection();
+      if (!this.notes.llm.backend || !this.notes.llm.model) {
+        this.errorMessage = 'Select an available backend and model first.';
+        return;
+      }
+      if (this.notes.scope === 'project' && !this.currentProject?.path) {
+        this.errorMessage = 'Open a project to generate project notes.';
+        return;
+      }
+      if (this.notes.llm.useSelectedImage && !this.selectedImage?.id) {
+        this.errorMessage = 'Select an image in the editor tab before enabling image context.';
+        return;
+      }
+
+      const toolsEnabled = [];
+      if (this.notes.llm.webSearch) toolsEnabled.push('web_search');
+      if (this.notes.llm.webFetch) toolsEnabled.push('web_fetch');
+      const selectedModel = this.selectedNoteLLMModel();
+      let fallbackNotice = '';
+      if (toolsEnabled.length > 0 && selectedModel && !selectedModel.tool_capable) {
+        toolsEnabled.length = 0;
+        fallbackNotice = ` Model ${this.notes.llm.model} is not tool-capable, so tools were skipped.`;
+      }
+
+      const projectPath = this.currentProject?.path || null;
+      const contextUrls = this.notes.llm.contextUrl.trim() ? [this.notes.llm.contextUrl.trim()] : [];
+      const contextFiles = this.notes.llm.contextFile.trim() ? [this.notes.llm.contextFile.trim()] : [];
+
+      await this.withSubmitting(async () => {
+        const response = await fetch('/api/llm/generate-note-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            backend: this.notes.llm.backend,
+            model: this.notes.llm.model,
+            prompt: this.notes.llm.prompt,
+            project_path: projectPath,
+            image_id: this.notes.llm.useSelectedImage ? this.selectedImage?.id ?? null : null,
+            timeout_seconds: this.settings.llmTimeoutSeconds,
+            tools_enabled: toolsEnabled,
+            context_urls: contextUrls,
+            context_files: contextFiles,
+            include_project_notes: this.notes.llm.includeProjectNotes,
+            include_global_notes: this.notes.llm.includeGlobalNotes,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Note generation failed'));
+        }
+
+        const generatedText = payload.text || '';
+        const generatedTitle = this.buildGeneratedNoteTitle();
+        const generatedTags = this.notes.llm.tags.trim();
+        const generatedFormat = this.notes.llm.outputFormat === 'text' ? 'text' : 'markdown';
+
+        this.notes.editor.title = generatedTitle;
+        this.notes.editor.content = generatedText;
+        this.notes.editor.format = generatedFormat;
+        this.notes.editor.tags = generatedTags;
+
+        const log = payload.tool_usage_log?.length ? ` (${payload.tool_usage_log.length} tool/context event(s))` : '';
+        const modeMap = {
+          tool_calls: 'Mode: Tool Calls',
+          context_injection: 'Mode: Context Injection',
+        };
+        const modeLabel = modeMap[payload.generation_mode] || `Mode: ${payload.generation_mode || 'unknown'}`;
+
+        if (!saveAsNewNote) {
+          this.statusMessage = `Generated note draft with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
+          return;
+        }
+
+        const endpoint = this.notes.scope === 'global' ? '/api/global-notes/create' : '/api/notes/create';
+        const body = {
+          title: generatedTitle,
+          content: generatedText,
+          format: generatedFormat,
+          tags: generatedTags,
+        };
+        if (this.notes.scope === 'project') {
+          body.project_path = this.currentProject.path;
+        }
+
+        const saveResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const savePayload = await saveResponse.json();
+        if (!saveResponse.ok) {
+          throw new Error(this.formatApiError(savePayload, 'Failed to save generated note'));
+        }
+
+        const savedNote = savePayload.note;
+        await this.refreshNotes();
+        this.selectNote(savedNote);
+        this.statusMessage = `Generated and saved note with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
+      });
     },
     async loadHealth(isStartup = false) {
       try {
@@ -708,6 +1065,7 @@ function describeItApp() {
         this.llm.backends = payload.backends ?? [];
         this.pickDefaultLLMSelection();
         this.onPresetBackendChanged();
+        this.syncNotesLLMSelection();
       } catch (error) {
         this.llm.backends = [];
         this.errorMessage = error.message;
@@ -739,6 +1097,8 @@ function describeItApp() {
         toolWebFetch: false,
         contextUrlTemplate: '',
         contextFileTemplate: '',
+        includeProjectNotes: false,
+        includeGlobalNotes: false,
       };
       this.onPresetBackendChanged();
     },
@@ -754,6 +1114,8 @@ function describeItApp() {
         toolWebFetch: preset.tool_web_fetch === true,
         contextUrlTemplate: preset.context_url_template ?? '',
         contextFileTemplate: preset.context_file_template ?? '',
+        includeProjectNotes: preset.include_project_notes === true,
+        includeGlobalNotes: preset.include_global_notes === true,
       };
       this.llm.selectedPresetId = String(preset.id);
     },
@@ -803,6 +1165,8 @@ function describeItApp() {
             tool_web_fetch: this.llm.presetForm.toolWebFetch,
             context_url_template: this.llm.presetForm.contextUrlTemplate,
             context_file_template: this.llm.presetForm.contextFileTemplate,
+            include_project_notes: this.llm.presetForm.includeProjectNotes,
+            include_global_notes: this.llm.presetForm.includeGlobalNotes,
           }),
         });
         const payload = await response.json();
@@ -846,6 +1210,8 @@ function describeItApp() {
             tool_web_fetch: this.llm.presetForm.toolWebFetch,
             context_url_template: this.llm.presetForm.contextUrlTemplate,
             context_file_template: this.llm.presetForm.contextFileTemplate,
+            include_project_notes: this.llm.presetForm.includeProjectNotes,
+            include_global_notes: this.llm.presetForm.includeGlobalNotes,
           }),
         });
         const payload = await response.json();
@@ -1337,6 +1703,8 @@ function describeItApp() {
             tools_enabled: toolsEnabled,
             context_urls: contextUrls,
             context_files: contextFiles,
+            include_project_notes: this.llm.tools.includeProjectNotes,
+            include_global_notes: this.llm.tools.includeGlobalNotes,
           }),
         });
         const payload = await response.json();
@@ -1657,6 +2025,7 @@ function describeItApp() {
             clean_output_folder: this.exportForm.clean_output_folder,
             create_new_folder: this.exportForm.create_new_folder,
             new_folder_name: this.exportForm.new_folder_name,
+            include_project_notes: this.exportForm.include_project_notes,
           }),
         });
         const payload = await response.json();
@@ -1667,7 +2036,8 @@ function describeItApp() {
         const collisionSuffix = result.skipped_due_to_collision ? `, ${result.skipped_due_to_collision} skipped due to collisions` : '';
         const blobSuffix = result.skipped_missing_blob ? `, ${result.skipped_missing_blob} missing image data` : '';
         const metadataSuffix = result.metadata_written && result.metadata_file ? ' Metadata manifest written.' : '';
-        this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}`;
+        const notesSuffix = result.exported_notes ? ` ${result.exported_notes} note(s) exported to notes/.` : '';
+        this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}${notesSuffix}`;
         this.exportPreview = null;
       });
     },

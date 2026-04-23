@@ -224,3 +224,151 @@ def test_export_preview_counts_match_export_results(tmp_path: Path) -> None:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["counts"]["exported_images"] == export["exported_images"]
     assert manifest["counts"]["skipped_missing_blob"] == export["skipped_missing_blob"]
+
+
+def _create_note_in_project(*, project_path: Path, title: str, content: str, format: str = "markdown") -> None:
+    from backend.services.note_service import create_note
+    create_note(project_path=str(project_path), title=title, content=content, format=format)
+
+
+def test_export_notes_writes_notes_folder(tmp_path: Path) -> None:
+    project_path = tmp_path / "project.db"
+    output_folder = tmp_path / "out"
+
+    _create_project_db(
+        project_path=project_path,
+        trigger_word="",
+        images=[
+            {"filename": "img.png", "blob": b"img", "included": True, "caption": "a scene"},
+        ],
+    )
+    _create_note_in_project(
+        project_path=project_path,
+        title="Style Guide",
+        content="Use vivid descriptions.",
+        format="markdown",
+    )
+    _create_note_in_project(
+        project_path=project_path,
+        title="Tags Reference",
+        content="1girl, solo, outdoor",
+        format="text",
+    )
+
+    result = _post_json(
+        "/api/projects/export",
+        {
+            "project_path": str(project_path),
+            "output_folder": str(output_folder),
+            "included_only": True,
+            "apply_trigger_word": False,
+            "include_metadata": False,
+            "overwrite_existing": False,
+            "clean_output_folder": False,
+            "create_new_folder": False,
+            "new_folder_name": "",
+            "include_project_notes": True,
+        },
+    )["result"]
+
+    assert result["exported_images"] == 1
+    assert result["exported_notes"] == 2
+    assert result["notes_folder"] is not None
+
+    notes_dir = Path(result["notes_folder"])
+    assert notes_dir.is_dir()
+    note_files = sorted(notes_dir.iterdir(), key=lambda p: p.name)
+    assert len(note_files) == 2
+
+    # Markdown note should use .md extension
+    md_files = [f for f in note_files if f.suffix == ".md"]
+    txt_files = [f for f in note_files if f.suffix == ".txt"]
+    assert len(md_files) == 1
+    assert len(txt_files) == 1
+
+    md_content = md_files[0].read_text(encoding="utf-8")
+    assert "# title: Style Guide" in md_content
+    assert "# format: markdown" in md_content
+    assert "Use vivid descriptions." in md_content
+
+    txt_content = txt_files[0].read_text(encoding="utf-8")
+    assert "# title: Tags Reference" in txt_content
+    assert "# format: text" in txt_content
+    assert "1girl, solo, outdoor" in txt_content
+
+
+def test_export_notes_disabled_skips_notes_folder(tmp_path: Path) -> None:
+    project_path = tmp_path / "project.db"
+    output_folder = tmp_path / "out"
+
+    _create_project_db(
+        project_path=project_path,
+        trigger_word="",
+        images=[{"filename": "img.png", "blob": b"img", "included": True, "caption": "scene"}],
+    )
+    _create_note_in_project(project_path=project_path, title="Note", content="Content", format="text")
+
+    result = _post_json(
+        "/api/projects/export",
+        {
+            "project_path": str(project_path),
+            "output_folder": str(output_folder),
+            "included_only": True,
+            "apply_trigger_word": False,
+            "include_metadata": False,
+            "overwrite_existing": False,
+            "clean_output_folder": False,
+            "create_new_folder": False,
+            "new_folder_name": "",
+            "include_project_notes": False,
+        },
+    )["result"]
+
+    assert result["exported_notes"] == 0
+    assert result["notes_folder"] is None
+    assert not (output_folder / "notes").exists()
+
+
+def test_export_archived_notes_not_included(tmp_path: Path) -> None:
+    project_path = tmp_path / "project.db"
+    output_folder = tmp_path / "out"
+
+    _create_project_db(
+        project_path=project_path,
+        trigger_word="",
+        images=[{"filename": "img.png", "blob": b"img", "included": True, "caption": "scene"}],
+    )
+    from backend.services.note_service import create_note, update_note, list_notes
+    create_note(project_path=str(project_path), title="Active", content="visible", format="text")
+    archived_note = create_note(project_path=str(project_path), title="Archived", content="hidden", format="text")
+    update_note(
+        project_path=str(project_path),
+        note_id=archived_note.id,
+        title=archived_note.title,
+        content=archived_note.content,
+        format=archived_note.format,
+        tags=archived_note.tags,
+        is_archived=True,
+    )
+
+    result = _post_json(
+        "/api/projects/export",
+        {
+            "project_path": str(project_path),
+            "output_folder": str(output_folder),
+            "included_only": True,
+            "apply_trigger_word": False,
+            "include_metadata": False,
+            "overwrite_existing": False,
+            "clean_output_folder": False,
+            "create_new_folder": False,
+            "new_folder_name": "",
+            "include_project_notes": True,
+        },
+    )["result"]
+
+    assert result["exported_notes"] == 1
+    notes_dir = Path(result["notes_folder"])
+    note_files = list(notes_dir.iterdir())
+    assert len(note_files) == 1
+    assert "Active" in note_files[0].read_text(encoding="utf-8")
