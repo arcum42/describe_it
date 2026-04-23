@@ -26,6 +26,8 @@ class ProjectSummary:
     description: str = ""
     trigger_word: str = ""
     caption_mode: str = "description"
+    context_url: str = ""
+    context_file_path: str = ""
 
 
 @dataclass
@@ -143,13 +145,24 @@ def open_project(*, path: str) -> ProjectSummary:
             description=record.description,
             trigger_word=record.trigger_word,
             caption_mode=record.caption_mode,
+            context_url=record.context_url,
+            context_file_path=record.context_file_path,
         )
 
     register_recent_project(summary)
     return summary
 
 
-def update_project_metadata(*, path: str, name: str, description: str, trigger_word: str, caption_mode: str) -> ProjectSummary:
+def update_project_metadata(
+    *,
+    path: str,
+    name: str,
+    description: str,
+    trigger_word: str,
+    caption_mode: str,
+    context_url: str,
+    context_file_path: str,
+) -> ProjectSummary:
     project_path = _resolve_project_path(path)
     if not project_path.exists():
         raise ValueError(f"Project file does not exist: {project_path}")
@@ -166,6 +179,8 @@ def update_project_metadata(*, path: str, name: str, description: str, trigger_w
         record.description = description
         record.trigger_word = trigger_word
         record.caption_mode = caption_mode
+        record.context_url = context_url
+        record.context_file_path = context_file_path
         session.commit()
 
         summary = ProjectSummary(
@@ -174,6 +189,8 @@ def update_project_metadata(*, path: str, name: str, description: str, trigger_w
             description=record.description,
             trigger_word=record.trigger_word,
             caption_mode=record.caption_mode,
+            context_url=record.context_url,
+            context_file_path=record.context_file_path,
         )
 
     register_recent_project(summary)

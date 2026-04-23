@@ -16,6 +16,8 @@ class ProjectRecord(Base):
     description: Mapped[str] = mapped_column(String(2048), default="")
     trigger_word: Mapped[str] = mapped_column(String(255), default="")
     caption_mode: Mapped[str] = mapped_column(String(32), default="description")
+    context_url: Mapped[str] = mapped_column(String(2048), default="")
+    context_file_path: Mapped[str] = mapped_column(String(2048), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
     images: Mapped[list["ImageRecord"]] = relationship(back_populates="project")
     prompts: Mapped[list["PromptRecord"]] = relationship(back_populates="project")

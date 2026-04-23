@@ -6,8 +6,8 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260423d" />
-    <script defer src="/static/app.js?v=20260423d"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260423i" />
+    <script defer src="/static/app.js?v=20260423i"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -139,6 +139,14 @@
                     <option value="description">Description</option>
                     <option value="tags">Tags</option>
                   </select>
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Project Context URL
+                  <input x-model="metadataForm.context_url" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="https://example.com/reference" />
+                </label>
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Project Context File Path
+                  <input x-model="metadataForm.context_file_path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/context.md" />
                 </label>
                 <button @click="saveMetadata()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                   Save Metadata
@@ -437,6 +445,39 @@
                       <textarea x-model="llm.extraInstructions" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional style guidance for generation"></textarea>
                     </label>
 
+                    <!-- Context & Tools accordion -->
+                    <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900">
+                      <button
+                        type="button"
+                        @click="llm.tools.showPanel = !llm.tools.showPanel"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-400 hover:text-amber-300"
+                      >
+                        <span>Context &amp; Tools</span>
+                        <span x-text="llm.tools.showPanel ? '▲' : '▼'" class="text-stone-500"></span>
+                      </button>
+                      <div x-show="llm.tools.showPanel" class="border-t border-stone-800 px-3 pb-3 pt-2 space-y-3">
+                        <p class="text-xs text-stone-500">Context URLs and files are injected into every generation. Tool checkboxes require a tool-capable model (🔨).</p>
+                        <div class="space-y-2">
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.webSearch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Web search (model decides what to search)
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.webFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Web fetch (model can read URLs from search results)
+                          </label>
+                        </div>
+                        <label class="block text-xs text-stone-400">
+                          Reference URL (pre-fetched before generation)
+                          <input type="url" x-model="llm.tools.contextUrl" placeholder="https://…" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                        </label>
+                        <label class="block text-xs text-stone-400">
+                          Reference file path (pre-read before generation)
+                          <input type="text" x-model="llm.tools.contextFile" placeholder="/path/to/notes.txt" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                        </label>
+                      </div>
+                    </div>
+
                     <div class="mt-3 flex flex-wrap items-center gap-3">
                       <label class="field-checkbox">
                         <input type="checkbox" x-model="llm.makeActive" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
@@ -448,18 +489,36 @@
                       <button
                         @click="generateCaptionWithLLM()"
                         :disabled="isSubmitting || !!llm.selectedPresetId || !llm.backend || !llm.model"
-                        class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex items-center gap-2 rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Generate Manual Caption
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : 'Generate Manual Caption'"></span>
                       </button>
                       <button
                         @click="generateCaptionWithPreset()"
                         :disabled="isSubmitting || !llm.selectedPresetId"
-                        class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        class="inline-flex items-center gap-2 rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Generate With Preset
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : 'Generate With Preset'"></span>
+                      </button>
+                      <button
+                        @click="generateCaptionWithTools()"
+                        :disabled="isSubmitting || !llm.backend || !llm.model"
+                        class="inline-flex items-center gap-2 rounded-xl border border-amber-700 px-4 py-2 text-sm font-medium text-amber-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Generate using context injection and/or tool calling"
+                      >
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : '🔨 Generate with Tools'"></span>
                       </button>
                     </div>
+                    <!-- Inline status/error — visible without scrolling to the sidebar -->
+                    <template x-if="statusMessage && mainView === 'editor'">
+                      <p class="mt-3 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200" x-text="statusMessage"></p>
+                    </template>
+                    <template x-if="errorMessage && mainView === 'editor'">
+                      <p class="mt-3 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200" x-text="errorMessage"></p>
+                    </template>
                     <template x-if="llm.backends.length === 0">
                       <p class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
                         No LLM backend is reachable yet. Start Ollama or LM Studio, then refresh models.
@@ -710,8 +769,33 @@
                         <textarea x-model="llm.presetForm.systemPrompt" class="mt-2 min-h-40 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="You are a captioning assistant for {project_name}. Current caption: {active_caption}"></textarea>
                       </label>
 
+                      <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900/70 p-3">
+                        <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Preset Tools</p>
+                        <div class="grid gap-2 md:grid-cols-2">
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.toolWebSearch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Enable web_search
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.toolWebFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Enable web_fetch
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Context URL Template
+                          <input x-model="llm.presetForm.contextUrlTemplate" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="{project_context_url}" />
+                        </label>
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Context File Path Template
+                          <input x-model="llm.presetForm.contextFileTemplate" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="{project_context_file_path}" />
+                        </label>
+                      </div>
+
                       <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
-                        Supported placeholders: {project_name}, {project_description}, {project_trigger_word}, {project_caption_mode}, {filename}, {active_caption}, {caption_1}, {caption_2}, ...
+                        Supported placeholders in all preset template fields (prompt, URL, file path): {project_name}, {project_description}, {project_trigger_word}, {project_caption_mode}, {project_context_url}, {project_context_file_path}, {filename}, {active_caption}, {caption_1}, {caption_2}, ...
                       </div>
 
                     <div class="mt-4 flex flex-wrap gap-3">
@@ -1037,6 +1121,10 @@
                       Timeout Override (optional)
                       <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
                     </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Context Window Override (optional)
+                      <input type="number" min="256" max="262144" step="1" x-model="settings.ollamaNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses model default when blank" />
+                    </label>
                   </div>
                 </div>
 
@@ -1066,6 +1154,10 @@
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                       Timeout Override (optional)
                       <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                    </label>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Context Window Override (optional)
+                      <input type="number" min="256" max="262144" step="1" x-model="settings.lmstudioNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Used when backend supports num_ctx" />
                     </label>
                   </div>
                 </div>

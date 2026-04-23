@@ -101,6 +101,7 @@ class OllamaClient:
         image_bytes: bytes | None = None,
         system_prompt: str = "",
         timeout_seconds: int = 120,
+        num_ctx: int | None = None,
     ) -> str:
         payload: dict[str, object] = {
             "model": model,
@@ -111,6 +112,8 @@ class OllamaClient:
             payload["system"] = system_prompt.strip()
         if image_bytes:
             payload["images"] = [base64.b64encode(image_bytes).decode("ascii")]
+        if num_ctx is not None:
+            payload["options"] = {"num_ctx": int(num_ctx)}
         response = self._post("/api/generate", payload, timeout_seconds=timeout_seconds)
         text = (response.get("response") or "").strip()
         if not text:

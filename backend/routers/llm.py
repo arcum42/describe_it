@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from backend.services.batch_service import batch_service
 from backend.services.app_state_service import get_global_settings, update_global_settings
@@ -11,6 +15,7 @@ from backend.services.llm_service import (
     delete_preset,
     generate_caption_for_image,
     generate_caption_with_preset,
+    generate_caption_with_tools,
     list_backends,
     list_presets,
     update_preset,
@@ -39,6 +44,10 @@ class CreatePresetRequest(BaseModel):
     model_name: str = Field(min_length=1)
     caption_mode_strategy: str = Field(default="auto", pattern="^(auto|description|tags)$")
     system_prompt: str = ""
+    tool_web_search: bool = False
+    tool_web_fetch: bool = False
+    context_url_template: str = ""
+    context_file_template: str = ""
 
 
 class UpdatePresetRequest(CreatePresetRequest):
@@ -58,6 +67,8 @@ class UpdateSettingsRequest(BaseModel):
     lmstudio_base_url: str = "http://127.0.0.1:1234"
     ollama_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
     lmstudio_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
+    ollama_num_ctx: int | None = Field(default=None, ge=256, le=262144)
+    lmstudio_num_ctx: int | None = Field(default=None, ge=256, le=262144)
 
 
 class GenerateWithPresetRequest(BaseModel):
@@ -66,6 +77,19 @@ class GenerateWithPresetRequest(BaseModel):
     preset_id: int
     make_active: bool = True
     timeout_seconds: int = Field(default=120, ge=10, le=900)
+
+
+class GenerateCaptionWithToolsRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_id: int
+    backend: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    extra_instructions: str = ""
+    make_active: bool = True
+    timeout_seconds: int = Field(default=120, ge=10, le=900)
+    tools_enabled: list[str] = Field(default_factory=list)
+    context_urls: list[str] = Field(default_factory=list)
+    context_files: list[str] = Field(default_factory=list)
 
 
 class CreateBatchJobRequest(BaseModel):
@@ -161,6 +185,35 @@ def generate_caption(request: GenerateCaptionRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@router.post("/generate-caption-with-tools")
+def generate_caption_with_tools_route(request: GenerateCaptionWithToolsRequest) -> dict[str, object]:
+    try:
+        return generate_caption_with_tools(
+            project_path=request.project_path.strip(),
+            image_id=request.image_id,
+            backend=request.backend.strip(),
+            model=request.model.strip(),
+            extra_instructions=request.extra_instructions,
+            make_active=request.make_active,
+            timeout_seconds=request.timeout_seconds,
+            tools_enabled=request.tools_enabled,
+            context_urls=request.context_urls,
+            context_files=request.context_files,
+        )
+    except ValueError as error:
+        logger.exception(
+            "generate-caption-with-tools failed: backend=%s model=%s tools=%s context_urls=%s",
+            request.backend, request.model, request.tools_enabled, request.context_urls,
+        )
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:
+        logger.exception(
+            "generate-caption-with-tools unexpected error: backend=%s model=%s",
+            request.backend, request.model,
+        )
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {error}") from error
+
+
 @router.get("/settings")
 def get_settings() -> dict[str, object]:
     return get_global_settings()
@@ -177,6 +230,8 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         lmstudio_base_url=request.lmstudio_base_url,
         ollama_timeout_seconds=request.ollama_timeout_seconds,
         lmstudio_timeout_seconds=request.lmstudio_timeout_seconds,
+        ollama_num_ctx=request.ollama_num_ctx,
+        lmstudio_num_ctx=request.lmstudio_num_ctx,
     )
 
 
@@ -197,6 +252,10 @@ def create_preset_route(request: CreatePresetRequest) -> dict[str, object]:
             model_name=request.model_name,
             caption_mode_strategy=request.caption_mode_strategy,
             system_prompt=request.system_prompt,
+            tool_web_search=request.tool_web_search,
+            tool_web_fetch=request.tool_web_fetch,
+            context_url_template=request.context_url_template,
+            context_file_template=request.context_file_template,
         )
         return {"preset": preset}
     except ValueError as error:
@@ -213,6 +272,10 @@ def update_preset_route(request: UpdatePresetRequest) -> dict[str, object]:
             model_name=request.model_name,
             caption_mode_strategy=request.caption_mode_strategy,
             system_prompt=request.system_prompt,
+            tool_web_search=request.tool_web_search,
+            tool_web_fetch=request.tool_web_fetch,
+            context_url_template=request.context_url_template,
+            context_file_template=request.context_file_template,
         )
         return {"preset": preset}
     except ValueError as error:

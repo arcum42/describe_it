@@ -70,15 +70,27 @@ def test_create_and_open_project(tmp_path: Path) -> None:
     # trigger_word is only settable via update, not create
     update_resp = client.post(
         "/api/projects/update",
-        json={"path": project_path, "name": "Smoke Project", "description": "End-to-end smoke test", "trigger_word": "smptest", "caption_mode": "description"},
+        json={
+            "path": project_path,
+            "name": "Smoke Project",
+            "description": "End-to-end smoke test",
+            "trigger_word": "smptest",
+            "caption_mode": "description",
+            "context_url": "https://example.com/{project_name}",
+            "context_file_path": "/tmp/{project_name}.md",
+        },
     )
     assert update_resp.status_code == 200, update_resp.text
     assert update_resp.json()["project"]["trigger_word"] == "smptest"
+    assert update_resp.json()["project"]["context_url"] == "https://example.com/{project_name}"
+    assert update_resp.json()["project"]["context_file_path"] == "/tmp/{project_name}.md"
 
     open_resp = client.post("/api/projects/open", json={"path": project_path})
     assert open_resp.status_code == 200, open_resp.text
     assert open_resp.json()["project"]["name"] == "Smoke Project"
     assert open_resp.json()["project"]["trigger_word"] == "smptest"
+    assert open_resp.json()["project"]["context_url"] == "https://example.com/{project_name}"
+    assert open_resp.json()["project"]["context_file_path"] == "/tmp/{project_name}.md"
 
 
 def test_update_project_metadata(tmp_path: Path) -> None:
@@ -97,6 +109,8 @@ def test_update_project_metadata(tmp_path: Path) -> None:
             "description": "Updated description",
             "trigger_word": "newtrig",
             "caption_mode": "tags",
+            "context_url": "https://context.local/{filename}",
+            "context_file_path": "notes/{filename}.md",
         },
     )
     assert update_resp.status_code == 200, update_resp.text
@@ -104,6 +118,8 @@ def test_update_project_metadata(tmp_path: Path) -> None:
     assert project["name"] == "Updated Name"
     assert project["caption_mode"] == "tags"
     assert project["trigger_word"] == "newtrig"
+    assert project["context_url"] == "https://context.local/{filename}"
+    assert project["context_file_path"] == "notes/{filename}.md"
 
 
 def test_import_folder(tmp_path: Path) -> None:
@@ -445,10 +461,13 @@ def test_settings_round_trip(tmp_path: Path) -> None:
             "lmstudio_base_url": "http://127.0.0.1:1234",
             "ollama_timeout_seconds": None,
             "lmstudio_timeout_seconds": None,
+            "ollama_num_ctx": 8192,
+            "lmstudio_num_ctx": None,
         },
     )
     assert update_resp.status_code == 200, update_resp.text
     assert update_resp.json()["llm_timeout_seconds"] == 45
+    assert update_resp.json()["ollama_num_ctx"] == 8192
 
     # Restore original timeout so we don't pollute shared state
     client.post(
@@ -462,6 +481,8 @@ def test_settings_round_trip(tmp_path: Path) -> None:
             "lmstudio_base_url": original.get("lmstudio_base_url", "http://127.0.0.1:1234"),
             "ollama_timeout_seconds": original.get("ollama_timeout_seconds"),
             "lmstudio_timeout_seconds": original.get("lmstudio_timeout_seconds"),
+            "ollama_num_ctx": original.get("ollama_num_ctx"),
+            "lmstudio_num_ctx": original.get("lmstudio_num_ctx"),
         },
     )
 
@@ -490,12 +511,20 @@ def test_preset_crud() -> None:
             "model_name": "llava:latest",
             "caption_mode_strategy": "description",
             "system_prompt": "",
+            "tool_web_search": True,
+            "tool_web_fetch": False,
+            "context_url_template": "{project_context_url}",
+            "context_file_template": "{project_context_file_path}",
         },
     )
     assert create_resp.status_code == 200, create_resp.text
     preset = create_resp.json()["preset"]
     preset_id = preset["id"]
     assert preset["name"] == "Smoke Preset"
+    assert preset["tool_web_search"] is True
+    assert preset["tool_web_fetch"] is False
+    assert preset["context_url_template"] == "{project_context_url}"
+    assert preset["context_file_template"] == "{project_context_file_path}"
 
     list_resp = client.get("/api/llm/presets")
     assert list_resp.status_code == 200, list_resp.text
@@ -511,10 +540,16 @@ def test_preset_crud() -> None:
             "model_name": "llava:latest",
             "caption_mode_strategy": "tags",
             "system_prompt": "Be concise.",
+            "tool_web_search": True,
+            "tool_web_fetch": True,
+            "context_url_template": "https://example.com/{project_name}",
+            "context_file_template": "{project_context_file_path}",
         },
     )
     assert update_resp.status_code == 200, update_resp.text
     assert update_resp.json()["preset"]["caption_mode_strategy"] == "tags"
+    assert update_resp.json()["preset"]["tool_web_search"] is True
+    assert update_resp.json()["preset"]["tool_web_fetch"] is True
 
     delete_resp = client.post("/api/llm/presets/delete", json={"preset_id": preset_id})
     assert delete_resp.status_code == 200, delete_resp.text

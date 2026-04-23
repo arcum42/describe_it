@@ -8,6 +8,8 @@ function describeItApp() {
       description: '',
       trigger_word: '',
       caption_mode: 'description',
+      context_url: '',
+      context_file_path: '',
     },
     recentProjects: [],
     createForm: {
@@ -66,6 +68,17 @@ function describeItApp() {
         modelName: '',
         captionModeStrategy: 'auto',
         systemPrompt: '',
+        toolWebSearch: false,
+        toolWebFetch: false,
+        contextUrlTemplate: '',
+        contextFileTemplate: '',
+      },
+      tools: {
+        showPanel: false,
+        webSearch: false,
+        webFetch: false,
+        contextUrl: '',
+        contextFile: '',
       },
     },
     batch: {
@@ -99,6 +112,8 @@ function describeItApp() {
       lmstudioBaseUrl: 'http://127.0.0.1:1234',
       ollamaTimeoutSeconds: '',
       lmstudioTimeoutSeconds: '',
+      ollamaNumCtx: '',
+      lmstudioNumCtx: '',
       ragEnabled: false,
     },
     rag: {
@@ -163,6 +178,27 @@ function describeItApp() {
 
       throw lastError || new Error('Request failed');
     },
+    formatApiError(payload, fallbackMessage = 'Request failed') {
+      const detail = payload?.detail;
+      if (typeof detail === 'string' && detail.trim()) {
+        return detail;
+      }
+      if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0];
+        if (typeof first === 'string' && first.trim()) {
+          return first;
+        }
+        if (first && typeof first === 'object') {
+          const fieldPath = Array.isArray(first.loc) ? first.loc.join('.') : 'field';
+          const message = typeof first.msg === 'string' ? first.msg : 'Invalid value';
+          return `${fieldPath}: ${message}`;
+        }
+      }
+      if (detail && typeof detail === 'object') {
+        return JSON.stringify(detail);
+      }
+      return fallbackMessage;
+    },
     normalizeTimeout(value) {
       const parsed = Number.parseInt(value, 10);
       if (!Number.isFinite(parsed)) {
@@ -180,6 +216,16 @@ function describeItApp() {
       }
       return Math.min(900, Math.max(10, parsed));
     },
+    normalizeOptionalNumCtx(value) {
+      if (value === '' || value === null || value === undefined) {
+        return '';
+      }
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed)) {
+        return '';
+      }
+      return Math.min(262144, Math.max(256, parsed));
+    },
     async loadSettings(isStartup = false) {
       try {
         const response = await this.fetchWithRetry('/api/llm/settings', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
@@ -195,6 +241,8 @@ function describeItApp() {
         this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
         this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
         this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
+        this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(payload.ollama_num_ctx);
+        this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
         this.applyPresetPreference();
       } catch (error) {
         this.settings.llmTimeoutSeconds = 120;
@@ -205,15 +253,21 @@ function describeItApp() {
         this.settings.lmstudioBaseUrl = 'http://127.0.0.1:1234';
         this.settings.ollamaTimeoutSeconds = '';
         this.settings.lmstudioTimeoutSeconds = '';
+        this.settings.ollamaNumCtx = '';
+        this.settings.lmstudioNumCtx = '';
       }
     },
     async saveSettings() {
       this.settings.llmTimeoutSeconds = this.normalizeTimeout(this.settings.llmTimeoutSeconds);
       this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.ollamaTimeoutSeconds);
       this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.lmstudioTimeoutSeconds);
+      this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(this.settings.ollamaNumCtx);
+      this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(this.settings.lmstudioNumCtx);
       const defaultPresetId = this.settings.defaultPresetId ? Number(this.settings.defaultPresetId) : null;
       const ollamaTimeoutSeconds = this.settings.ollamaTimeoutSeconds === '' ? null : Number(this.settings.ollamaTimeoutSeconds);
       const lmstudioTimeoutSeconds = this.settings.lmstudioTimeoutSeconds === '' ? null : Number(this.settings.lmstudioTimeoutSeconds);
+      const ollamaNumCtx = this.settings.ollamaNumCtx === '' ? null : Number(this.settings.ollamaNumCtx);
+      const lmstudioNumCtx = this.settings.lmstudioNumCtx === '' ? null : Number(this.settings.lmstudioNumCtx);
       try {
         const response = await fetch('/api/llm/settings', {
           method: 'POST',
@@ -227,6 +281,8 @@ function describeItApp() {
             lmstudio_base_url: this.settings.lmstudioBaseUrl,
             ollama_timeout_seconds: ollamaTimeoutSeconds,
             lmstudio_timeout_seconds: lmstudioTimeoutSeconds,
+            ollama_num_ctx: ollamaNumCtx,
+            lmstudio_num_ctx: lmstudioNumCtx,
           }),
         });
         const payload = await response.json();
@@ -241,6 +297,8 @@ function describeItApp() {
         this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
         this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
         this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
+        this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(payload.ollama_num_ctx);
+        this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
         this.projectSession.reopenLastProject = this.settings.reopenLastProjectOnStartup;
         await this.saveProjectSessionState();
         this.applyPresetPreference();
@@ -327,6 +385,8 @@ function describeItApp() {
         description: project.description ?? '',
         trigger_word: project.trigger_word ?? '',
         caption_mode: project.caption_mode ?? 'description',
+        context_url: project.context_url ?? '',
+        context_file_path: project.context_file_path ?? '',
       };
       this.openForm.path = project.path;
       const lastSeparator = project.path.lastIndexOf('/');
@@ -365,6 +425,8 @@ function describeItApp() {
         description: '',
         trigger_word: '',
         caption_mode: 'description',
+        context_url: '',
+        context_file_path: '',
       };
       this.imageSummary = {
         count: 0,
@@ -573,6 +635,13 @@ function describeItApp() {
     selectedLLMBackend() {
       return this.llm.backends.find((item) => item.name === this.llm.backend) || null;
     },
+    selectedLLMModel() {
+      const backend = this.selectedLLMBackend();
+      if (!backend) {
+        return null;
+      }
+      return backend.models?.find((item) => item.name === this.llm.model) || null;
+    },
     modelCapabilityLabel(backendName, modelName) {
       const backend = this.llm.backends.find((item) => item.name === backendName);
       const model = backend?.models?.find((item) => item.name === modelName);
@@ -649,7 +718,11 @@ function describeItApp() {
       this.llm.model = models[0]?.name ?? '';
     },
     onPresetBackendChanged() {
-      const models = this.availableModelsForBackend(this.llm.presetForm.backend);
+      let models = this.availableModelsForBackend(this.llm.presetForm.backend);
+      if (models.length === 0) {
+        const backend = this.llm.backends.find((item) => item.name === this.llm.presetForm.backend);
+        models = backend?.models ?? [];
+      }
       if (!models.some((item) => item.name === this.llm.presetForm.modelName)) {
         this.llm.presetForm.modelName = models[0]?.name ?? '';
       }
@@ -662,6 +735,10 @@ function describeItApp() {
         modelName: '',
         captionModeStrategy: 'auto',
         systemPrompt: '',
+        toolWebSearch: false,
+        toolWebFetch: false,
+        contextUrlTemplate: '',
+        contextFileTemplate: '',
       };
       this.onPresetBackendChanged();
     },
@@ -673,6 +750,10 @@ function describeItApp() {
         modelName: preset.model_name,
         captionModeStrategy: preset.caption_mode_strategy || 'auto',
         systemPrompt: preset.system_prompt ?? '',
+        toolWebSearch: preset.tool_web_search === true,
+        toolWebFetch: preset.tool_web_fetch === true,
+        contextUrlTemplate: preset.context_url_template ?? '',
+        contextFileTemplate: preset.context_file_template ?? '',
       };
       this.llm.selectedPresetId = String(preset.id);
     },
@@ -696,21 +777,37 @@ function describeItApp() {
       }
     },
     async createPreset() {
+      if (!this.llm.presetForm.name.trim()) {
+        this.errorMessage = 'Preset name is required.';
+        return;
+      }
+      if (!this.llm.presetForm.backend) {
+        this.errorMessage = 'Select a backend for the preset.';
+        return;
+      }
+      if (!this.llm.presetForm.modelName) {
+        this.errorMessage = 'Select a model for the preset.';
+        return;
+      }
       await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/presets/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: this.llm.presetForm.name,
+            name: this.llm.presetForm.name.trim(),
             backend: this.llm.presetForm.backend,
             model_name: this.llm.presetForm.modelName,
             caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
             system_prompt: this.llm.presetForm.systemPrompt,
+            tool_web_search: this.llm.presetForm.toolWebSearch,
+            tool_web_fetch: this.llm.presetForm.toolWebFetch,
+            context_url_template: this.llm.presetForm.contextUrlTemplate,
+            context_file_template: this.llm.presetForm.contextFileTemplate,
           }),
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to create preset');
+          throw new Error(this.formatApiError(payload, 'Failed to create preset'));
         }
         await this.loadLLMPresets();
         this.applyPresetToForm(payload.preset);
@@ -722,22 +819,38 @@ function describeItApp() {
         this.errorMessage = 'Select a preset to update.';
         return;
       }
+      if (!this.llm.presetForm.name.trim()) {
+        this.errorMessage = 'Preset name is required.';
+        return;
+      }
+      if (!this.llm.presetForm.backend) {
+        this.errorMessage = 'Select a backend for the preset.';
+        return;
+      }
+      if (!this.llm.presetForm.modelName) {
+        this.errorMessage = 'Select a model for the preset.';
+        return;
+      }
       await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/presets/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             preset_id: this.llm.presetForm.id,
-            name: this.llm.presetForm.name,
+            name: this.llm.presetForm.name.trim(),
             backend: this.llm.presetForm.backend,
             model_name: this.llm.presetForm.modelName,
             caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
             system_prompt: this.llm.presetForm.systemPrompt,
+            tool_web_search: this.llm.presetForm.toolWebSearch,
+            tool_web_fetch: this.llm.presetForm.toolWebFetch,
+            context_url_template: this.llm.presetForm.contextUrlTemplate,
+            context_file_template: this.llm.presetForm.contextFileTemplate,
           }),
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to update preset');
+          throw new Error(this.formatApiError(payload, 'Failed to update preset'));
         }
         await this.loadLLMPresets();
         this.applyPresetToForm(payload.preset);
@@ -1143,7 +1256,14 @@ function describeItApp() {
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Preset generation failed');
         }
-        this.statusMessage = `Generated caption with preset ${payload.preset.name}.`;
+        const modeMap = {
+          tool_calls: 'Mode: Tool Calls',
+          context_injection: 'Mode: Context Injection',
+        };
+        const modeLabel = modeMap[payload.preset?.generation_mode] || '';
+        const events = payload.preset?.tool_usage_log?.length || 0;
+        const eventLabel = events > 0 ? ` (${events} tool/context event(s))` : '';
+        this.statusMessage = `Generated caption with preset ${payload.preset.name}${eventLabel}.${modeLabel ? ` ${modeLabel}.` : ''}`;
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
@@ -1177,6 +1297,59 @@ function describeItApp() {
           throw new Error(payload.detail ?? 'Caption generation failed');
         }
         this.statusMessage = `Generated caption with ${payload.backend}/${payload.model}.`;
+        await this.selectImage(this.selectedImage.id, false);
+        await this.loadImages();
+        await this.loadImageSummary();
+      });
+    },
+    async generateCaptionWithTools() {
+      if (!this.currentProject?.path || !this.selectedImage) {
+        this.errorMessage = 'Open a project and select an image first.';
+        return;
+      }
+      if (!this.llm.backend || !this.llm.model) {
+        this.errorMessage = 'Select an available backend and model first.';
+        return;
+      }
+      const toolsEnabled = [];
+      if (this.llm.tools.webSearch) toolsEnabled.push('web_search');
+      if (this.llm.tools.webFetch) toolsEnabled.push('web_fetch');
+      const selectedModel = this.selectedLLMModel();
+      let fallbackNotice = '';
+      if (toolsEnabled.length > 0 && selectedModel && !selectedModel.tool_capable) {
+        toolsEnabled.length = 0;
+        fallbackNotice = ` Model ${this.llm.model} is not tool-capable, so tools were skipped.`;
+      }
+      const contextUrls = this.llm.tools.contextUrl.trim() ? [this.llm.tools.contextUrl.trim()] : [];
+      const contextFiles = this.llm.tools.contextFile.trim() ? [this.llm.tools.contextFile.trim()] : [];
+      await this.withSubmitting(async () => {
+        const response = await fetch('/api/llm/generate-caption-with-tools', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            image_id: this.selectedImage.id,
+            backend: this.llm.backend,
+            model: this.llm.model,
+            extra_instructions: this.llm.extraInstructions,
+            make_active: this.llm.makeActive,
+            timeout_seconds: this.settings.llmTimeoutSeconds,
+            tools_enabled: toolsEnabled,
+            context_urls: contextUrls,
+            context_files: contextFiles,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Caption generation failed');
+        }
+        const log = payload.tool_usage_log?.length ? ` (${payload.tool_usage_log.length} tool/context event(s))` : '';
+        const modeMap = {
+          tool_calls: 'Mode: Tool Calls',
+          context_injection: 'Mode: Context Injection',
+        };
+        const modeLabel = modeMap[payload.generation_mode] || `Mode: ${payload.generation_mode || 'unknown'}`;
+        this.statusMessage = `Generated caption with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();

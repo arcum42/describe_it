@@ -27,6 +27,8 @@ class UpdateProjectRequest(BaseModel):
     description: str = ""
     trigger_word: str = ""
     caption_mode: str = Field(pattern="^(description|tags)$")
+    context_url: str = ""
+    context_file_path: str = ""
 
 
 class ImportFolderRequest(BaseModel):
@@ -123,6 +125,8 @@ def update_project_route(request: UpdateProjectRequest) -> dict[str, dict[str, s
             description=request.description.strip(),
             trigger_word=request.trigger_word.strip(),
             caption_mode=request.caption_mode.strip(),
+            context_url=request.context_url.strip(),
+            context_file_path=request.context_file_path.strip(),
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
