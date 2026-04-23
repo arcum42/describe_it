@@ -103,6 +103,12 @@ function describeItApp() {
       isRebuildingEmbeddings: false,
       embeddingsStatus: '',
     },
+    connectionTest: {
+      ollama: null,
+      lmstudio: null,
+      ollamaTesting: false,
+      lmstudioTesting: false,
+    },
     projectSession: {
       lastProjectPath: '',
       lastProjectDirectory: '',
@@ -120,9 +126,39 @@ function describeItApp() {
     },
     gridCards: [],
     async init() {
-      await Promise.all([this.loadHealth(), this.loadRecentProjects(), this.loadLLMBackends(), this.loadSettings(), this.loadLLMPresets(), this.loadProjectSessionState(), this.checkRAGStatus()]);
-      await this.loadBrowser(this.projectSession.lastProjectDirectory || null);
+      await Promise.all([
+        this.loadHealth(true),
+        this.loadRecentProjects(true),
+        this.loadLLMBackends(true),
+        this.loadSettings(true),
+        this.loadLLMPresets(true),
+        this.loadProjectSessionState(true),
+        this.checkRAGStatus(),
+      ]);
+      await this.loadBrowser(this.projectSession.lastProjectDirectory || null, true);
       await this.autoOpenLastProjectIfNeeded();
+    },
+    async sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    },
+    async fetchWithRetry(resource, options = {}, retryOptions = {}) {
+      const attempts = Math.max(1, Number(retryOptions.attempts ?? 1));
+      const delayMs = Math.max(0, Number(retryOptions.delayMs ?? 150));
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+          return await fetch(resource, options);
+        } catch (error) {
+          lastError = error;
+          if (attempt >= attempts) {
+            throw error;
+          }
+          await this.sleep(delayMs * attempt);
+        }
+      }
+
+      throw lastError || new Error('Request failed');
     },
     normalizeTimeout(value) {
       const parsed = Number.parseInt(value, 10);
@@ -141,9 +177,9 @@ function describeItApp() {
       }
       return Math.min(900, Math.max(10, parsed));
     },
-    async loadSettings() {
+    async loadSettings(isStartup = false) {
       try {
-        const response = await fetch('/api/llm/settings');
+        const response = await this.fetchWithRetry('/api/llm/settings', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to load settings');
@@ -211,9 +247,9 @@ function describeItApp() {
         this.errorMessage = error.message;
       }
     },
-    async loadProjectSessionState() {
+    async loadProjectSessionState(isStartup = false) {
       try {
-        const response = await fetch('/api/projects/session-state');
+        const response = await this.fetchWithRetry('/api/projects/session-state', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to load project session state');
@@ -259,7 +295,7 @@ function describeItApp() {
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to reopen last project');
         }
-        this.applyProject(payload.project);
+        this.applyProject(payload.project, { preserveMainView: true });
         await this.loadRecentProjects();
         this.statusMessage = `Reopened last project ${payload.project.name}.`;
       } catch (error) {
@@ -276,9 +312,12 @@ function describeItApp() {
     openWorkspace() {
       this.uiSection = 'workspace';
     },
-    applyProject(project) {
+    applyProject(project, options = {}) {
+      const preserveMainView = options.preserveMainView === true;
       this.currentProject = project;
-      this.mainView = 'grid';
+      if (!preserveMainView) {
+        this.mainView = 'grid';
+      }
       this.metadataForm = {
         path: project.path,
         name: project.name ?? '',
@@ -339,31 +378,31 @@ function describeItApp() {
       this.batch.results = [];
       this.loadBrowser(this.projectSession.lastProjectDirectory || null);
     },
-    async loadHealth() {
+    async loadHealth(isStartup = false) {
       try {
-        const response = await fetch('/api/health');
+        const response = await this.fetchWithRetry('/api/health', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         this.healthLabel = payload.status;
       } catch (error) {
         this.healthLabel = 'offline';
       }
     },
-    async loadRecentProjects() {
+    async loadRecentProjects(isStartup = false) {
       try {
-        const response = await fetch('/api/projects/recent');
+        const response = await this.fetchWithRetry('/api/projects/recent', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         this.recentProjects = payload.projects ?? [];
       } catch (error) {
         this.recentProjects = [];
       }
     },
-    async loadBrowser(path = null) {
+    async loadBrowser(path = null, isStartup = false) {
       try {
         const url = new URL('/api/projects/browser', window.location.origin);
         if (path) {
           url.searchParams.set('path', path);
         }
-        const response = await fetch(url);
+        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to browse paths');
@@ -583,9 +622,9 @@ function describeItApp() {
         this.llm.model = models[0]?.name ?? '';
       }
     },
-    async loadLLMBackends() {
+    async loadLLMBackends(isStartup = false) {
       try {
-        const response = await fetch('/api/llm/backends');
+        const response = await this.fetchWithRetry('/api/llm/backends', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to load LLM backends');
@@ -630,9 +669,9 @@ function describeItApp() {
       };
       this.llm.selectedPresetId = String(preset.id);
     },
-    async loadLLMPresets() {
+    async loadLLMPresets(isStartup = false) {
       try {
-        const response = await fetch('/api/llm/presets');
+        const response = await this.fetchWithRetry('/api/llm/presets', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
         if (!response.ok) {
           throw new Error(payload.detail ?? 'Failed to load presets');
@@ -1551,6 +1590,25 @@ function describeItApp() {
         this.errorMessage = error.message;
       } finally {
         this.isSubmitting = false;
+      }
+    },
+    async testConnection(backend) {
+      const urlKey = backend === 'ollama' ? 'ollamaBaseUrl' : 'lmstudioBaseUrl';
+      const testingKey = backend === 'ollama' ? 'ollamaTesting' : 'lmstudioTesting';
+      this.connectionTest[testingKey] = true;
+      this.connectionTest[backend] = null;
+      try {
+        const response = await fetch('/api/llm/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backend, url: this.settings[urlKey] }),
+        });
+        const payload = await response.json();
+        this.connectionTest[backend] = payload;
+      } catch (error) {
+        this.connectionTest[backend] = { ok: false, message: error.message };
+      } finally {
+        this.connectionTest[testingKey] = false;
       }
     },
     async checkRAGStatus() {

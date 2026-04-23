@@ -388,13 +388,19 @@ describe-it export --project path/to/project.db --output ./export
 
 ---
 
+## Recently Completed (April 2026)
+
+- Caption CRUD: per-candidate delete and inline edit in the editor UI, backed by `delete_caption` / `update_caption_text` service functions and `/api/captions/delete` + `/api/captions/update` endpoints.
+- Startup reliability: server-ready health-poll before browser open (`run.py`), `preserveMainView` option on `applyProject`, and `fetchWithRetry` on all startup loads.
+- Alpine null guards and static asset cache-busting.
+- Batch regression tests: 6 tests covering restart recovery (running/queued → paused), terminal-status preservation, result-row integrity, CSV column correctness, and empty-result CSV edge case.
+- Connection test button: `POST /api/llm/test-connection` endpoint; Test button next to each backend URL field in Settings; inline success/error feedback; 18 regression tests passing.
+- End-user docs updated: README.md rewritten to reflect current feature set; BATCH_GUIDE.md written covering presets, caption mode strategy, backend runtime settings, batch workflows, output modes, and CSV export.
+- End-to-end smoke pass: `tests/test_smoke_e2e.py` — 13 tests covering full project lifecycle (create/open/import/edit/generate/batch/export/settings/presets/connection test); all 31 tests passing.
+
 ## Immediate Next Tasks
 
-1. Add regression checks for batch resume/restart recovery, results integrity, and CSV export behavior.
-2. Add UI affordances for backend settings validation (URL sanity checks and connection test button).
-3. Update end-user docs for preset mode strategy, backend runtime settings, and batch workflows.
-4. Run a full end-to-end smoke pass across project lifecycle: create/open/import/edit/generate/batch/export.
-5. Consider Phase 7 (ChromaDB/RAG) if needed, or focus on hardening/polish before public release.
+None — all planned phases and hardening tasks complete.
 
 ---
 

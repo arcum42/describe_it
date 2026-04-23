@@ -87,6 +87,11 @@ class BatchJobCommandRequest(BaseModel):
     job_id: str = Field(min_length=1)
 
 
+class TestConnectionRequest(BaseModel):
+    backend: str = Field(pattern="^(ollama|lmstudio)$")
+    url: str = Field(min_length=1, max_length=2048)
+
+
 class RebuildEmbeddingsRequest(BaseModel):
     project_path: str = Field(min_length=1)
 
@@ -95,6 +100,25 @@ class SearchCaptionsRequest(BaseModel):
     project_path: str = Field(min_length=1)
     query_text: str = Field(min_length=1)
     top_k: int = Field(default=3, ge=1, le=10)
+
+
+@router.post("/test-connection")
+def test_connection(request: TestConnectionRequest) -> dict[str, object]:
+    from backend.llm.ollama_client import OllamaClient
+    from backend.llm.lmstudio_client import LMStudioClient
+
+    url = request.url.strip()
+    try:
+        if request.backend == "ollama":
+            info = OllamaClient(base_url=url).get_backend_info()
+        else:
+            info = LMStudioClient(base_url=url).get_backend_info()
+        if not info.available:
+            return {"ok": False, "message": info.error or "Backend unreachable.", "model_count": 0}
+        model_count = len(info.models or [])
+        return {"ok": True, "message": f"Connected \u2014 {model_count} model(s) found.", "model_count": model_count}
+    except ValueError as error:
+        return {"ok": False, "message": str(error), "model_count": 0}
 
 
 @router.get("/backends")

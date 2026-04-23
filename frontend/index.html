@@ -6,8 +6,8 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260422" />
-    <script defer src="/static/app.js?v=20260422"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260422b" />
+    <script defer src="/static/app.js?v=20260422b"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -944,14 +944,44 @@
 
                 <p class="text-sm font-medium text-stone-200">Backend Runtime</p>
                 <div class="grid gap-3 md:grid-cols-2">
-                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                     Ollama Base URL
-                    <input x-model="settings.ollamaBaseUrl" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
-                  </label>
-                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="settings.ollamaBaseUrl" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
+                      <button
+                        @click="testConnection('ollama')"
+                        :disabled="connectionTest.ollamaTesting"
+                        class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                        x-text="connectionTest.ollamaTesting ? 'Testing…' : 'Test'"
+                      ></button>
+                    </div>
+                    <template x-if="connectionTest.ollama !== null">
+                      <p
+                        class="mt-1 text-[11px]"
+                        :class="connectionTest.ollama.ok ? 'text-emerald-400' : 'text-red-400'"
+                        x-text="connectionTest.ollama.message"
+                      ></p>
+                    </template>
+                  </div>
+                  <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                     LM Studio Base URL
-                    <input x-model="settings.lmstudioBaseUrl" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
-                  </label>
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="settings.lmstudioBaseUrl" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
+                      <button
+                        @click="testConnection('lmstudio')"
+                        :disabled="connectionTest.lmstudioTesting"
+                        class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                        x-text="connectionTest.lmstudioTesting ? 'Testing…' : 'Test'"
+                      ></button>
+                    </div>
+                    <template x-if="connectionTest.lmstudio !== null">
+                      <p
+                        class="mt-1 text-[11px]"
+                        :class="connectionTest.lmstudio.ok ? 'text-emerald-400' : 'text-red-400'"
+                        x-text="connectionTest.lmstudio.message"
+                      ></p>
+                    </template>
+                  </div>
                   <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                     Ollama Timeout Override (optional)
                     <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
