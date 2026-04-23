@@ -42,6 +42,9 @@ function describeItApp() {
     uiSection: 'workspace',
     images: [],
     mainView: 'grid',
+    sidebarMode: 'create',
+    showOpenProject: false,
+    showBrowser: false,
     selectedImage: null,
     editorCaptionText: '',
     newCaptionText: '',
@@ -342,6 +345,13 @@ function describeItApp() {
       this.loadLatestBatchJob();
     },
     closeProject() {
+      const activeCaption = this.selectedImage?.captions?.find((c) => c.is_active);
+      const savedText = activeCaption?.text ?? '';
+      if (this.selectedImage && this.editorCaptionText !== savedText) {
+        if (!window.confirm('You have unsaved caption changes. Close project anyway?')) {
+          return;
+        }
+      }
       this.currentProject = null;
       this.mainView = 'grid';
       this.selectedImage = null;
@@ -494,11 +504,20 @@ function describeItApp() {
         this.errorMessage = error.message;
       }
     },
-    async createProject() {
+    async withSubmitting(fn) {
+      this.isSubmitting = true;
       this.errorMessage = '';
       this.statusMessage = '';
-      this.isSubmitting = true;
       try {
+        await fn();
+      } catch (error) {
+        this.errorMessage = error.message;
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+    async createProject() {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/projects/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -512,17 +531,10 @@ function describeItApp() {
         this.statusMessage = `Created project ${payload.project.name}`;
         await this.loadRecentProjects();
         await this.loadBrowser(payload.project.path);
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async openProject() {
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/projects/open', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -536,17 +548,10 @@ function describeItApp() {
         this.statusMessage = `Opened project ${payload.project.name}`;
         await this.loadRecentProjects();
         await this.loadBrowser(payload.project.path);
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async saveMetadata() {
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/projects/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -559,11 +564,7 @@ function describeItApp() {
         this.applyProject(payload.project);
         this.statusMessage = `Saved metadata for ${payload.project.name}`;
         await this.loadRecentProjects();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async openRecentProject(path) {
       this.openForm.path = path;
@@ -689,10 +690,7 @@ function describeItApp() {
       }
     },
     async createPreset() {
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/presets/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -711,21 +709,14 @@ function describeItApp() {
         await this.loadLLMPresets();
         this.applyPresetToForm(payload.preset);
         this.statusMessage = `Created preset ${payload.preset.name}.`;
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async updatePreset() {
       if (!this.llm.presetForm.id) {
         this.errorMessage = 'Select a preset to update.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/presets/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -745,21 +736,14 @@ function describeItApp() {
         await this.loadLLMPresets();
         this.applyPresetToForm(payload.preset);
         this.statusMessage = `Updated preset ${payload.preset.name}.`;
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async deletePreset() {
       if (!this.llm.presetForm.id) {
         this.errorMessage = 'Select a preset to delete.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/presets/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -775,11 +759,7 @@ function describeItApp() {
         this.resetPresetForm();
         this.llm.selectedPresetId = '';
         this.statusMessage = `Deleted preset ${payload.deleted_preset_id}.`;
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     onSelectedPresetChanged() {
       const preset = this.llm.presets.find((item) => String(item.id) === String(this.llm.selectedPresetId));
@@ -1082,9 +1062,7 @@ function describeItApp() {
       this.batch.currentGeneratedText = '';
       this.batch.currentFilename = '';
       this.batch.currentImageId = null;
-
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/batch-jobs/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1113,11 +1091,7 @@ function describeItApp() {
         await this.loadBatchHistory();
         await this.loadBatchResults(job.id);
         this.statusMessage = 'Batch job started.';
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     applyPresetPreference() {
       const selectedExists = this.llm.presets.some((item) => String(item.id) === String(this.llm.selectedPresetId));
@@ -1147,10 +1121,7 @@ function describeItApp() {
         this.errorMessage = 'Choose a preset first.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/generate-with-preset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1170,11 +1141,7 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async generateCaptionWithLLM() {
       if (!this.currentProject?.path || !this.selectedImage) {
@@ -1185,10 +1152,7 @@ function describeItApp() {
         this.errorMessage = 'Select an available backend and model first.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/llm/generate-caption', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1210,11 +1174,7 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async loadImageSummary() {
       if (!this.currentProject?.path) {
@@ -1299,10 +1259,7 @@ function describeItApp() {
       if (!this.currentProject?.path || !this.selectedImage) {
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch(`/api/images/${this.selectedImage.id}/included`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1320,20 +1277,13 @@ function describeItApp() {
         await this.loadImages();
         await this.loadImageSummary();
         await this.selectImage(this.selectedImage.id, false);
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async saveActiveCaption() {
       if (!this.currentProject?.path || !this.selectedImage) {
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/captions/update-active', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1351,11 +1301,7 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async addCaptionCandidate(makeActive = true) {
       if (!this.currentProject?.path || !this.selectedImage) {
@@ -1366,10 +1312,7 @@ function describeItApp() {
         this.errorMessage = 'Enter caption text before adding a candidate.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/captions/create', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1389,20 +1332,13 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async setActiveCaption(captionId) {
       if (!this.currentProject?.path || !this.selectedImage) {
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/captions/set-active', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1420,11 +1356,7 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     startEditCaption(caption) {
       if (!caption) {
@@ -1443,11 +1375,7 @@ function describeItApp() {
       if (!this.currentProject?.path || !this.selectedImage || !caption) {
         return;
       }
-
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/captions/update', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1467,26 +1395,17 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async deleteCaption(caption) {
       if (!this.currentProject?.path || !this.selectedImage || !caption) {
         return;
       }
-
       const confirmDelete = window.confirm('Delete this caption? This cannot be undone.');
       if (!confirmDelete) {
         return;
       }
-
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/captions/delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1504,21 +1423,14 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async importFolder() {
       if (!this.currentProject?.path) {
         this.errorMessage = 'Open or create a project first.';
         return;
       }
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/projects/import-folder', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1536,11 +1448,7 @@ function describeItApp() {
         this.statusMessage = `Imported ${result.imported_images} images (${result.captions_from_files} with captions, ${result.blank_captions} blank).`;
         await this.loadImages();
         await this.loadImageSummary();
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async exportProjectDataset() {
       if (!this.currentProject?.path) {
@@ -1556,11 +1464,7 @@ function describeItApp() {
         this.errorMessage = 'Choose either clean output folder or overwrite existing files.';
         return;
       }
-
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.isSubmitting = true;
-      try {
+      await this.withSubmitting(async () => {
         const response = await fetch('/api/projects/export', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1586,11 +1490,7 @@ function describeItApp() {
         const metadataSuffix = result.metadata_written && result.metadata_file ? ' Metadata manifest written.' : '';
         this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}`;
         this.exportPreview = null;
-      } catch (error) {
-        this.errorMessage = error.message;
-      } finally {
-        this.isSubmitting = false;
-      }
+      });
     },
     async testConnection(backend) {
       const urlKey = backend === 'ollama' ? 'ollamaBaseUrl' : 'lmstudioBaseUrl';

@@ -17,7 +17,8 @@ class Settings:
 
 def get_settings() -> Settings:
     base_dir = Path(__file__).resolve().parent.parent
-    state_dir = base_dir / ".describe_it"
+    state_dir_override = os.getenv("DESCRIBE_IT_STATE_DIR")
+    state_dir = Path(state_dir_override) if state_dir_override else base_dir / ".describe_it"
     return Settings(
         app_name="describe_it",
         host=os.getenv("DESCRIBE_IT_HOST", "127.0.0.1"),

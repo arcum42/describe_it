@@ -208,44 +208,7 @@ The frontend is served as static files from the Python server (FastAPI can serve
 
 For CSS, **DaisyUI on top of Tailwind CSS** is a strong default: it provides ready-made components (buttons, modals, cards, badges) that suit this UI well, and Tailwind can be pulled in via CDN for a no-build setup, or via the Vite pipeline if a build step is used anyway.
 
-#### Option 1 — Plain HTML + Vanilla JS + Alpine.js ⭐ Easiest
-
-- **Setup**: Drop `alpine.js` from a CDN into `index.html`. No build step, no `package.json`, nothing to install beyond the Python backend.
-- **How it works**: Alpine.js adds reactive data binding (`x-data`, `x-bind`, `x-on`) directly in HTML attributes, handling UI state like open/closed modals, hover states, and toggling views without writing imperative JS.
-- **Good for**: The grid view, single-image view, settings panel, and most forms work naturally with Alpine. Fetch calls to the backend are plain `fetch()`.
-- **Difficulty**: Very low. If you know HTML and a little JS, you're productive immediately.
-- **Limitation**: The tag bubble drag-and-drop editor would need a small vanilla JS library (e.g., [SortableJS](https://sortablejs.github.io/Sortable/)) to handle dragging. Manageable, but slightly awkward without a component model.
-- **File layout**: Everything lives in `frontend/index.html` plus maybe a `frontend/app.js` for shared fetch helpers. No bundler, no build command.
-
-#### Option 2 — HTMX
-
-- **Setup**: Drop `htmx.js` from a CDN. No build step. The server renders HTML fragments that replace parts of the page.
-- **How it works**: HTMX lets HTML elements trigger HTTP requests and swap the response into the DOM — e.g., clicking "Generate Caption" sends a POST and the server returns just the updated caption panel HTML. The Python backend (Jinja2 templates with FastAPI or Flask) handles all rendering logic.
-- **Good for**: Apps that are fundamentally CRUD-heavy with discrete page regions that update independently. The grid, single-image view, and settings panel all fit this model well.
-- **Difficulty**: Low to medium. Easy once the pattern clicks, but requires the backend to return HTML rather than JSON, which is a different mental model if you're used to SPA-style API design. It also means mixing presentation concerns into the Python server.
-- **Limitation**: Live updates (e.g., a streaming progress bar during batch captioning) require HTMX's SSE or WebSocket extensions, which adds complexity. The tag bubble editor still needs a JS drag library.
-- **Note**: HTMX and Alpine.js are frequently used together — HTMX for server-driven partial updates, Alpine for purely client-side interactivity. This combo covers most of the UI without a build step.
-
-#### Option 3 — Vue 3 + Vite ⭐ Best balance for this project
-
-- **Setup**: `npm create vite@latest frontend -- --template vue`, then `npm install`. Running `npm run dev` starts a hot-reloading dev server; `npm run build` outputs a `dist/` folder that FastAPI serves as static files.
-- **How it works**: Vue's single-file components (`.vue` files) co-locate template, logic, and styles. The Composition API (`<script setup>`) makes state and reactivity straightforward. The whole app is a tree of components — `GridView.vue`, `ImageEditor.vue`, `TagBubble.vue`, etc.
-- **Good for**: The tag bubble editor is a natural fit for a Vue component with a drag library (SortableJS or Vue Draggable). Complex reactive state — like tracking which caption candidate is active, live streaming tokens from the LLM into the text area, or a progress bar updating as batch captioning runs — is much cleaner in Vue than in Alpine or HTMX.
-- **Difficulty**: Medium. Requires Node.js on the machine and familiarity with the Vite/npm workflow. The learning curve for Vue 3 Composition API is modest. The two-server dev experience (Vite on one port, FastAPI on another, with a proxy) adds a small setup step but is well-documented.
-- **Limitation**: Adds a Node.js dependency and a build step. The `dist/` output must be rebuilt whenever frontend code changes (fine in production; the dev server handles this automatically).
-
-#### Option 4 — React
-
-- **Setup**: Similar to Vue + Vite (`npm create vite@latest frontend -- --template react`).
-- **How it works**: Same SPA model as Vue, but with JSX syntax and a heavier ecosystem.
-- **Difficulty**: Medium, same as Vue — but React is arguably more verbose for this type of form-heavy UI (more boilerplate for state management, no built-in two-way binding).
-- **Verdict**: Only prefer React if there's existing familiarity with it. Vue is a better fit for this scope.
-
-#### Recommendation
-
-**Start with Alpine.js + vanilla fetch** for the fastest path to a working prototype — the whole frontend is a single HTML file with no tooling. If the tag bubble editor or the streaming LLM output becomes unwieldy, migrate to **Vue 3 + Vite** for that component specifically (or for the whole frontend). The backend API stays the same either way.
-
-For this project, **Option 1 is the initial frontend choice**. The first implementation pass should assume:
+The frontend uses **Alpine.js + vanilla fetch** with no build step. The whole frontend is served as static files from the FastAPI backend.
 
 - `frontend/index.html` contains the main UI shell
 - `frontend/app.js` contains shared state, API calls, and view logic
@@ -282,7 +245,7 @@ Notes:
 
 ### Database Schema (sketch)
 - `projects` — id, name, description, trigger_word, caption_mode, created_at
-- `images` — id, project_id, filename, original_blob (BLOB), working_blob (BLOB, nullable), width, height, included, parent_image_id
+- `images` — id, project_id, filename, original_blob (BLOB), width, height, included
 - `captions` — id, image_id, text, is_active, source (manual | model_name), created_at
 - `prompts` — id, project_id, name, text
 - `presets` — id, project_id, name, prompt_id, backend, model_name
@@ -302,33 +265,17 @@ Note: `original_blob` stores the unmodified source bytes. `working_blob` is null
 - **Multi-project export** — merge several projects into one export folder
 - **Undo/redo** for caption edits
 - **Keyboard shortcuts** in single-image view (arrow keys to navigate, `E` to edit, `G` to generate caption, etc.)
-- **Dark mode**
-- **RAG-assisted captioning** — see section below
 
 ---
 
-## RAG / Embedding-Assisted Captioning (Stretch Goal)
+## RAG / Embedding-Assisted Captioning
 
-**Would ChromaDB or similar RAG tooling be useful here?**
+ChromaDB is supported as an **optional dependency** (`requirements-optional.txt`). When installed it enables:
 
-Short answer: yes, with caveats — it's more useful as datasets grow large.
+- **Few-shot example retrieval** — finds the `N` most similar already-captioned images (by caption embedding similarity) and injects their captions into the prompt as style examples.
+- **Semantic caption search** — search across captions by meaning rather than exact keywords.
 
-### How it could help
-
-Both Ollama and LM Studio can generate text embeddings (`ollama.embed()`, or LM Studio's embeddings endpoint). These could be stored in a vector store like [ChromaDB](https://www.trychroma.com/) alongside each image's caption, enabling:
-
-- **Few-shot example retrieval** — when generating a caption for a new image, automatically find the `N` most similar already-captioned images (by caption embedding similarity) and inject their captions into the prompt as style examples. This significantly improves consistency across large datasets.
-- **Semantic caption search** — search across all captions by meaning rather than exact keywords (e.g., "find all images with outdoor scenes").
-- **Consistency enforcement** — detect when a new AI caption uses vocabulary or style that diverges significantly from the rest of the dataset.
-
-### Caveats
-- For small datasets (< a few hundred images), the overhead isn't worth it — a keyword search is sufficient.
-- ChromaDB runs as an in-process library (no separate server needed for local use), so integration is not heavy.
-- Embedding images directly (rather than their captions) would require a CLIP-compatible embedding model, which is a separate dependency. Caption-based embeddings are simpler and likely good enough for style matching.
-- This is genuinely more useful once a dataset grows beyond ~500 images or when you want to enforce a consistent captioning style across a large set.
-
-### Suggested approach
-Add ChromaDB as an optional dependency. If installed, enable a "RAG mode" in the captioning workflow that retrieves similar captions and adds them to the prompt automatically. The collection can be rebuilt on demand from the current database.
+The RAG collection is built from caption text embeddings (not raw image embeddings) and can be rebuilt on demand from the Settings panel. When ChromaDB is not installed the feature is gracefully disabled and all other functionality is unaffected.
 
 ---
 
