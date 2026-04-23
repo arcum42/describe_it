@@ -45,6 +45,8 @@ function describeItApp() {
     selectedImage: null,
     editorCaptionText: '',
     newCaptionText: '',
+    editingCaptionId: null,
+    editingCaptionText: '',
     llm: {
       backends: [],
       backend: '',
@@ -94,6 +96,12 @@ function describeItApp() {
       lmstudioBaseUrl: 'http://127.0.0.1:1234',
       ollamaTimeoutSeconds: '',
       lmstudioTimeoutSeconds: '',
+      ragEnabled: false,
+    },
+    rag: {
+      enabled: false,
+      isRebuildingEmbeddings: false,
+      embeddingsStatus: '',
     },
     projectSession: {
       lastProjectPath: '',
@@ -112,7 +120,7 @@ function describeItApp() {
     },
     gridCards: [],
     async init() {
-      await Promise.all([this.loadHealth(), this.loadRecentProjects(), this.loadLLMBackends(), this.loadSettings(), this.loadLLMPresets(), this.loadProjectSessionState()]);
+      await Promise.all([this.loadHealth(), this.loadRecentProjects(), this.loadLLMBackends(), this.loadSettings(), this.loadLLMPresets(), this.loadProjectSessionState(), this.checkRAGStatus()]);
       await this.loadBrowser(this.projectSession.lastProjectDirectory || null);
       await this.autoOpenLastProjectIfNeeded();
     },
@@ -263,6 +271,7 @@ function describeItApp() {
       this.uiSection = 'settings';
       this.errorMessage = '';
       this.statusMessage = '';
+      this.checkRAGStatus();
     },
     openWorkspace() {
       this.uiSection = 'workspace';
@@ -1228,6 +1237,8 @@ function describeItApp() {
           throw new Error(payload.detail ?? 'Failed to load image details');
         }
         this.selectedImage = payload.image;
+        this.editingCaptionId = null;
+        this.editingCaptionText = '';
         const active = this.selectedImage.captions.find((caption) => caption.is_active);
         this.editorCaptionText = active ? active.text : '';
         if (switchToEditor) {
@@ -1376,6 +1387,90 @@ function describeItApp() {
         this.isSubmitting = false;
       }
     },
+    startEditCaption(caption) {
+      if (!caption) {
+        return;
+      }
+      this.editingCaptionId = caption.id;
+      this.editingCaptionText = caption.text || '';
+      this.errorMessage = '';
+      this.statusMessage = '';
+    },
+    cancelEditCaption() {
+      this.editingCaptionId = null;
+      this.editingCaptionText = '';
+    },
+    async saveEditedCaption(caption) {
+      if (!this.currentProject?.path || !this.selectedImage || !caption) {
+        return;
+      }
+
+      this.errorMessage = '';
+      this.statusMessage = '';
+      this.isSubmitting = true;
+      try {
+        const response = await fetch('/api/captions/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            image_id: this.selectedImage.id,
+            caption_id: caption.id,
+            text: this.editingCaptionText,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to update caption');
+        }
+        this.cancelEditCaption();
+        this.statusMessage = 'Caption updated.';
+        await this.selectImage(this.selectedImage.id, false);
+        await this.loadImages();
+        await this.loadImageSummary();
+      } catch (error) {
+        this.errorMessage = error.message;
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
+    async deleteCaption(caption) {
+      if (!this.currentProject?.path || !this.selectedImage || !caption) {
+        return;
+      }
+
+      const confirmDelete = window.confirm('Delete this caption? This cannot be undone.');
+      if (!confirmDelete) {
+        return;
+      }
+
+      this.errorMessage = '';
+      this.statusMessage = '';
+      this.isSubmitting = true;
+      try {
+        const response = await fetch('/api/captions/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            project_path: this.currentProject.path,
+            image_id: this.selectedImage.id,
+            caption_id: caption.id,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to delete caption');
+        }
+        this.statusMessage = 'Caption deleted.';
+        await this.selectImage(this.selectedImage.id, false);
+        await this.loadImages();
+        await this.loadImageSummary();
+      } catch (error) {
+        this.errorMessage = error.message;
+      } finally {
+        this.isSubmitting = false;
+      }
+    },
     async importFolder() {
       if (!this.currentProject?.path) {
         this.errorMessage = 'Open or create a project first.';
@@ -1456,6 +1551,46 @@ function describeItApp() {
         this.errorMessage = error.message;
       } finally {
         this.isSubmitting = false;
+      }
+    },
+    async checkRAGStatus() {
+      try {
+        const response = await fetch('/api/llm/rag/status');
+        const payload = await response.json();
+        if (response.ok) {
+          this.rag.enabled = payload.rag_enabled ?? false;
+        }
+      } catch (error) {
+        this.rag.enabled = false;
+      }
+    },
+    async rebuildEmbeddings() {
+      if (!this.currentProject?.path) {
+        this.errorMessage = 'Open or create a project first.';
+        return;
+      }
+      this.rag.isRebuildingEmbeddings = true;
+      this.rag.embeddingsStatus = 'Rebuilding embeddings...';
+      this.errorMessage = '';
+      this.statusMessage = '';
+      try {
+        const response = await fetch('/api/llm/rag/rebuild-embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ project_path: this.currentProject.path }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(payload.detail ?? 'Failed to rebuild embeddings');
+        }
+        const result = payload.result;
+        this.rag.embeddingsStatus = `Indexed ${result.indexed} captions`;
+        this.statusMessage = `Embeddings rebuilt: ${result.indexed} captions indexed`;
+      } catch (error) {
+        this.errorMessage = error.message;
+        this.rag.embeddingsStatus = 'Failed to rebuild embeddings';
+      } finally {
+        this.rag.isRebuildingEmbeddings = false;
       }
     },
   };

@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from backend.services.caption_service import create_caption_candidate, set_active_caption, update_active_caption_text
+from backend.services.caption_service import (
+    create_caption_candidate,
+    delete_caption,
+    set_active_caption,
+    update_active_caption_text,
+    update_caption_text,
+)
 
 router = APIRouter(prefix="/api/captions", tags=["captions"])
 
@@ -22,6 +28,19 @@ class CreateCaptionCandidateRequest(BaseModel):
 
 
 class SetActiveCaptionRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_id: int
+    caption_id: int
+
+
+class UpdateCaptionRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_id: int
+    caption_id: int
+    text: str
+
+
+class DeleteCaptionRequest(BaseModel):
     project_path: str = Field(min_length=1)
     image_id: int
     caption_id: int
@@ -58,6 +77,32 @@ def create_caption(request: CreateCaptionCandidateRequest) -> dict[str, object]:
 def set_active(request: SetActiveCaptionRequest) -> dict[str, int]:
     try:
         return set_active_caption(
+            project_path=request.project_path.strip(),
+            image_id=request.image_id,
+            caption_id=request.caption_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/update")
+def update_caption(request: UpdateCaptionRequest) -> dict[str, object]:
+    try:
+        result = update_caption_text(
+            project_path=request.project_path.strip(),
+            image_id=request.image_id,
+            caption_id=request.caption_id,
+            text=request.text,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"caption": result}
+
+
+@router.post("/delete")
+def delete_caption_route(request: DeleteCaptionRequest) -> dict[str, object]:
+    try:
+        return delete_caption(
             project_path=request.project_path.strip(),
             image_id=request.image_id,
             caption_id=request.caption_id,

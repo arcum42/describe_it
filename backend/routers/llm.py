@@ -15,6 +15,10 @@ from backend.services.llm_service import (
     list_presets,
     update_preset,
 )
+from backend.services.rag_service import rag_service
+from backend.db.session import create_sqlite_session_factory
+from backend.db.models import CaptionRecord
+from sqlalchemy import select
 
 router = APIRouter(prefix="/api/llm", tags=["llm"])
 
@@ -81,6 +85,16 @@ class CreateBatchJobRequest(BaseModel):
 
 class BatchJobCommandRequest(BaseModel):
     job_id: str = Field(min_length=1)
+
+
+class RebuildEmbeddingsRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+
+
+class SearchCaptionsRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    query_text: str = Field(min_length=1)
+    top_k: int = Field(default=3, ge=1, le=10)
 
 
 @router.get("/backends")
@@ -284,3 +298,38 @@ def batch_job_results_export(job_id: str) -> Response:
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="batch-job-{job_id}-results.csv"'},
     )
+
+
+@router.get("/rag/status")
+def rag_status() -> dict[str, object]:
+    return {"rag_enabled": rag_service.is_enabled()}
+
+
+@router.post("/rag/rebuild-embeddings")
+def rebuild_embeddings(request: RebuildEmbeddingsRequest) -> dict[str, object]:
+    try:
+        project_path = request.project_path.strip()
+        session_factory = create_sqlite_session_factory(__import__("pathlib").Path(project_path))
+        with session_factory() as session:
+            captions_rows = session.scalars(
+                select(CaptionRecord).order_by(CaptionRecord.id.asc())
+            ).all()
+        captions = [{"id": c.id, "text": c.text} for c in captions_rows]
+        return {"result": rag_service.rebuild_embeddings_for_project(project_path=project_path, captions=captions)}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(error)) from error
+
+
+@router.post("/rag/search")
+def search_captions(request: SearchCaptionsRequest) -> dict[str, object]:
+    try:
+        similar = rag_service.get_similar_captions(
+            project_path=request.project_path.strip(),
+            query_text=request.query_text.strip(),
+            top_k=request.top_k,
+        )
+        return {"similar_captions": similar, "rag_enabled": rag_service.is_enabled()}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

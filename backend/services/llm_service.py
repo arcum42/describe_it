@@ -20,6 +20,7 @@ from backend.services.app_state_service import (
 )
 from backend.services.caption_service import create_caption_candidate
 from backend.services.image_service import get_image_content, get_image_detail
+from backend.services.rag_service import rag_service
 
 
 def list_backends() -> list[BackendInfo]:
@@ -203,6 +204,7 @@ def generate_text_for_image_manual(
     image_detail = get_image_detail(project_path=project_path, image_id=image_id)
     active_caption = next((caption for caption in image_detail.captions if caption.is_active), None)
     image_bytes, media_type = get_image_content(project_path=project_path, image_id=image_id)
+    project, _ = _load_project_record(project_path)
 
     prompt = build_caption_prompt(
         filename=image_detail.filename,
@@ -303,6 +305,15 @@ def generate_text_for_image_with_preset(
 
     context = _build_preset_context(project=project, image_detail=image_detail)
     system_prompt = _render_system_prompt(system_template, context)
+
+    if rag_service.is_enabled():
+        system_prompt = rag_service.build_augmented_system_prompt(
+            base_system_prompt=system_prompt,
+            project_path=project_path,
+            current_caption=active_caption.text if active_caption else "",
+            include_few_shot=True,
+        )
+
     preset_backend = str(preset.get("backend") or "")
     preset_model_name = str(preset.get("model_name") or "")
     preset_name = str(preset.get("name") or f"Preset {preset_id}")

@@ -109,6 +109,73 @@ def update_active_caption_text(*, project_path: str, image_id: int, text: str) -
         }
 
 
+def update_caption_text(*, project_path: str, image_id: int, caption_id: int, text: str) -> dict[str, object]:
+    resolved_project_path = _resolve_path(project_path)
+    if not resolved_project_path.exists():
+        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        image = _load_image_for_project(session, resolved_project_path, image_id)
+        caption = session.scalar(
+            select(CaptionRecord).where(CaptionRecord.id == caption_id, CaptionRecord.image_id == image.id).limit(1)
+        )
+        if caption is None:
+            raise ValueError(f"Caption not found for image {image_id}: {caption_id}")
+
+        caption.text = text
+        session.commit()
+
+        return {
+            "id": caption.id,
+            "image_id": caption.image_id,
+            "text": caption.text,
+            "is_active": caption.is_active,
+            "source": caption.source,
+            "created_at": caption.created_at.isoformat(),
+        }
+
+
+def delete_caption(*, project_path: str, image_id: int, caption_id: int) -> dict[str, object]:
+    resolved_project_path = _resolve_path(project_path)
+    if not resolved_project_path.exists():
+        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        image = _load_image_for_project(session, resolved_project_path, image_id)
+        caption = session.scalar(
+            select(CaptionRecord).where(CaptionRecord.id == caption_id, CaptionRecord.image_id == image.id).limit(1)
+        )
+        if caption is None:
+            raise ValueError(f"Caption not found for image {image_id}: {caption_id}")
+
+        was_active = bool(caption.is_active)
+        session.delete(caption)
+        session.flush()
+
+        new_active_caption_id: int | None = None
+        if was_active:
+            remaining = session.scalars(
+                select(CaptionRecord)
+                .where(CaptionRecord.image_id == image.id)
+                .order_by(CaptionRecord.created_at.desc(), CaptionRecord.id.desc())
+            ).all()
+            if remaining:
+                new_active = remaining[0]
+                for item in remaining:
+                    item.is_active = item.id == new_active.id
+                new_active_caption_id = new_active.id
+
+        session.commit()
+
+        return {
+            "image_id": image.id,
+            "deleted_caption_id": caption_id,
+            "active_caption_id": new_active_caption_id,
+        }
+
+
 def apply_generated_caption(
     *,
     project_path: str,

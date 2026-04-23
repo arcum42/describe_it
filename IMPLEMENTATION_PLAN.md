@@ -18,7 +18,7 @@ Turn the overview into an executable implementation roadmap, starting with a min
 - Phase 4: complete
 - Phase 5: complete
 - Phase 6: complete
-- Phase 7: not started
+- Phase 7: complete
 
 ---
 
@@ -314,28 +314,54 @@ Phase 6 deliverables are finalized: flat export folder with image/txt pairs, opt
 
 ## Phase 7: Optional ChromaDB / RAG Layer
 
-Status: not started
+Status: complete
 
-This should remain optional and not block the base application.
+Optional semantic search integration is fully implemented with ChromaDB backend.
 
-### Objectives
+### Implementation Summary
 
-- Add a feature flag or availability check for ChromaDB
-- Build embeddings from captions
-- Retrieve similar captions during AI generation
-- Add semantic search for captions
+- ✅ ChromaDB service layer (`backend/services/chromadb_service.py`) with availability checks
+- ✅ RAG service layer (`backend/services/rag_service.py`) with few-shot retrieval
+- ✅ LLM service integration for prompt augmentation during generation
+- ✅ API routes for rebuild/search (`/api/llm/rag/*`)
+- ✅ Frontend UI: RAG status display and rebuild embeddings button in Settings
+- ✅ 7 regression tests covering all RAG paths
+- ✅ End-user documentation: `PHASE_7_RAG_GUIDE.md`
 
-### Suggested design
+### Features Delivered
 
-- Keep Chroma collections outside the main SQLite database
-- Rebuild the vector index from project data on demand
-- Only enable RAG features when ChromaDB is installed and configured
+1. **Embeddings Management**: Rebuild embeddings for projects via API/UI
+2. **Semantic Search**: Find similar captions by text query
+3. **Prompt Augmentation**: Automatic few-shot example injection during generation
+4. **Graceful Degradation**: Works without ChromaDB (feature quietly disabled)
+5. **Local Storage**: Collections stored at `.describe_it/chroma/`
 
-### Deliverables
+### Architecture
 
-- Rebuild embeddings for a project
-- Search captions semantically
-- Optional few-shot retrieval in prompt generation
+```
+ChromaDBService (singleton)
+  ├── is_chromadb_available() → bool
+  ├── rebuild_embeddings() → indexed count
+  ├── search_similar() → list[{text, similarity}]
+  └── delete_collection() → result
+
+RAGService (singleton, wraps ChromaDBService)
+  ├── is_enabled() → bool
+  ├── get_similar_captions() → list[str]
+  ├── build_augmented_system_prompt() → str
+  └── rebuild_embeddings_for_project() → result
+
+LLMService integration
+  └── generate_text_for_image_with_preset()
+      └── Uses rag_service.build_augmented_system_prompt()
+```
+
+### Test Coverage
+
+- Direct service methods: embed/search/augment (3 tests)
+- API endpoints: rebuild/search/status (3 tests)
+- Graceful degradation: works without ChromaDB (1 test)
+- Result: 7/7 passing
 
 ---
 

@@ -6,8 +6,8 @@
     <title>describe_it</title>
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/static/styles.css" />
-    <script defer src="/static/app.js"></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260422" />
+    <script defer src="/static/app.js?v=20260422"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -387,15 +387,15 @@
               <template x-if="selectedImage">
                 <div class="space-y-4">
                   <div class="overflow-hidden rounded-2xl border border-stone-800 bg-stone-950/70">
-                    <img :src="imageSrc(selectedImage.id)" :alt="selectedImage.filename" class="h-auto w-full object-contain" />
+                    <img :src="selectedImage ? imageSrc(selectedImage.id) : ''" :alt="selectedImage ? selectedImage.filename : ''" class="h-auto w-full object-contain" />
                   </div>
                   <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300">
                     <div>
-                      <p class="font-medium text-stone-100" x-text="selectedImage.filename"></p>
-                      <p class="text-xs text-stone-500" x-text="`${selectedImage.width || '?'} x ${selectedImage.height || '?'} px`"></p>
+                      <p class="font-medium text-stone-100" x-text="selectedImage ? selectedImage.filename : ''"></p>
+                      <p class="text-xs text-stone-500" x-text="selectedImage ? `${selectedImage.width || '?'} x ${selectedImage.height || '?'} px` : ''"></p>
                     </div>
-                    <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
-                      <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
+                    <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage && selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
+                      <span x-text="selectedImage && selectedImage.included ? 'Included' : 'Excluded'"></span>
                     </button>
                   </div>
 
@@ -494,17 +494,44 @@
 
                   <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <p class="text-sm font-medium text-stone-200">Caption Candidates</p>
+                    <p class="mt-1 text-xs text-stone-500">Use the controls on each caption to set active, edit, or delete.</p>
                     <div class="mt-3 max-h-48 space-y-2 overflow-auto pr-1">
-                      <template x-for="caption in selectedImage.captions" :key="caption.id">
-                        <button @click="setActiveCaption(caption.id)" class="w-full rounded-xl border px-3 py-2 text-left text-sm transition" :class="caption.is_active ? 'border-amber-500 bg-amber-500/10 text-amber-100' : 'border-stone-800 bg-stone-900 text-stone-300 hover:border-amber-400/60'">
+                      <template x-for="caption in (selectedImage ? selectedImage.captions : [])" :key="caption.id">
+                        <div class="w-full rounded-xl border px-3 py-2 text-left text-sm transition" :class="caption.is_active ? 'border-amber-500 bg-amber-500/10 text-amber-100' : 'border-stone-800 bg-stone-900 text-stone-300'">
                           <div class="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.2em]">
                             <span x-text="caption.source"></span>
                             <span x-text="caption.is_active ? 'active' : 'candidate'"></span>
                           </div>
-                          <p class="line-clamp-3" x-text="caption.text || '(empty caption)'"></p>
-                        </button>
+                          <template x-if="editingCaptionId !== caption.id">
+                            <p class="line-clamp-3" x-text="caption.text || '(empty caption)'"></p>
+                          </template>
+                          <template x-if="editingCaptionId === caption.id">
+                            <textarea x-model="editingCaptionText" class="min-h-20 w-full rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Edit caption text"></textarea>
+                          </template>
+                          <div class="mt-2 flex flex-wrap gap-2">
+                            <button @click="setActiveCaption(caption.id)" :disabled="isSubmitting || caption.is_active" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Set Active
+                            </button>
+                            <button @click="startEditCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Edit
+                            </button>
+                            <button @click="deleteCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-red-700 px-2 py-1 text-xs text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Delete
+                            </button>
+                          </div>
+                          <template x-if="editingCaptionId === caption.id">
+                            <div class="mt-2 flex flex-wrap gap-2">
+                              <button @click="saveEditedCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-60">
+                                Save Edit
+                              </button>
+                              <button @click="cancelEditCaption()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                Cancel Edit
+                              </button>
+                            </div>
+                          </template>
+                        </div>
                       </template>
-                      <template x-if="selectedImage.captions.length === 0">
+                      <template x-if="selectedImage && selectedImage.captions.length === 0">
                         <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No captions yet for this image.</p>
                       </template>
                     </div>
@@ -933,6 +960,40 @@
                     LM Studio Timeout Override (optional)
                     <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
                   </label>
+                </div>
+
+                <div class="rounded-xl border border-emerald-700/50 bg-emerald-950/30 p-3">
+                  <div class="mb-3 flex items-center justify-between">
+                    <p class="text-xs uppercase tracking-[0.2em] text-emerald-400">Semantic Search (RAG)</p>
+                    <span
+                      class="rounded-full px-2 py-1 text-[10px]"
+                      :class="rag.enabled ? 'bg-emerald-400/20 text-emerald-300' : 'bg-stone-700/40 text-stone-300'"
+                      x-text="rag.enabled ? 'Available' : 'Unavailable'"
+                    ></span>
+                  </div>
+
+                  <template x-if="rag.enabled && currentProject">
+                    <div>
+                      <button @click="rebuildEmbeddings()" :disabled="rag.isRebuildingEmbeddings" class="w-full rounded-lg border border-emerald-600 bg-emerald-900/40 px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] text-emerald-300 hover:border-emerald-400 hover:bg-emerald-900/60 disabled:opacity-50">
+                        <span x-text="rag.isRebuildingEmbeddings ? 'Rebuilding...' : 'Rebuild Embeddings'"></span>
+                      </button>
+                      <template x-if="rag.embeddingsStatus">
+                        <p class="mt-2 text-xs text-emerald-300" x-text="rag.embeddingsStatus"></p>
+                      </template>
+                    </div>
+                  </template>
+
+                  <template x-if="rag.enabled && !currentProject">
+                    <p class="text-xs text-stone-500">Open a project to rebuild embeddings.</p>
+                  </template>
+
+                  <template x-if="!rag.enabled">
+                    <p class="text-xs text-stone-400">
+                      Semantic search is currently unavailable. Install optional dependency
+                      <span class="font-mono text-stone-300">chromadb</span>
+                      in your active Python environment and restart the app.
+                    </p>
+                  </template>
                 </div>
 
                 <template x-if="settings.showDebugSection">
