@@ -133,6 +133,7 @@ def available_backends() -> dict[str, list[dict[str, object]]]:
                     {
                         "name": model.name,
                         "vision_capable": model.vision_capable,
+                        "tool_capable": model.tool_capable,
                         "capabilities": model.capabilities or [],
                     }
                     for model in (backend.models or [])

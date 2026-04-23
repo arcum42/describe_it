@@ -80,6 +80,7 @@ class OllamaClient:
                 ModelInfo(
                     name=name,
                     vision_capable="vision" in capabilities,
+                    tool_capable="tools" in capabilities,
                     capabilities=capabilities,
                 )
             )

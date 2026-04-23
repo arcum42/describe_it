@@ -112,6 +112,15 @@ class LMStudioClient:
 
         return any(token in {"vision", "image", "image_input"} for token in capabilities) or "image" in modalities
 
+    def _tool_capable(self, entry: dict[str, object], capabilities: list[str]) -> bool:
+        raw_capabilities = entry.get("capabilities")
+        if isinstance(raw_capabilities, dict):
+            tool_value = raw_capabilities.get("trained_for_tool_use")
+            if isinstance(tool_value, bool):
+                return tool_value
+
+        return any(token in {"tools", "function_calling", "tool_use"} for token in capabilities)
+
     def _parse_models(self, entries: list[dict[str, object]]) -> list[ModelInfo]:
         models: list[ModelInfo] = []
         for entry in entries:
@@ -126,11 +135,13 @@ class LMStudioClient:
             capabilities = self._extract_capabilities(entry)
             modalities = self._extract_modalities(entry)
             vision_capable = self._vision_capable(entry, capabilities, modalities)
+            tool_capable = self._tool_capable(entry, capabilities)
 
             models.append(
                 ModelInfo(
                     name=model_name,
                     vision_capable=vision_capable,
+                    tool_capable=tool_capable,
                     capabilities=capabilities,
                 )
             )

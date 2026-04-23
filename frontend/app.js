@@ -579,13 +579,19 @@ function describeItApp() {
       if (!model) {
         return '';
       }
-      return model.vision_capable ? '👁️' : '';
+      const icons = [];
+      if (model.vision_capable) icons.push('👁️');
+      if (model.tool_capable) icons.push('🔨');
+      return icons.join(' ');
     },
     modelOptionLabel(modelInfo) {
       if (!modelInfo) {
         return '';
       }
-      return modelInfo.vision_capable ? `${modelInfo.name}  👁️` : modelInfo.name;
+      const icons = [];
+      if (modelInfo.vision_capable) icons.push('👁️');
+      if (modelInfo.tool_capable) icons.push('🔨');
+      return icons.length > 0 ? `${modelInfo.name}  ${icons.join(' ')}` : modelInfo.name;
     },
     availableModelsForBackend(backendName) {
       const backend = this.llm.backends.find((item) => item.name === backendName);

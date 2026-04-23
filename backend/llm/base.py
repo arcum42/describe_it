@@ -7,6 +7,7 @@ from dataclasses import dataclass
 class ModelInfo:
     name: str
     vision_capable: bool = False
+    tool_capable: bool = False
     capabilities: list[str] | None = None
 
 
