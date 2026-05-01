@@ -5,7 +5,13 @@ import json
 import urllib.error
 import urllib.request
 
-from backend.llm.base import BackendInfo, ModelInfo
+from backend.llm.base import (
+    BackendInfo,
+    GenerationResult,
+    ModelInfo,
+    normalize_reasoning_mode,
+    split_reasoning_content,
+)
 
 
 class LMStudioClient:
@@ -121,6 +127,17 @@ class LMStudioClient:
 
         return any(token in {"tools", "function_calling", "tool_use"} for token in capabilities)
 
+    def _reasoning_capable(self, entry: dict[str, object], capabilities: list[str]) -> bool:
+        raw_capabilities = entry.get("capabilities")
+        if isinstance(raw_capabilities, dict):
+            reasoning_value = raw_capabilities.get("reasoning")
+            if isinstance(reasoning_value, dict):
+                return True
+            if isinstance(reasoning_value, bool):
+                return reasoning_value
+
+        return any(token in {"reasoning", "thinking"} for token in capabilities)
+
     def _parse_models(self, entries: list[dict[str, object]]) -> list[ModelInfo]:
         models: list[ModelInfo] = []
         for entry in entries:
@@ -136,12 +153,14 @@ class LMStudioClient:
             modalities = self._extract_modalities(entry)
             vision_capable = self._vision_capable(entry, capabilities, modalities)
             tool_capable = self._tool_capable(entry, capabilities)
+            reasoning_capable = self._reasoning_capable(entry, capabilities)
 
             models.append(
                 ModelInfo(
                     name=model_name,
                     vision_capable=vision_capable,
                     tool_capable=tool_capable,
+                    reasoning_capable=reasoning_capable,
                     capabilities=capabilities,
                 )
             )
@@ -168,7 +187,14 @@ class LMStudioClient:
         except (TimeoutError, ValueError, json.JSONDecodeError) as error:
             return BackendInfo(name="lmstudio", available=False, models=[], error=str(error))
 
-    def generate_caption(
+    def _extract_reasoning_from_message(self, message: dict[str, object]) -> str:
+        for key in ("reasoning", "reasoning_content", "thinking", "thought"):
+            value = message.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    def generate_caption_result(
         self,
         *,
         model: str,
@@ -177,7 +203,9 @@ class LMStudioClient:
         system_prompt: str = "",
         media_type: str = "image/png",
         timeout_seconds: int = 120,
-    ) -> str:
+        reasoning_mode: str = "off",
+    ) -> GenerationResult:
+        normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
         messages: list[dict[str, object]] = []
         if system_prompt.strip():
             messages.append({"role": "system", "content": system_prompt.strip()})
@@ -193,12 +221,36 @@ class LMStudioClient:
             "messages": messages,
             "temperature": 0.2,
         }
+        payload["reasoning"] = normalized_reasoning_mode
         response = self._post("/v1/chat/completions", payload, timeout_seconds=timeout_seconds)
         choices = response.get("choices") or []
         if not choices:
             raise ValueError("LM Studio returned no choices.")
         message = choices[0].get("message") or {}
-        text = (message.get("content") or "").strip()
+        raw_text = str(message.get("content") or "").strip()
+        raw_reasoning = self._extract_reasoning_from_message(message)
+        text, reasoning = split_reasoning_content(text=raw_text, explicit_reasoning=raw_reasoning)
         if not text:
             raise ValueError("LM Studio returned an empty caption response.")
-        return text
+        return GenerationResult(text=text, reasoning=reasoning)
+
+    def generate_caption(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        image_bytes: bytes | None = None,
+        system_prompt: str = "",
+        media_type: str = "image/png",
+        timeout_seconds: int = 120,
+        reasoning_mode: str = "off",
+    ) -> str:
+        return self.generate_caption_result(
+            model=model,
+            prompt=prompt,
+            image_bytes=image_bytes,
+            system_prompt=system_prompt,
+            media_type=media_type,
+            timeout_seconds=timeout_seconds,
+            reasoning_mode=reasoning_mode,
+        ).text

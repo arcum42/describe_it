@@ -20,6 +20,7 @@ import json
 import urllib.error
 import urllib.request
 
+from backend.llm.base import normalize_reasoning_mode, split_reasoning_content
 from backend.services.tool_service import (
     ToolResult,
     execute_tool,
@@ -63,6 +64,18 @@ def _extract_text(response: dict[str, object]) -> str:
     return (message.get("content") or "").strip()
 
 
+def _extract_reasoning(response: dict[str, object]) -> str:
+    choices = response.get("choices") or []
+    if not choices:
+        return ""
+    message = (choices[0] if isinstance(choices[0], dict) else {}).get("message") or {}
+    for key in ("reasoning", "reasoning_content", "thinking", "thought"):
+        value = message.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
+
+
 def _extract_tool_calls(response: dict[str, object]) -> list[dict[str, object]]:
     choices = response.get("choices") or []
     if not choices:
@@ -97,14 +110,16 @@ def generate_with_tools(
     timeout_seconds: int = 120,
     max_tool_rounds: int = _MAX_TOOL_ROUNDS,
     num_ctx: int | None = None,
-) -> tuple[str, list[str]]:
+    reasoning_mode: str = "off",
+) -> tuple[str, str, list[str]]:
     """Run tool-augmented caption generation.
 
-    Returns ``(caption_text, tool_usage_log)`` where ``tool_usage_log`` is a
-    list of human-readable ``display_summary`` strings from each tool call made
-    during the loop (empty if no tools were called).
+    Returns ``(caption_text, reasoning_text, tool_usage_log)`` where
+    ``tool_usage_log`` is a list of human-readable ``display_summary`` strings
+    from each tool call made during the loop (empty if no tools were called).
     """
     tools_enabled = [t for t in (tools_enabled or []) if t]
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
     context_urls = [u for u in (context_urls or []) if u]
     context_files = [f for f in (context_files or []) if f]
 
@@ -162,6 +177,12 @@ def generate_with_tools(
         "messages": messages,
         "temperature": 0.2,
     }
+    if normalized_reasoning_mode != "off":
+        payload["reasoning"] = normalized_reasoning_mode
+        if normalized_reasoning_mode == "on":
+            payload["think"] = True
+        else:
+            payload["think"] = normalized_reasoning_mode
     if num_ctx is not None:
         payload["options"] = {"num_ctx": int(num_ctx)}
     tool_schemas = list_tool_schemas(tools_enabled)
@@ -170,9 +191,11 @@ def generate_with_tools(
 
     # --- Agentic loop ---
     last_text = ""
+    last_reasoning = ""
     for _round in range(max_tool_rounds):
         response = _post_chat(base_url, payload, timeout_seconds)
         last_text = _extract_text(response)
+        last_reasoning = _extract_reasoning(response)
         tool_calls = _extract_tool_calls(response)
 
         if not tool_calls:
@@ -213,7 +236,9 @@ def generate_with_tools(
         payload["messages"] = messages
         payload.pop("tools", None)
 
-    if not last_text:
+    final_text, final_reasoning = split_reasoning_content(text=last_text, explicit_reasoning=last_reasoning)
+
+    if not final_text:
         raise ValueError("The model returned an empty response.")
 
-    return last_text, tool_usage_log
+    return final_text, final_reasoning, tool_usage_log

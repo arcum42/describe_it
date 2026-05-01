@@ -185,6 +185,11 @@ def _apply_generated_caption(
     source: str,
     make_active: bool,
 ) -> dict[str, object]:
+    """Apply generated text to an image caption.
+
+    Internal helper used by batch generation flows to support
+    output-mode behavior (new candidate, replace active, append active).
+    """
     normalized_mode = mode.strip().lower()
     if normalized_mode == "new_candidate":
         return create_caption_candidate(

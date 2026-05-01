@@ -6,7 +6,12 @@ from sqlalchemy import select
 
 from backend.db.models import ProjectRecord
 from backend.db.session import create_sqlite_session_factory
-from backend.llm.base import BackendInfo
+from backend.llm.base import (
+    BackendInfo,
+    format_reasoning_output,
+    normalize_reasoning_mode,
+    normalize_reasoning_visibility,
+)
 from backend.llm.lmstudio_client import LMStudioClient
 from backend.llm.ollama_client import OllamaClient
 from backend.llm.prompt_builder import build_caption_prompt
@@ -27,6 +32,14 @@ from backend.services.rag_service import rag_service
 
 
 _CONTEXT_RETRY_CHAR_BUDGETS: tuple[int | None, ...] = (None, 12_000, 8_000, 5_000, 3_000)
+
+
+def _finalize_generation_text(*, answer_text: str, reasoning_text: str, reasoning_visibility: str) -> str:
+    return format_reasoning_output(
+        answer=(answer_text or ""),
+        reasoning=(reasoning_text or ""),
+        visibility=normalize_reasoning_visibility(reasoning_visibility),
+    )
 
 
 def _lookup_model_info(*, backend: str, model_name: str):
@@ -117,6 +130,8 @@ def create_preset(
     context_file_template: str,
     include_project_notes: bool = False,
     include_global_notes: bool = False,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     normalized_backend = _normalize_backend_name(backend)
     return create_global_preset(
@@ -131,6 +146,8 @@ def create_preset(
         context_file_template=context_file_template,
         include_project_notes=include_project_notes,
         include_global_notes=include_global_notes,
+        reasoning_mode=reasoning_mode,
+        reasoning_visibility=reasoning_visibility,
     )
 
 
@@ -148,6 +165,8 @@ def update_preset(
     context_file_template: str,
     include_project_notes: bool = False,
     include_global_notes: bool = False,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     normalized_backend = _normalize_backend_name(backend)
     return update_global_preset(
@@ -163,6 +182,8 @@ def update_preset(
         context_file_template=context_file_template,
         include_project_notes=include_project_notes,
         include_global_notes=include_global_notes,
+        reasoning_mode=reasoning_mode,
+        reasoning_visibility=reasoning_visibility,
     )
 
 
@@ -214,6 +235,8 @@ def generate_caption_for_image(
     extra_instructions: str = "",
     make_active: bool = True,
     timeout_seconds: int = 120,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     generated = generate_text_for_image_manual(
         project_path=project_path,
@@ -222,6 +245,8 @@ def generate_caption_for_image(
         model=model,
         extra_instructions=extra_instructions,
         timeout_seconds=timeout_seconds,
+        reasoning_mode=reasoning_mode,
+        reasoning_visibility=reasoning_visibility,
     )
 
     selected_backend = str(generated.get("backend") or "")
@@ -239,6 +264,10 @@ def generate_caption_for_image(
         "caption": caption,
         "backend": selected_backend,
         "model": selected_model,
+        "reasoning_mode": str(generated.get("reasoning_mode") or "off"),
+        "reasoning_visibility": str(generated.get("reasoning_visibility") or "hidden"),
+        "reasoning_text": str(generated.get("reasoning_text") or ""),
+        "answer_text": str(generated.get("answer_text") or ""),
     }
 
 
@@ -250,6 +279,8 @@ def generate_text_for_image_manual(
     model: str,
     extra_instructions: str = "",
     timeout_seconds: int = 120,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     selected_backend = _normalize_backend_name(backend)
     selected_model = model.strip()
@@ -257,6 +288,9 @@ def generate_text_for_image_manual(
         raise ValueError("Model is required.")
     if timeout_seconds < 10:
         raise ValueError("Timeout must be at least 10 seconds.")
+
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
+    normalized_reasoning_visibility = normalize_reasoning_visibility(reasoning_visibility)
 
     settings = get_global_settings()
     ollama_base_url = str(settings.get("ollama_base_url") or "http://127.0.0.1:11434")
@@ -278,22 +312,33 @@ def generate_text_for_image_manual(
     )
 
     if selected_backend == "ollama":
-        generated_text = OllamaClient(base_url=ollama_base_url).generate_caption(
+        generated_result = OllamaClient(base_url=ollama_base_url).generate_caption_result(
             model=selected_model,
             prompt=prompt,
             image_bytes=image_bytes,
             timeout_seconds=effective_timeout,
+            reasoning_mode=normalized_reasoning_mode,
         )
     else:
-        generated_text = LMStudioClient(base_url=lmstudio_base_url).generate_caption(
+        generated_result = LMStudioClient(base_url=lmstudio_base_url).generate_caption_result(
             model=selected_model,
             prompt=prompt,
             image_bytes=image_bytes,
             media_type=media_type,
             timeout_seconds=effective_timeout,
+            reasoning_mode=normalized_reasoning_mode,
         )
+    generated_text = _finalize_generation_text(
+        answer_text=generated_result.text,
+        reasoning_text=generated_result.reasoning,
+        reasoning_visibility=normalized_reasoning_visibility,
+    )
     return {
         "text": generated_text,
+        "answer_text": generated_result.text,
+        "reasoning_text": generated_result.reasoning,
+        "reasoning_mode": normalized_reasoning_mode,
+        "reasoning_visibility": normalized_reasoning_visibility,
         "backend": selected_backend,
         "model": selected_model,
     }
@@ -330,6 +375,10 @@ def generate_caption_with_preset(
         "caption": caption,
         "backend": backend,
         "model": preset_model_name,
+        "reasoning_mode": str(generated.get("reasoning_mode") or "off"),
+        "reasoning_visibility": str(generated.get("reasoning_visibility") or "hidden"),
+        "reasoning_text": str(generated.get("reasoning_text") or ""),
+        "answer_text": str(generated.get("answer_text") or ""),
         "preset": {
             "id": preset_id,
             "name": preset_name,
@@ -354,6 +403,8 @@ def generate_text_for_image_with_preset(
     context_file_template = str(preset.get("context_file_template") or "")
     preset_tool_web_search = bool(preset.get("tool_web_search") is True)
     preset_tool_web_fetch = bool(preset.get("tool_web_fetch") is True)
+    preset_reasoning_mode = normalize_reasoning_mode(str(preset.get("reasoning_mode") or "off"))
+    preset_reasoning_visibility = normalize_reasoning_visibility(str(preset.get("reasoning_visibility") or "hidden"))
 
     image_detail = get_image_detail(project_path=project_path, image_id=image_id)
     image_bytes, media_type = get_image_content(project_path=project_path, image_id=image_id)
@@ -443,7 +494,8 @@ def generate_text_for_image_with_preset(
             f"model {preset_model_name!r} is not tool-capable; using context injection only"
         )
 
-    generated_text = ""
+    generated_answer_text = ""
+    generated_reasoning_text = ""
     generation_mode = "context_injection"
     last_error: ValueError | None = None
 
@@ -458,7 +510,7 @@ def generate_text_for_image_with_preset(
         try:
             if tools_enabled:
                 generation_mode = "tool_calls"
-                generated_text, loop_log = generate_with_tools(
+                generated_answer_text, generated_reasoning_text, loop_log = generate_with_tools(
                     base_url=base_url,
                     model=preset_model_name,
                     prompt=prompt,
@@ -470,28 +522,35 @@ def generate_text_for_image_with_preset(
                     context_files=[],
                     timeout_seconds=effective_timeout,
                     num_ctx=effective_num_ctx if backend == "ollama" else None,
+                    reasoning_mode=preset_reasoning_mode,
                 )
                 tool_usage_log.extend(loop_log)
             elif backend == "ollama":
                 generation_mode = "context_injection"
-                generated_text = OllamaClient(base_url=base_url).generate_caption(
+                generated_result = OllamaClient(base_url=base_url).generate_caption_result(
                     model=preset_model_name,
                     prompt=prompt,
                     image_bytes=image_bytes,
                     system_prompt=effective_system_prompt,
                     timeout_seconds=effective_timeout,
                     num_ctx=effective_num_ctx,
+                    reasoning_mode=preset_reasoning_mode,
                 )
+                generated_answer_text = generated_result.text
+                generated_reasoning_text = generated_result.reasoning
             else:
                 generation_mode = "context_injection"
-                generated_text = LMStudioClient(base_url=base_url).generate_caption(
+                generated_result = LMStudioClient(base_url=base_url).generate_caption_result(
                     model=preset_model_name,
                     prompt=prompt,
                     image_bytes=image_bytes,
                     system_prompt=effective_system_prompt,
                     media_type=media_type,
                     timeout_seconds=effective_timeout,
+                    reasoning_mode=preset_reasoning_mode,
                 )
+                generated_answer_text = generated_result.text
+                generated_reasoning_text = generated_result.reasoning
             break
         except ValueError as error:
             last_error = error
@@ -509,11 +568,21 @@ def generate_text_for_image_with_preset(
             )
             continue
 
-    if not generated_text and last_error is not None:
+    if not generated_answer_text and last_error is not None:
         raise last_error
+
+    generated_text = _finalize_generation_text(
+        answer_text=generated_answer_text,
+        reasoning_text=generated_reasoning_text,
+        reasoning_visibility=preset_reasoning_visibility,
+    )
 
     return {
         "text": generated_text,
+        "answer_text": generated_answer_text,
+        "reasoning_text": generated_reasoning_text,
+        "reasoning_mode": preset_reasoning_mode,
+        "reasoning_visibility": preset_reasoning_visibility,
         "backend": backend,
         "model": preset_model_name,
         "preset": {
@@ -543,6 +612,8 @@ def generate_caption_with_tools(
     project_note_ids: list[int] | None = None,
     include_global_notes: bool = False,
     global_note_ids: list[int] | None = None,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     selected_backend = _normalize_backend_name(backend)
     selected_model = model.strip()
@@ -550,6 +621,9 @@ def generate_caption_with_tools(
         raise ValueError("Model is required.")
     if timeout_seconds < 10:
         raise ValueError("Timeout must be at least 10 seconds.")
+
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
+    normalized_reasoning_visibility = normalize_reasoning_visibility(reasoning_visibility)
 
     requested_tools = [t for t in (tools_enabled or []) if t]
     tools_enabled = list(requested_tools)
@@ -631,7 +705,8 @@ def generate_caption_with_tools(
                 f"model {selected_model!r} is not tool-capable; using context injection only"
             )
 
-    generated_text = ""
+    generated_answer_text = ""
+    generated_reasoning_text = ""
     last_error: ValueError | None = None
 
     for attempt_index, max_chars in enumerate(_CONTEXT_RETRY_CHAR_BUDGETS):
@@ -642,7 +717,7 @@ def generate_caption_with_tools(
                 # Actual tool calling requires /v1/chat/completions. The tool_loop
                 # already has context_urls/files support, but we pass the pre-built
                 # system_prompt and empty lists so it doesn't re-fetch.
-                generated_text, loop_log = generate_with_tools(
+                generated_answer_text, generated_reasoning_text, loop_log = generate_with_tools(
                     base_url=base_url,
                     model=selected_model,
                     prompt=prompt,
@@ -654,6 +729,7 @@ def generate_caption_with_tools(
                     context_files=[],
                     timeout_seconds=effective_timeout,
                     num_ctx=effective_num_ctx if selected_backend == "ollama" else None,
+                    reasoning_mode=normalized_reasoning_mode,
                 )
                 tool_usage_log.extend(loop_log)
             else:
@@ -661,23 +737,29 @@ def generate_caption_with_tools(
                 # Context-injection only — use the native client APIs so any model
                 # works (e.g. fine-tuned Ollama models that crash on /v1/chat/completions).
                 if selected_backend == "ollama":
-                    generated_text = OllamaClient(base_url=base_url).generate_caption(
+                    generated_result = OllamaClient(base_url=base_url).generate_caption_result(
                         model=selected_model,
                         prompt=prompt,
                         image_bytes=image_bytes,
                         system_prompt=system_prompt,
                         timeout_seconds=effective_timeout,
                         num_ctx=effective_num_ctx,
+                        reasoning_mode=normalized_reasoning_mode,
                     )
+                    generated_answer_text = generated_result.text
+                    generated_reasoning_text = generated_result.reasoning
                 else:
-                    generated_text = LMStudioClient(base_url=base_url).generate_caption(
+                    generated_result = LMStudioClient(base_url=base_url).generate_caption_result(
                         model=selected_model,
                         prompt=prompt,
                         image_bytes=image_bytes,
                         system_prompt=system_prompt,
                         media_type=media_type,
                         timeout_seconds=effective_timeout,
+                        reasoning_mode=normalized_reasoning_mode,
                     )
+                    generated_answer_text = generated_result.text
+                    generated_reasoning_text = generated_result.reasoning
             break
         except ValueError as error:
             last_error = error
@@ -695,8 +777,14 @@ def generate_caption_with_tools(
             )
             continue
 
-    if not generated_text and last_error is not None:
+    if not generated_answer_text and last_error is not None:
         raise last_error
+
+    generated_text = _finalize_generation_text(
+        answer_text=generated_answer_text,
+        reasoning_text=generated_reasoning_text,
+        reasoning_visibility=normalized_reasoning_visibility,
+    )
 
     source = f"llm:{selected_backend}:{selected_model}"
     caption = create_caption_candidate(
@@ -710,6 +798,10 @@ def generate_caption_with_tools(
         "caption": caption,
         "backend": selected_backend,
         "model": selected_model,
+        "reasoning_mode": normalized_reasoning_mode,
+        "reasoning_visibility": normalized_reasoning_visibility,
+        "reasoning_text": generated_reasoning_text,
+        "answer_text": generated_answer_text,
         "tool_usage_log": tool_usage_log,
         "generation_mode": generation_mode,
     }
@@ -730,6 +822,8 @@ def generate_note_text_with_tools(
     project_note_ids: list[int] | None = None,
     include_global_notes: bool = False,
     global_note_ids: list[int] | None = None,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     selected_backend = _normalize_backend_name(backend)
     selected_model = model.strip()
@@ -740,6 +834,9 @@ def generate_note_text_with_tools(
         raise ValueError("Prompt is required.")
     if timeout_seconds < 10:
         raise ValueError("Timeout must be at least 10 seconds.")
+
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
+    normalized_reasoning_visibility = normalize_reasoning_visibility(reasoning_visibility)
 
     normalized_project_path = (project_path or "").strip() or None
     if image_id is not None and not normalized_project_path:
@@ -807,7 +904,8 @@ def generate_note_text_with_tools(
                 f"model {selected_model!r} is not tool-capable; using context injection only"
             )
 
-    generated_text = ""
+    generated_answer_text = ""
+    generated_reasoning_text = ""
     last_error: ValueError | None = None
 
     for attempt_index, max_chars in enumerate(_CONTEXT_RETRY_CHAR_BUDGETS):
@@ -815,7 +913,7 @@ def generate_note_text_with_tools(
         try:
             if tools_enabled:
                 generation_mode = "tool_calls"
-                generated_text, loop_log = generate_with_tools(
+                generated_answer_text, generated_reasoning_text, loop_log = generate_with_tools(
                     base_url=base_url,
                     model=selected_model,
                     prompt=prompt_text,
@@ -827,28 +925,35 @@ def generate_note_text_with_tools(
                     context_files=[],
                     timeout_seconds=effective_timeout,
                     num_ctx=effective_num_ctx if selected_backend == "ollama" else None,
+                    reasoning_mode=normalized_reasoning_mode,
                 )
                 tool_usage_log.extend(loop_log)
             else:
                 generation_mode = "context_injection"
                 if selected_backend == "ollama":
-                    generated_text = OllamaClient(base_url=base_url).generate_caption(
+                    generated_result = OllamaClient(base_url=base_url).generate_caption_result(
                         model=selected_model,
                         prompt=prompt_text,
                         image_bytes=image_bytes,
                         system_prompt=system_prompt,
                         timeout_seconds=effective_timeout,
                         num_ctx=effective_num_ctx,
+                        reasoning_mode=normalized_reasoning_mode,
                     )
+                    generated_answer_text = generated_result.text
+                    generated_reasoning_text = generated_result.reasoning
                 else:
-                    generated_text = LMStudioClient(base_url=base_url).generate_caption(
+                    generated_result = LMStudioClient(base_url=base_url).generate_caption_result(
                         model=selected_model,
                         prompt=prompt_text,
                         image_bytes=image_bytes,
                         system_prompt=system_prompt,
                         media_type=media_type,
                         timeout_seconds=effective_timeout,
+                        reasoning_mode=normalized_reasoning_mode,
                     )
+                    generated_answer_text = generated_result.text
+                    generated_reasoning_text = generated_result.reasoning
             break
         except ValueError as error:
             last_error = error
@@ -866,11 +971,21 @@ def generate_note_text_with_tools(
             )
             continue
 
-    if not generated_text and last_error is not None:
+    if not generated_answer_text and last_error is not None:
         raise last_error
+
+    generated_text = _finalize_generation_text(
+        answer_text=generated_answer_text,
+        reasoning_text=generated_reasoning_text,
+        reasoning_visibility=normalized_reasoning_visibility,
+    )
 
     return {
         "text": generated_text,
+        "answer_text": generated_answer_text,
+        "reasoning_text": generated_reasoning_text,
+        "reasoning_mode": normalized_reasoning_mode,
+        "reasoning_visibility": normalized_reasoning_visibility,
         "backend": selected_backend,
         "model": selected_model,
         "tool_usage_log": tool_usage_log,

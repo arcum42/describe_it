@@ -35,6 +35,8 @@ class BatchJob:
     output_mode: str
     skip_on_failure: bool
     retry_count: int
+    reasoning_mode: str = "off"
+    reasoning_visibility: str = "hidden"
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     status: str = "queued"
@@ -102,6 +104,8 @@ class BatchService:
                     output_mode TEXT NOT NULL,
                     skip_on_failure INTEGER NOT NULL,
                     retry_count INTEGER NOT NULL,
+                    reasoning_mode TEXT NOT NULL DEFAULT 'off',
+                    reasoning_visibility TEXT NOT NULL DEFAULT 'hidden',
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL,
                     status TEXT NOT NULL,
@@ -136,6 +140,11 @@ class BatchService:
                 );
                 """
             )
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(batch_jobs)").fetchall()}
+            if "reasoning_mode" not in columns:
+                connection.execute("ALTER TABLE batch_jobs ADD COLUMN reasoning_mode TEXT NOT NULL DEFAULT 'off'")
+            if "reasoning_visibility" not in columns:
+                connection.execute("ALTER TABLE batch_jobs ADD COLUMN reasoning_visibility TEXT NOT NULL DEFAULT 'hidden'")
             connection.commit()
 
     def _save_job(self, job: BatchJob) -> None:
@@ -145,13 +154,13 @@ class BatchService:
                 INSERT INTO batch_jobs (
                     id, project_path, target, use_preset, preset_id, backend, model,
                     extra_instructions, timeout_seconds, make_active, output_mode,
-                    skip_on_failure, retry_count, created_at, updated_at, status,
+                    skip_on_failure, retry_count, reasoning_mode, reasoning_visibility, created_at, updated_at, status,
                     total, completed, succeeded, failed, current_index, current_image_id,
                     current_filename, current_generated_text, last_error,
                     pause_requested, cancel_requested, image_ids_json,
                     image_filenames_json, errors_json
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     project_path=excluded.project_path,
@@ -166,6 +175,8 @@ class BatchService:
                     output_mode=excluded.output_mode,
                     skip_on_failure=excluded.skip_on_failure,
                     retry_count=excluded.retry_count,
+                    reasoning_mode=excluded.reasoning_mode,
+                    reasoning_visibility=excluded.reasoning_visibility,
                     updated_at=excluded.updated_at,
                     status=excluded.status,
                     total=excluded.total,
@@ -197,6 +208,8 @@ class BatchService:
                     job.output_mode,
                     1 if job.skip_on_failure else 0,
                     job.retry_count,
+                    job.reasoning_mode,
+                    job.reasoning_visibility,
                     job.created_at,
                     job.updated_at,
                     job.status,
@@ -287,6 +300,8 @@ class BatchService:
                 output_mode=row["output_mode"],
                 skip_on_failure=bool(row["skip_on_failure"]),
                 retry_count=int(row["retry_count"]),
+                reasoning_mode=str(row["reasoning_mode"] or "off"),
+                reasoning_visibility=str(row["reasoning_visibility"] or "hidden"),
                 created_at=float(row["created_at"]),
                 updated_at=float(row["updated_at"]),
                 status=status,
@@ -326,6 +341,8 @@ class BatchService:
             "output_mode": job.output_mode,
             "skip_on_failure": job.skip_on_failure,
             "retry_count": job.retry_count,
+            "reasoning_mode": job.reasoning_mode,
+            "reasoning_visibility": job.reasoning_visibility,
             "total": job.total,
             "completed": job.completed,
             "succeeded": job.succeeded,
@@ -377,6 +394,8 @@ class BatchService:
             model=job.model,
             extra_instructions=job.extra_instructions,
             timeout_seconds=job.timeout_seconds,
+            reasoning_mode=job.reasoning_mode,
+            reasoning_visibility=job.reasoning_visibility,
         )
         backend = str(result.get("backend") or "")
         model = str(result.get("model") or "")
@@ -510,6 +529,8 @@ class BatchService:
         output_mode: str,
         skip_on_failure: bool,
         retry_count: int,
+        reasoning_mode: str,
+        reasoning_visibility: str,
     ) -> dict[str, Any]:
         image_ids, image_filenames = self._collect_images(project_path=project_path, target=target)
         if not image_ids:
@@ -529,6 +550,8 @@ class BatchService:
             output_mode=output_mode,
             skip_on_failure=skip_on_failure,
             retry_count=max(0, int(retry_count)),
+            reasoning_mode=reasoning_mode,
+            reasoning_visibility=reasoning_visibility,
             image_ids=image_ids,
             image_filenames=image_filenames,
             total=len(image_ids),

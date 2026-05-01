@@ -5,7 +5,13 @@ import json
 import urllib.error
 import urllib.request
 
-from backend.llm.base import BackendInfo, ModelInfo
+from backend.llm.base import (
+    BackendInfo,
+    GenerationResult,
+    ModelInfo,
+    normalize_reasoning_mode,
+    split_reasoning_content,
+)
 
 
 class OllamaClient:
@@ -81,6 +87,7 @@ class OllamaClient:
                     name=name,
                     vision_capable="vision" in capabilities,
                     tool_capable="tools" in capabilities,
+                    reasoning_capable=("thinking" in capabilities or "reasoning" in capabilities),
                     capabilities=capabilities,
                 )
             )
@@ -93,7 +100,7 @@ class OllamaClient:
         except (TimeoutError, ValueError, json.JSONDecodeError) as error:
             return BackendInfo(name="ollama", available=False, models=[], error=str(error))
 
-    def generate_caption(
+    def generate_caption_result(
         self,
         *,
         model: str,
@@ -102,7 +109,9 @@ class OllamaClient:
         system_prompt: str = "",
         timeout_seconds: int = 120,
         num_ctx: int | None = None,
-    ) -> str:
+        reasoning_mode: str = "off",
+    ) -> GenerationResult:
+        normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
         payload: dict[str, object] = {
             "model": model,
             "prompt": prompt,
@@ -114,8 +123,37 @@ class OllamaClient:
             payload["images"] = [base64.b64encode(image_bytes).decode("ascii")]
         if num_ctx is not None:
             payload["options"] = {"num_ctx": int(num_ctx)}
+        if normalized_reasoning_mode == "off":
+            payload["think"] = False
+        elif normalized_reasoning_mode == "on":
+            payload["think"] = True
+        else:
+            payload["think"] = normalized_reasoning_mode
         response = self._post("/api/generate", payload, timeout_seconds=timeout_seconds)
-        text = (response.get("response") or "").strip()
+        raw_text = str(response.get("response") or "").strip()
+        raw_reasoning = str(response.get("thinking") or "").strip()
+        text, reasoning = split_reasoning_content(text=raw_text, explicit_reasoning=raw_reasoning)
         if not text:
             raise ValueError("Ollama returned an empty caption response.")
-        return text
+        return GenerationResult(text=text, reasoning=reasoning)
+
+    def generate_caption(
+        self,
+        *,
+        model: str,
+        prompt: str,
+        image_bytes: bytes | None = None,
+        system_prompt: str = "",
+        timeout_seconds: int = 120,
+        num_ctx: int | None = None,
+        reasoning_mode: str = "off",
+    ) -> str:
+        return self.generate_caption_result(
+            model=model,
+            prompt=prompt,
+            image_bytes=image_bytes,
+            system_prompt=system_prompt,
+            timeout_seconds=timeout_seconds,
+            num_ctx=num_ctx,
+            reasoning_mode=reasoning_mode,
+        ).text

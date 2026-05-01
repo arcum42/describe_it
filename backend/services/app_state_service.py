@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from backend.config import get_settings
+from backend.llm.base import normalize_reasoning_mode, normalize_reasoning_visibility
 
 
 DEFAULT_LLM_TIMEOUT_SECONDS = 120
@@ -80,6 +81,14 @@ def _ensure_schema(connection: sqlite3.Connection) -> None:
         connection.execute(
             "ALTER TABLE llm_presets ADD COLUMN include_global_notes INTEGER NOT NULL DEFAULT 0"
         )
+    if "reasoning_mode" not in preset_columns:
+        connection.execute(
+            "ALTER TABLE llm_presets ADD COLUMN reasoning_mode TEXT NOT NULL DEFAULT 'off'"
+        )
+    if "reasoning_visibility" not in preset_columns:
+        connection.execute(
+            "ALTER TABLE llm_presets ADD COLUMN reasoning_visibility TEXT NOT NULL DEFAULT 'hidden'"
+        )
     connection.commit()
 
 
@@ -121,7 +130,7 @@ def list_global_presets() -> list[dict[str, object]]:
     with _connect() as connection:
         _ensure_schema(connection)
         rows = connection.execute(
-            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes FROM llm_presets ORDER BY name ASC, id ASC"
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes, reasoning_mode, reasoning_visibility FROM llm_presets ORDER BY name ASC, id ASC"
         ).fetchall()
     presets: list[dict[str, object]] = []
     for row in rows:
@@ -130,6 +139,8 @@ def list_global_presets() -> list[dict[str, object]]:
         preset["tool_web_fetch"] = bool(preset.get("tool_web_fetch"))
         preset["include_project_notes"] = bool(preset.get("include_project_notes"))
         preset["include_global_notes"] = bool(preset.get("include_global_notes"))
+        preset["reasoning_mode"] = normalize_reasoning_mode(str(preset.get("reasoning_mode") or "off"))
+        preset["reasoning_visibility"] = normalize_reasoning_visibility(str(preset.get("reasoning_visibility") or "hidden"))
         presets.append(preset)
     return presets
 
@@ -138,7 +149,7 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     with _connect() as connection:
         _ensure_schema(connection)
         row = connection.execute(
-            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes FROM llm_presets WHERE id = ?",
+            "SELECT id, name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes, reasoning_mode, reasoning_visibility FROM llm_presets WHERE id = ?",
             (preset_id,),
         ).fetchone()
     if row is None:
@@ -148,6 +159,8 @@ def get_global_preset(*, preset_id: int) -> dict[str, object]:
     preset["tool_web_fetch"] = bool(preset.get("tool_web_fetch"))
     preset["include_project_notes"] = bool(preset.get("include_project_notes"))
     preset["include_global_notes"] = bool(preset.get("include_global_notes"))
+    preset["reasoning_mode"] = normalize_reasoning_mode(str(preset.get("reasoning_mode") or "off"))
+    preset["reasoning_visibility"] = normalize_reasoning_visibility(str(preset.get("reasoning_visibility") or "hidden"))
     return preset
 
 
@@ -164,6 +177,8 @@ def create_global_preset(
     context_file_template: str,
     include_project_notes: bool = False,
     include_global_notes: bool = False,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
@@ -175,6 +190,9 @@ def create_global_preset(
     if strategy not in {"auto", "description", "tags"}:
         raise ValueError("Preset caption mode strategy must be one of: auto, description, tags.")
 
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
+    normalized_reasoning_visibility = normalize_reasoning_visibility(reasoning_visibility)
+
     with _connect() as connection:
         _ensure_schema(connection)
         duplicate = connection.execute("SELECT id FROM llm_presets WHERE name = ?", (clean_name,)).fetchone()
@@ -182,7 +200,7 @@ def create_global_preset(
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         cursor = connection.execute(
-            "INSERT INTO llm_presets(name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO llm_presets(name, backend, model_name, caption_mode_strategy, system_prompt, tool_web_search, tool_web_fetch, context_url_template, context_file_template, include_project_notes, include_global_notes, reasoning_mode, reasoning_visibility) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 clean_name,
                 backend,
@@ -195,6 +213,8 @@ def create_global_preset(
                 context_file_template,
                 1 if include_project_notes else 0,
                 1 if include_global_notes else 0,
+                normalized_reasoning_mode,
+                normalized_reasoning_visibility,
             ),
         )
         connection.commit()
@@ -217,6 +237,8 @@ def update_global_preset(
     context_file_template: str,
     include_project_notes: bool = False,
     include_global_notes: bool = False,
+    reasoning_mode: str = "off",
+    reasoning_visibility: str = "hidden",
 ) -> dict[str, object]:
     clean_name = name.strip()
     clean_model_name = model_name.strip()
@@ -227,6 +249,9 @@ def update_global_preset(
     strategy = caption_mode_strategy.strip().lower()
     if strategy not in {"auto", "description", "tags"}:
         raise ValueError("Preset caption mode strategy must be one of: auto, description, tags.")
+
+    normalized_reasoning_mode = normalize_reasoning_mode(reasoning_mode)
+    normalized_reasoning_visibility = normalize_reasoning_visibility(reasoning_visibility)
 
     with _connect() as connection:
         _ensure_schema(connection)
@@ -239,7 +264,7 @@ def update_global_preset(
             raise ValueError(f"A preset with this name already exists: {clean_name}")
 
         connection.execute(
-            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, caption_mode_strategy = ?, system_prompt = ?, tool_web_search = ?, tool_web_fetch = ?, context_url_template = ?, context_file_template = ?, include_project_notes = ?, include_global_notes = ? WHERE id = ?",
+            "UPDATE llm_presets SET name = ?, backend = ?, model_name = ?, caption_mode_strategy = ?, system_prompt = ?, tool_web_search = ?, tool_web_fetch = ?, context_url_template = ?, context_file_template = ?, include_project_notes = ?, include_global_notes = ?, reasoning_mode = ?, reasoning_visibility = ? WHERE id = ?",
             (
                 clean_name,
                 backend,
@@ -252,6 +277,8 @@ def update_global_preset(
                 context_file_template,
                 1 if include_project_notes else 0,
                 1 if include_global_notes else 0,
+                normalized_reasoning_mode,
+                normalized_reasoning_visibility,
                 preset_id,
             ),
         )

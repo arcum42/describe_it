@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,7 +18,7 @@ class ProjectRecord(Base):
     caption_mode: Mapped[str] = mapped_column(String(32), default="description")
     context_url: Mapped[str] = mapped_column(String(2048), default="")
     context_file_path: Mapped[str] = mapped_column(String(2048), default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
     images: Mapped[list["ImageRecord"]] = relationship(back_populates="project")
     notes: Mapped[list["NoteRecord"]] = relationship(back_populates="project")
     prompts: Mapped[list["PromptRecord"]] = relationship(back_populates="project")
@@ -49,7 +49,7 @@ class CaptionRecord(Base):
     text: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     source: Mapped[str] = mapped_column(String(255), default="manual")
-    created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
     image: Mapped[ImageRecord] = relationship(back_populates="captions")
 
 
@@ -85,6 +85,6 @@ class NoteRecord(Base):
     format: Mapped[str] = mapped_column(String(32), default="markdown")
     tags: Mapped[str] = mapped_column(String(1024), default="")
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
     project: Mapped[ProjectRecord] = relationship(back_populates="notes")

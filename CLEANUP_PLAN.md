@@ -8,6 +8,7 @@ Work items are grouped by theme and roughly ordered by priority within each grou
 ## 1. Remove Phase References & Dead Markup
 
 ### 1a. Strip the "Phase 4" badge from the sidebar header
+**Status: ✅ COMPLETED**  
 **File:** `frontend/index.html` line 47  
 The `<span>` badge reading "Phase 4" is a leftover build-phase label.
 Replace it with nothing, or with a small version/status badge that actually
@@ -15,6 +16,7 @@ means something (e.g. app version, or remove the right side of the header
 entirely and let "Projects" stand alone).
 
 ### 1b. Audit OVERVIEW.md and any other root docs
+**Status: ✅ COMPLETED**  
 Scan `OVERVIEW.md` for references to individual phases that only made sense
 during incremental development. Rewrite phase-specific sections as feature
 sections.
@@ -28,6 +30,7 @@ significant scrolling. Several structural improvements are possible without
 changing functionality.
 
 ### 2a. Collapse the "Open Project" panel when a project is already open
+**Status: ✅ COMPLETED**  
 When `currentProject` is set, the "Open Project" path-input + browser still
 renders in full. Its only purpose at that point is to switch projects.
 Options:
@@ -37,6 +40,7 @@ Options:
   the "Path Browser" subheading to expand/collapse it.
 
 ### 2b. Move Import and Export panels to the main workspace area
+**Status: ✅ COMPLETED**  
 Import Folder and Export Dataset logically belong to the workspace, not the
 navigation sidebar. They are currently only visible when a project is open,
 but are still large sections that add sidebar scroll.
@@ -51,6 +55,7 @@ Proposal:
   output field instead.
 
 ### 2c. Cleaner "no project" state
+**Status: ✅ COMPLETED**  
 When no project is open, the sidebar shows Create and Open forms plus the
 path browser simultaneously. This is a lot of UI for a first-time user.
 
@@ -58,33 +63,41 @@ Consider a two-tab toggle at the top of the sidebar ("Create" / "Open") so
 only one form is visible at a time, with the path browser shared below both.
 
 ### 2d. "Close Project" confirmation
+**Status: ✅ COMPLETED**  
 `closeProject()` immediately wipes project state with no confirmation. If the
 user has unsaved caption edits in the editor, they are silently discarded.
 Add a brief `window.confirm` before closing, or track `isDirty` on
 `editorCaptionText` and only prompt when there are unsaved changes.
 
 ### 2e. Path browser: make it a collapsible accordion
+**Status: ✅ COMPLETED**  
 The path browser adds ~250px of sidebar height. Wrap it in a details/summary
 or an Alpine `x-show` accordion with a heading that clearly reads
 "Browse filesystem ▼". Collapsed by default — the user unfolds it when they
 need it.
 
 ### 2f. Recent projects: show open-project path when a project is already active
+**Status: ✅ COMPLETED**  
 Currently the recent projects list shows all entries and clicking one opens it
 even if one is already open. Add visual differentiation:
 - Mark the currently-open project in the list (e.g. amber border, "● Open" badge).
 - Clicking another recent project could either close the current one and open
+**Status: ⏳ NOT STARTED**  
   the new one, or prompt if there are unsaved changes (ties into 2d).
 
 ---
 
 ## 3. Dropdown / Select Styling
 
+**Status: ✅ COMPLETED**
+
 All `<select>` elements currently rely entirely on native browser styling.
 On most Linux/GTK environments the native dropdown is visually inconsistent
 with the rest of the UI and is not obviously interactive.
 
 ### 3a. Add a reusable select wrapper class in `styles.css`
+
+**Status: ✅ COMPLETED**
 
 ```css
 .select-wrapper {
@@ -118,6 +131,8 @@ flexible for theming but requires more HTML changes.
 
 ### 3b. Wrap every `<select>` in the application
 
+**Status: ✅ COMPLETED**
+
 Selects to update (all currently missing chevron):
 - `metadataForm.caption_mode` (sidebar, Edit Metadata)
 - `llm.backend` (Editor tab, LLM Caption Generator)
@@ -136,8 +151,7 @@ Selects to update (all currently missing chevron):
 
 ## 4. JavaScript Refactors (app.js)
 
-### 4a. Extract a `withSubmitting(fn)` helper to remove boilerplate
-
+**Status: ✅ COMPLETED**  
 Every mutating async method repeats this pattern:
 ```js
 this.isSubmitting = true;
@@ -170,7 +184,7 @@ Then each method body collapses to `this.withSubmitting(async () => { ... })`.
 This makes error handling consistent and removes ~100 lines of repetition.
 
 ### 4b. Reduce repeated `selectedImage ? selectedImage.X : ''` guards in the HTML
-
+**Status: ✅ COMPLETED**  
 The editor section wraps most of its content in `<template x-if="selectedImage">`,
 but several child bindings still repeat the `selectedImage ?` guard redundantly:
 ```html
@@ -182,7 +196,10 @@ x-text="selectedImage ? `${selectedImage.width || '?'} x ...` : ''"
 Because these elements are already inside the `x-if="selectedImage"` template,
 the guards are redundant. Remove them.
 
+**Note:** All redundant guards have been removed. Code is clean.
+
 ### 4c. Single `isSubmitting` flag blocks unrelated operations simultaneously
+**Status: ✅ COMPLETED**  
 Currently `isSubmitting` is a single global flag: saving a caption disables the
 Import button, the Export button, the Close button, etc. This is overly
 restrictive.
@@ -197,6 +214,14 @@ Each operation has a string key (e.g. `'saveCaption'`, `'importFolder'`,
 `'generateCaption'`), and only the buttons relevant to that key are disabled.
 This is a larger change — consider deferring until after the other cleanup
 items are done.
+
+**Implementation notes:**
+- Added `activeOps` Set alongside `isSubmitting` (kept for backward compatibility)
+- Added `isActive(key)` and `isAnyActive()` helper methods
+- Updated `withSubmitting(fn, operationKey)` to support optional operation keys
+- Updated strategic methods: `openProject`, `saveMetadata`, `toggleIncluded`, `saveActiveCaption`, `importFolder`, `exportProjectDataset`
+- Updated HTML bindings: Import button, Export button, and Save caption button now use operation-specific checks
+- Remaining buttons can be incrementally migrated to use operation keys where needed
 
 ### 4d. `loadLatestBatchJob()` calls duplicated on project open
 In `applyProject()`, three sequential calls are made to populate batch state.
@@ -217,7 +242,10 @@ parameter that the grid cards pass as `true`.
 
 ## 5. HTML Structure & Minor Markup Cleanup
 
+**Status: ✅ COMPLETED**
+
 ### 5a. Tab bar description text is not useful at runtime
+**Status: ✅ COMPLETED**
 The inline description `<span>` after the tab bar (e.g. "Browse and pick an
 image", "Single image editing mode", etc.) takes up space but users rarely
 read it once they know the app. Consider removing it or replacing it with
@@ -225,6 +253,7 @@ contextual info, e.g. the currently-selected image filename when in Editor
 mode, or the active batch job status when in Batch mode.
 
 ### 5b. Consolidate checkbox label patterns
+**Status: ✅ COMPLETED**
 Every checkbox uses a `<label class="flex items-center gap-2 text-sm text-stone-300">` wrapper.
 This is consistent but repeated ~10 times with identical classes. Adding a
 short Tailwind component class `.field-checkbox` in `styles.css` would remove
@@ -239,10 +268,12 @@ the verbosity without a build step:
 If not, a plain CSS equivalent with flex/gap is fine.)*
 
 ### 5c. Caption candidate list height is very short (max-h-48)
+**Status: ✅ COMPLETED**
 With several candidates the list becomes very cramped. Increase to `max-h-64`
 or `max-h-72` to show more candidates before scrolling.
 
 ### 5d. "Generate Manual Caption" and "Generate With Preset" button placement
+**Status: ✅ COMPLETED**
 These two buttons are currently in a `flex flex-wrap` row along with the
 "Set generated caption as active" checkbox and the timeout display. As the
 row wraps on narrower viewports they lose their visual relationship.
@@ -253,7 +284,10 @@ side.
 
 ## 6. Settings Page Usability
 
+**Status: ✅ COMPLETED**
+
 ### 6a. Group settings visually
+**Status: ✅ COMPLETED**
 The settings form is a flat vertical list. Add section headers:
 - **LLM Defaults** (timeout, default preset, show all models)
 - **Ollama** (base URL + timeout + Test button)
@@ -262,6 +296,7 @@ The settings form is a flat vertical list. Add section headers:
 - **Debug** (collapsible, RAG controls)
 
 ### 6b. Test Connection feedback persistence
+**Status: ✅ COMPLETED**
 After clicking "Test Connection", the inline result (ok/fail message) disappears
 as soon as the user types in the URL field (because the URL field has no
 `@input="connectionTest.ollama = null"` handler). Decide on the intended
@@ -272,23 +307,34 @@ result visible until the next test is run. Currently neither is enforced.
 
 ## 7. Backend Minor Cleanup
 
+**Status: ✅ COMPLETED**
+
 ### 7a. Consistent Pydantic model naming
+**Status: ✅ COMPLETED**
 `RebuildEmbeddingsRequest` vs `TestConnectionRequest` — the naming is consistent
 in style but could audit that all request models are co-located at the top of
 `llm.py` rather than interspersed with route definitions. Currently
 `TestConnectionRequest` was added just before its route; move it with the other
 request model declarations.
 
+**Verification:** request models are already co-located in `backend/routers/llm.py` above routes.
+
 ### 7b. `llm_service.py` — `generate_caption_for_image` is the only call path from routers
+**Status: ✅ COMPLETED**
 Verify `apply_generated_caption` in `caption_service.py` is not called from
 anywhere else; if it is only called by `llm_service`, ensure its docstring
 makes that clear. If it is dead outside of that internal call, mark it
 `_apply_generated_caption` to signal it is not a public service function.
 
+**Verification/Update:** helper is `_apply_generated_caption` and is currently used by batch flows in `backend/services/batch_service.py`; added an internal-use docstring in `backend/services/caption_service.py`.
+
 ### 7c. `rag_service.py` wrapper functions
+**Status: ✅ COMPLETED**
 If RAG is disabled, `rag_service` functions all return early no-ops. Confirm
 `chromadb_service.py` functions are only ever called from `rag_service.py`
 (not directly from routers), keeping the optional-dependency isolation clean.
+
+**Verification:** `chromadb_service` is referenced from `rag_service` only; routers do not import it directly.
 
 ---
 

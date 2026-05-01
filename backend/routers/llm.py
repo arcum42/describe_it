@@ -37,6 +37,8 @@ class GenerateCaptionRequest(BaseModel):
     extra_instructions: str = ""
     make_active: bool = True
     timeout_seconds: int = Field(default=120, ge=10, le=900)
+    reasoning_mode: str = Field(default="off", pattern="^(off|on|low|medium|high)$")
+    reasoning_visibility: str = Field(default="hidden", pattern="^(hidden|blockquote|code)$")
 
 
 class CreatePresetRequest(BaseModel):
@@ -51,6 +53,8 @@ class CreatePresetRequest(BaseModel):
     context_file_template: str = ""
     include_project_notes: bool = False
     include_global_notes: bool = False
+    reasoning_mode: str = Field(default="off", pattern="^(off|on|low|medium|high)$")
+    reasoning_visibility: str = Field(default="hidden", pattern="^(hidden|blockquote|code)$")
 
 
 class UpdatePresetRequest(CreatePresetRequest):
@@ -97,6 +101,8 @@ class GenerateCaptionWithToolsRequest(BaseModel):
     project_note_ids: list[int] = Field(default_factory=list)
     include_global_notes: bool = False
     global_note_ids: list[int] = Field(default_factory=list)
+    reasoning_mode: str = Field(default="off", pattern="^(off|on|low|medium|high)$")
+    reasoning_visibility: str = Field(default="hidden", pattern="^(hidden|blockquote|code)$")
 
 
 class GenerateNoteTextRequest(BaseModel):
@@ -113,6 +119,8 @@ class GenerateNoteTextRequest(BaseModel):
     project_note_ids: list[int] = Field(default_factory=list)
     include_global_notes: bool = False
     global_note_ids: list[int] = Field(default_factory=list)
+    reasoning_mode: str = Field(default="off", pattern="^(off|on|low|medium|high)$")
+    reasoning_visibility: str = Field(default="hidden", pattern="^(hidden|blockquote|code)$")
 
 
 class CreateBatchJobRequest(BaseModel):
@@ -128,6 +136,8 @@ class CreateBatchJobRequest(BaseModel):
     output_mode: str = Field(default="new_candidate", pattern="^(new_candidate|replace_active|append_active)$")
     skip_on_failure: bool = True
     retry_count: int = Field(default=0, ge=0, le=5)
+    reasoning_mode: str = Field(default="off", pattern="^(off|on|low|medium|high)$")
+    reasoning_visibility: str = Field(default="hidden", pattern="^(hidden|blockquote|code)$")
 
 
 class BatchJobCommandRequest(BaseModel):
@@ -181,6 +191,7 @@ def available_backends() -> dict[str, list[dict[str, object]]]:
                         "name": model.name,
                         "vision_capable": model.vision_capable,
                         "tool_capable": model.tool_capable,
+                        "reasoning_capable": model.reasoning_capable,
                         "capabilities": model.capabilities or [],
                     }
                     for model in (backend.models or [])
@@ -203,6 +214,8 @@ def generate_caption(request: GenerateCaptionRequest) -> dict[str, object]:
             extra_instructions=request.extra_instructions,
             make_active=request.make_active,
             timeout_seconds=request.timeout_seconds,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -226,6 +239,8 @@ def generate_caption_with_tools_route(request: GenerateCaptionWithToolsRequest) 
             project_note_ids=request.project_note_ids,
             include_global_notes=request.include_global_notes,
             global_note_ids=request.global_note_ids,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
     except ValueError as error:
         logger.exception(
@@ -258,6 +273,8 @@ def generate_note_text_route(request: GenerateNoteTextRequest) -> dict[str, obje
             project_note_ids=request.project_note_ids,
             include_global_notes=request.include_global_notes,
             global_note_ids=request.global_note_ids,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
     except ValueError as error:
         logger.exception(
@@ -317,6 +334,8 @@ def create_preset_route(request: CreatePresetRequest) -> dict[str, object]:
             context_file_template=request.context_file_template,
             include_project_notes=request.include_project_notes,
             include_global_notes=request.include_global_notes,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
         return {"preset": preset}
     except ValueError as error:
@@ -339,6 +358,8 @@ def update_preset_route(request: UpdatePresetRequest) -> dict[str, object]:
             context_file_template=request.context_file_template,
             include_project_notes=request.include_project_notes,
             include_global_notes=request.include_global_notes,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
         return {"preset": preset}
     except ValueError as error:
@@ -400,6 +421,8 @@ def create_batch_job(request: CreateBatchJobRequest) -> dict[str, object]:
             output_mode=request.output_mode,
             skip_on_failure=request.skip_on_failure,
             retry_count=request.retry_count,
+            reasoning_mode=request.reasoning_mode,
+            reasoning_visibility=request.reasoning_visibility,
         )
         return {"job": job}
     except ValueError as error:

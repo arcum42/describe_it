@@ -75,6 +75,8 @@ function describeItApp() {
         contextFileTemplate: '',
         includeProjectNotes: false,
         includeGlobalNotes: false,
+        reasoningMode: 'off',
+        reasoningVisibility: 'hidden',
       },
       tools: {
         showPanel: false,
@@ -84,6 +86,8 @@ function describeItApp() {
         contextFile: '',
         includeProjectNotes: false,
         includeGlobalNotes: false,
+        reasoningMode: 'off',
+        reasoningVisibility: 'hidden',
       },
     },
     batch: {
@@ -135,6 +139,8 @@ function describeItApp() {
         contextFile: '',
         includeProjectNotes: false,
         includeGlobalNotes: false,
+        reasoningMode: 'off',
+        reasoningVisibility: 'hidden',
       },
     },
     settings: {
@@ -169,7 +175,8 @@ function describeItApp() {
     },
     statusMessage: '',
     errorMessage: '',
-    isSubmitting: false,
+    activeOps: new Set(), // Fine-grained operation tracking (replaces isSubmitting)
+    isSubmitting: false, // Kept for backward compatibility
     browser: {
       currentPath: '',
       parentPath: null,
@@ -751,6 +758,8 @@ function describeItApp() {
             context_files: contextFiles,
             include_project_notes: this.notes.llm.includeProjectNotes,
             include_global_notes: this.notes.llm.includeGlobalNotes,
+            reasoning_mode: this.notes.llm.reasoningMode,
+            reasoning_visibility: this.notes.llm.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -923,8 +932,22 @@ function describeItApp() {
         this.errorMessage = error.message;
       }
     },
-    async withSubmitting(fn) {
+    // Operation tracking helpers for fine-grained submit blocking
+    isActive(key) {
+      return this.activeOps.has(key);
+    },
+    isAnyActive() {
+      return this.activeOps.size > 0;
+    },
+    async withSubmitting(fn, operationKey = null) {
+      // Support both the old behavior (no key = global flag) and new behavior (with key)
       this.isSubmitting = true;
+      if (operationKey) {
+        this.activeOps.add(operationKey);
+      } else {
+        // Fallback: set a non-specific flag when no key provided
+        this.activeOps.add('_submitting');
+      }
       this.errorMessage = '';
       this.statusMessage = '';
       try {
@@ -933,6 +956,11 @@ function describeItApp() {
         this.errorMessage = error.message;
       } finally {
         this.isSubmitting = false;
+        if (operationKey) {
+          this.activeOps.delete(operationKey);
+        } else {
+          this.activeOps.delete('_submitting');
+        }
       }
     },
     async createProject() {
@@ -967,7 +995,7 @@ function describeItApp() {
         this.statusMessage = `Opened project ${payload.project.name}`;
         await this.loadRecentProjects();
         await this.loadBrowser(payload.project.path);
-      });
+      }, 'openProject');
     },
     async saveMetadata() {
       await this.withSubmitting(async () => {
@@ -983,7 +1011,7 @@ function describeItApp() {
         this.applyProject(payload.project);
         this.statusMessage = `Saved metadata for ${payload.project.name}`;
         await this.loadRecentProjects();
-      });
+      }, 'saveMetadata');
     },
     async openRecentProject(path) {
       this.openForm.path = path;
@@ -1008,6 +1036,7 @@ function describeItApp() {
       const icons = [];
       if (model.vision_capable) icons.push('👁️');
       if (model.tool_capable) icons.push('🔨');
+      if (model.reasoning_capable) icons.push('🧠');
       return icons.join(' ');
     },
     modelOptionLabel(modelInfo) {
@@ -1017,6 +1046,7 @@ function describeItApp() {
       const icons = [];
       if (modelInfo.vision_capable) icons.push('👁️');
       if (modelInfo.tool_capable) icons.push('🔨');
+      if (modelInfo.reasoning_capable) icons.push('🧠');
       return icons.length > 0 ? `${modelInfo.name}  ${icons.join(' ')}` : modelInfo.name;
     },
     availableModelsForBackend(backendName) {
@@ -1099,6 +1129,8 @@ function describeItApp() {
         contextFileTemplate: '',
         includeProjectNotes: false,
         includeGlobalNotes: false,
+        reasoningMode: 'off',
+        reasoningVisibility: 'hidden',
       };
       this.onPresetBackendChanged();
     },
@@ -1116,6 +1148,8 @@ function describeItApp() {
         contextFileTemplate: preset.context_file_template ?? '',
         includeProjectNotes: preset.include_project_notes === true,
         includeGlobalNotes: preset.include_global_notes === true,
+        reasoningMode: preset.reasoning_mode || 'off',
+        reasoningVisibility: preset.reasoning_visibility || 'hidden',
       };
       this.llm.selectedPresetId = String(preset.id);
     },
@@ -1167,6 +1201,8 @@ function describeItApp() {
             context_file_template: this.llm.presetForm.contextFileTemplate,
             include_project_notes: this.llm.presetForm.includeProjectNotes,
             include_global_notes: this.llm.presetForm.includeGlobalNotes,
+            reasoning_mode: this.llm.presetForm.reasoningMode,
+            reasoning_visibility: this.llm.presetForm.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -1212,6 +1248,8 @@ function describeItApp() {
             context_file_template: this.llm.presetForm.contextFileTemplate,
             include_project_notes: this.llm.presetForm.includeProjectNotes,
             include_global_notes: this.llm.presetForm.includeGlobalNotes,
+            reasoning_mode: this.llm.presetForm.reasoningMode,
+            reasoning_visibility: this.llm.presetForm.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -1564,6 +1602,8 @@ function describeItApp() {
             output_mode: this.batch.outputMode,
             skip_on_failure: this.batch.skipOnFailure,
             retry_count: Number(this.batch.retryCount || 0),
+            reasoning_mode: this.batch.usePreset ? 'off' : this.llm.tools.reasoningMode,
+            reasoning_visibility: this.batch.usePreset ? 'hidden' : this.llm.tools.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -1656,6 +1696,8 @@ function describeItApp() {
             extra_instructions: this.llm.extraInstructions,
             make_active: this.llm.makeActive,
             timeout_seconds: this.settings.llmTimeoutSeconds,
+            reasoning_mode: this.llm.tools.reasoningMode,
+            reasoning_visibility: this.llm.tools.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -1705,6 +1747,8 @@ function describeItApp() {
             context_files: contextFiles,
             include_project_notes: this.llm.tools.includeProjectNotes,
             include_global_notes: this.llm.tools.includeGlobalNotes,
+            reasoning_mode: this.llm.tools.reasoningMode,
+            reasoning_visibility: this.llm.tools.reasoningVisibility,
           }),
         });
         const payload = await response.json();
@@ -1824,7 +1868,7 @@ function describeItApp() {
         await this.loadImages();
         await this.loadImageSummary();
         await this.selectImage(this.selectedImage.id, false);
-      });
+      }, 'toggleIncluded');
     },
     async saveActiveCaption() {
       if (!this.currentProject?.path || !this.selectedImage) {
@@ -1848,7 +1892,7 @@ function describeItApp() {
         await this.selectImage(this.selectedImage.id, false);
         await this.loadImages();
         await this.loadImageSummary();
-      });
+      }, 'saveCaption');
     },
     async addCaptionCandidate(makeActive = true) {
       if (!this.currentProject?.path || !this.selectedImage) {
@@ -1995,7 +2039,7 @@ function describeItApp() {
         this.statusMessage = `Imported ${result.imported_images} images (${result.captions_from_files} with captions, ${result.blank_captions} blank).`;
         await this.loadImages();
         await this.loadImageSummary();
-      });
+      }, 'importFolder');
     },
     async exportProjectDataset() {
       if (!this.currentProject?.path) {
@@ -2039,7 +2083,7 @@ function describeItApp() {
         const notesSuffix = result.exported_notes ? ` ${result.exported_notes} note(s) exported to notes/.` : '';
         this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}${notesSuffix}`;
         this.exportPreview = null;
-      });
+      }, 'exportDataset');
     },
     async testConnection(backend) {
       const urlKey = backend === 'ollama' ? 'ollamaBaseUrl' : 'lmstudioBaseUrl';
