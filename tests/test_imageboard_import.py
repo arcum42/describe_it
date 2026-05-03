@@ -638,3 +638,320 @@ async def test_import_unknown_board_raises(tmp_path):
             query="test",
             import_count=1,
         )
+
+
+# ---------------------------------------------------------------------------
+# Per-client: tag extraction & normalization
+# ---------------------------------------------------------------------------
+
+class TestDerpibooruClient:
+    """Tests for Derpibooru tag extraction and normalization."""
+
+    def test_extract_tags_flat_strings(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        img_data = {"tags": ["Fluttershy", "solo", "safe"]}
+        assert DerpibooruClient._extract_tags(img_data) == ["Fluttershy", "solo", "safe"]
+
+    def test_extract_tags_dict_objects(self):
+        """Tags can come as dicts with a 'name' key."""
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        img_data = {"tags": [{"name": "Fluttershy", "slug": "fluttershy"}, {"name": "solo"}]}
+        assert DerpibooruClient._extract_tags(img_data) == ["Fluttershy", "solo"]
+
+    def test_extract_tags_empty(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        assert DerpibooruClient._extract_tags({}) == []
+
+    def test_extract_rating_safe(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        assert DerpibooruClient._extract_rating({"rating": "safe"}) == "safe"
+
+    def test_extract_rating_explicit(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        assert DerpibooruClient._extract_rating({"rating": "explicit"}) == "explicit"
+
+    def test_extract_rating_unknown_returns_none(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        assert DerpibooruClient._extract_rating({"rating": "gore"}) is None
+
+    def test_normalize_tags_removes_rating_tags(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        c = DerpibooruClient()
+        result = c.normalize_tags(["safe", "explicit", "suggestive", "solo", "Fluttershy"])
+        assert "safe" not in result
+        assert "explicit" not in result
+        assert "suggestive" not in result
+        assert "solo" in result
+        assert "fluttershy" in result
+
+    def test_normalize_tags_removes_meta_tags(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        c = DerpibooruClient()
+        result = c.normalize_tags(["derpibooru exclusive", "requires cropping", "rainbow dash"])
+        assert "derpibooru exclusive" not in result
+        assert "requires cropping" not in result
+        assert "rainbow dash" in result
+
+    def test_normalize_tags_sorted(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        c = DerpibooruClient()
+        result = c.normalize_tags(["zebra", "apple", "mare"])
+        assert result == sorted(result)
+
+
+class TestDanbooruClient:
+    """Tests for Danbooru tag extraction and normalization."""
+
+    def test_extract_tags_from_tag_strings(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        post_data = {
+            "tag_string_general": "1girl solo",
+            "tag_string_artist": "some_artist",
+            "tag_string_character": "reimu_hakurei",
+            "tag_string_copyright": "touhou",
+            "tag_string_meta": "highres",
+        }
+        tags = DanbooruClient._extract_tags(post_data)
+        assert "1girl" in tags
+        assert "solo" in tags
+        assert "some_artist" in tags
+        assert "reimu_hakurei" in tags
+        assert "touhou" in tags
+        assert "highres" in tags
+
+    def test_extract_tags_empty_fields(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        assert DanbooruClient._extract_tags({}) == []
+
+    def test_extract_rating_letter_codes(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        assert DanbooruClient._extract_rating({"rating": "s"}) == "safe"
+        assert DanbooruClient._extract_rating({"rating": "q"}) == "questionable"
+        assert DanbooruClient._extract_rating({"rating": "e"}) == "explicit"
+        assert DanbooruClient._extract_rating({"rating": "x"}) is None
+
+    def test_extract_image_url_prefers_file(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        post_data = {
+            "file": {"url": "https://cdn.example.com/full.png"},
+            "sample": {"url": "https://cdn.example.com/sample.jpg"},
+        }
+        assert DanbooruClient._extract_image_url(post_data) == "https://cdn.example.com/full.png"
+
+    def test_extract_image_url_falls_back_to_sample(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        post_data = {
+            "file": {"url": None},
+            "sample": {"url": "https://cdn.example.com/sample.jpg"},
+        }
+        assert DanbooruClient._extract_image_url(post_data) == "https://cdn.example.com/sample.jpg"
+
+    def test_extract_image_url_empty(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        assert DanbooruClient._extract_image_url({}) == ""
+
+    def test_normalize_tags_underscores_to_spaces(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        c = DanbooruClient()
+        result = c.normalize_tags(["blue_eyes", "long_hair", "1girl"])
+        assert "blue eyes" in result
+        assert "long hair" in result
+        assert "1girl" in result
+
+    def test_normalize_tags_removes_rating_tags(self):
+        from backend.llm.imageboard.danbooru import DanbooruClient
+        c = DanbooruClient()
+        result = c.normalize_tags(["safe", "explicit", "translated", "1girl"])
+        assert "safe" not in result
+        assert "explicit" not in result
+        assert "translated" not in result
+        assert "1girl" in result
+
+
+class TestE621Client:
+    """Tests for e621 tag extraction and normalization."""
+
+    def test_extract_tags_from_category_dict(self):
+        from backend.llm.imageboard.e621 import E621Client
+        post_data = {
+            "tags": {
+                "general": ["fluffy", "solo"],
+                "species": ["canine"],
+                "character": ["fido"],
+                "artist": ["some_artist"],
+                "copyright": [],
+                "meta": ["highres"],
+            }
+        }
+        tags = E621Client._extract_tags(post_data)
+        assert "fluffy" in tags
+        assert "solo" in tags
+        assert "canine" in tags
+        assert "fido" in tags
+        assert "some_artist" in tags
+        assert "highres" in tags
+
+    def test_extract_tags_flat_list_fallback(self):
+        from backend.llm.imageboard.e621 import E621Client
+        post_data = {"tags": ["fluffy", "solo"]}
+        assert E621Client._extract_tags(post_data) == ["fluffy", "solo"]
+
+    def test_extract_tags_empty(self):
+        from backend.llm.imageboard.e621 import E621Client
+        assert E621Client._extract_tags({}) == []
+
+    def test_extract_rating_letter_codes(self):
+        from backend.llm.imageboard.e621 import E621Client
+        assert E621Client._extract_rating({"rating": "s"}) == "safe"
+        assert E621Client._extract_rating({"rating": "q"}) == "questionable"
+        assert E621Client._extract_rating({"rating": "e"}) == "explicit"
+        assert E621Client._extract_rating({}) is None
+
+    def test_extract_image_url_file_object(self):
+        from backend.llm.imageboard.e621 import E621Client
+        post_data = {
+            "file": {"url": "https://cdn.e621.net/data/full.png"},
+            "sample": {"url": "https://cdn.e621.net/data/sample.jpg"},
+        }
+        assert E621Client._extract_image_url(post_data) == "https://cdn.e621.net/data/full.png"
+
+    def test_normalize_tags_underscores_to_spaces(self):
+        from backend.llm.imageboard.e621 import E621Client
+        c = E621Client()
+        result = c.normalize_tags(["blue_eyes", "long_hair", "solo"])
+        assert "blue eyes" in result
+        assert "long hair" in result
+        assert "solo" in result
+
+    def test_normalize_tags_removes_rating_words(self):
+        from backend.llm.imageboard.e621 import E621Client
+        c = E621Client()
+        result = c.normalize_tags(["safe", "explicit", "questionable", "fluffy"])
+        assert "safe" not in result
+        assert "explicit" not in result
+        assert "fluffy" in result
+
+
+class TestTwibooruClient:
+    """Tests for Twibooru tag extraction and normalization."""
+
+    def test_extract_tags_flat_list(self):
+        from backend.llm.imageboard.twibooru import TwibooruClient
+        post_data = {"tags": ["rainbow dash", "flying", "safe"]}
+        assert TwibooruClient._extract_tags(post_data) == ["rainbow dash", "flying", "safe"]
+
+    def test_extract_tags_empty(self):
+        from backend.llm.imageboard.twibooru import TwibooruClient
+        assert TwibooruClient._extract_tags({}) == []
+
+    def test_extract_rating_philomena_strings(self):
+        from backend.llm.imageboard.twibooru import TwibooruClient
+        assert TwibooruClient._extract_rating({"rating": "safe"}) == "safe"
+        assert TwibooruClient._extract_rating({"rating": "explicit"}) == "explicit"
+        assert TwibooruClient._extract_rating({"rating": "suggestive"}) == "suggestive"
+        assert TwibooruClient._extract_rating({"rating": "unknown"}) is None
+
+    def test_normalize_tags_removes_rating_tags(self):
+        from backend.llm.imageboard.twibooru import TwibooruClient
+        c = TwibooruClient()
+        result = c.normalize_tags(["safe", "suggestive", "rainbow dash"])
+        assert "safe" not in result
+        assert "suggestive" not in result
+        assert "rainbow dash" in result
+
+
+# ---------------------------------------------------------------------------
+# Source attribution
+# ---------------------------------------------------------------------------
+
+@pytest.mark.anyio
+async def test_caption_includes_source_url_when_available(tmp_path):
+    """When source_url is present on the image, caption should note it."""
+    db_path = _create_project(tmp_path, "source_attr")
+    image_bytes = _make_png_bytes((20, 40, 60))
+    fake_img = ImageboardImage(
+        id=42,
+        title="image_42.png",
+        image_url="https://cdn.example.com/42.png",
+        source_url="https://derpibooru.org/images/42",
+        tags=["pony", "solo"],
+        rating="safe",
+    )
+    mock_client = _MockClient(
+        search_result=_fake_search_result([fake_img]),
+        image_bytes=image_bytes,
+    )
+
+    svc = ImageboardImportService()
+    with patch.object(svc, "get_client", new=AsyncMock(return_value=mock_client)):
+        await svc.import_images(
+            project_path=db_path,
+            board_id="mock",
+            query="pony",
+            import_count=1,
+            include_tags_in_caption=True,
+            skip_duplicates=False,
+        )
+
+    from sqlalchemy import select
+    sf = create_sqlite_session_factory(db_path)
+    with sf() as session:
+        caption = session.scalar(select(CaptionRecord))
+        assert caption is not None
+        assert "derpibooru.org/images/42" in caption.text
+
+
+# ---------------------------------------------------------------------------
+# Rating filter
+# ---------------------------------------------------------------------------
+
+class TestApplyRatingFilter:
+    """Tests for _apply_rating_filter query modifier."""
+
+    def test_any_returns_query_unchanged(self):
+        svc = ImageboardImportService()
+        assert svc._apply_rating_filter("fluffy", "derpibooru", "any") == "fluffy"
+
+    def test_empty_filter_returns_query_unchanged(self):
+        svc = ImageboardImportService()
+        assert svc._apply_rating_filter("fluffy", "derpibooru", "") == "fluffy"
+
+    # --- Philomena boards ---
+    def test_safe_appended_for_derpibooru(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("fluffy", "derpibooru", "safe")
+        assert result == "fluffy, safe"
+
+    def test_questionable_becomes_suggestive_for_philomena(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("art", "tantabus", "questionable")
+        assert "suggestive" in result
+
+    def test_explicit_appended_for_twibooru(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("art", "twibooru", "explicit")
+        assert result == "art, explicit"
+
+    def test_empty_query_philomena_returns_just_rating(self):
+        svc = ImageboardImportService()
+        assert svc._apply_rating_filter("", "derpibooru", "safe") == "safe"
+
+    # --- Rails boards ---
+    def test_safe_appended_for_danbooru(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("1girl", "danbooru", "safe")
+        assert result == "1girl rating:s"
+
+    def test_questionable_appended_for_e621(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("canine", "e621", "questionable")
+        assert result == "canine rating:q"
+
+    def test_explicit_appended_for_e621(self):
+        svc = ImageboardImportService()
+        result = svc._apply_rating_filter("canine", "e621", "explicit")
+        assert result == "canine rating:e"
+
+    def test_empty_query_rails_returns_just_rating(self):
+        svc = ImageboardImportService()
+        assert svc._apply_rating_filter("", "danbooru", "safe") == "rating:s"

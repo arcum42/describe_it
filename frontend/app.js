@@ -263,6 +263,7 @@ function describeItApp() {
       importCount: 10,
       includeTags: true,
       skipDuplicates: true,
+      ratingFilter: 'any',
       previewImages: [],
       totalAvailable: 0,
       statusMessage: '',

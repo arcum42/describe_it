@@ -90,6 +90,37 @@ class ImageboardImportService:
         else:
             raise ValueError(f"Unknown board: {board_id}")
 
+    @staticmethod
+    def _apply_rating_filter(query: str, board_id: str, rating_filter: str) -> str:
+        """
+        Append a rating restriction to the query using board-appropriate syntax.
+
+        Args:
+            query: Original search query
+            board_id: Board identifier
+            rating_filter: One of 'any', 'safe', 'questionable', 'explicit'
+
+        Returns:
+            Modified query string with rating constraint, or original if 'any'
+        """
+        if not rating_filter or rating_filter == "any":
+            return query
+
+        # Philomena boards (Derpibooru, Tantabus, Twibooru): tags are comma-separated
+        if board_id in ("derpibooru", "tantabus", "twibooru"):
+            rating_tag = rating_filter  # 'safe', 'suggestive', 'explicit'
+            # Replace 'questionable' with 'suggestive' for Philomena boards
+            if rating_tag == "questionable":
+                rating_tag = "suggestive"
+            return f"{query}, {rating_tag}" if query.strip() else rating_tag
+
+        # Rails boards (Danbooru, e621): tags are space-separated
+        rating_map = {"safe": "s", "questionable": "q", "explicit": "e"}
+        letter = rating_map.get(rating_filter)
+        if letter:
+            return f"{query} rating:{letter}".strip() if query.strip() else f"rating:{letter}"
+        return query
+
     async def search(
         self,
         board_id: str,
@@ -98,6 +129,7 @@ class ImageboardImportService:
         sort_direction: str = "desc",
         page: int = 1,
         per_page: int = 20,
+        rating_filter: str = "any",
     ) -> SearchResult:
         """
         Search an imageboard.
@@ -109,6 +141,7 @@ class ImageboardImportService:
             sort_direction: "asc" or "desc"
             page: Page number (1-indexed)
             per_page: Results per page
+            rating_filter: 'any', 'safe', 'questionable', or 'explicit'
 
         Returns:
             SearchResult with images and pagination info
@@ -120,9 +153,11 @@ class ImageboardImportService:
         if not client:
             raise ValueError(f"Board not supported: {board_id}")
 
+        effective_query = self._apply_rating_filter(query, board_id, rating_filter)
+
         try:
             result = await client.search(
-                query=query,
+                query=effective_query,
                 sort_by=sort_by,
                 sort_direction=sort_direction,
                 page=page,
@@ -139,6 +174,7 @@ class ImageboardImportService:
         sort_by: str = "relevance",
         sort_direction: str = "desc",
         preview_count: int = 5,
+        rating_filter: str = "any",
     ) -> ImportPreview:
         """
         Get preview of images available for import.
@@ -163,6 +199,7 @@ class ImageboardImportService:
             sort_direction=sort_direction,
             page=1,
             per_page=preview_count,
+            rating_filter=rating_filter,
         )
 
         preview_images = []
@@ -213,6 +250,7 @@ class ImageboardImportService:
         import_count: int = 10,
         include_tags_in_caption: bool = True,
         skip_duplicates: bool = True,
+        rating_filter: str = "any",
     ) -> ImportResult:
         """
         Import images from imageboard into project.
@@ -248,8 +286,10 @@ class ImageboardImportService:
             if not client:
                 raise ValueError(f"Board not supported: {board_id}")
 
+            effective_query = self._apply_rating_filter(query, board_id, rating_filter)
+
             search_result = await client.search(
-                query=query,
+                query=effective_query,
                 sort_by=sort_by,
                 sort_direction=sort_direction,
                 page=1,
@@ -370,6 +410,10 @@ class ImageboardImportService:
                 # Include rating if available
                 if image_data.rating:
                     caption_text = f"[{image_data.rating}] {caption_text}"
+
+                # Append source URL so the origin is traceable
+                if image_data.source_url:
+                    caption_text = f"{caption_text} | source:{image_data.source_url}"
 
                 caption_record = CaptionRecord(
                     image_id=image_record.id,

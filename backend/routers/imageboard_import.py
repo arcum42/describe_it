@@ -29,6 +29,7 @@ class ImageboardPreviewRequest(BaseModel):
     sort_by: str = Field(default="relevance")
     sort_direction: str = Field(default="desc")
     preview_count: int = Field(default=5, ge=1, le=20)
+    rating_filter: str = Field(default="any")
 
 
 class ImageboardImportRequest(BaseModel):
@@ -42,6 +43,7 @@ class ImageboardImportRequest(BaseModel):
     import_count: int = Field(default=10, ge=1, le=100)
     include_tags_in_caption: bool = Field(default=True)
     skip_duplicates: bool = Field(default=True)
+    rating_filter: str = Field(default="any")
 
 
 class BatchSearchRequest(BaseModel):
@@ -111,6 +113,7 @@ async def get_import_preview(req: ImageboardPreviewRequest) -> dict:
             sort_by=req.sort_by,
             sort_direction=req.sort_direction,
             preview_count=req.preview_count,
+            rating_filter=req.rating_filter,
         )
         
         return {
@@ -146,6 +149,7 @@ async def perform_import(req: ImageboardImportRequest) -> dict:
             import_count=req.import_count,
             include_tags_in_caption=req.include_tags_in_caption,
             skip_duplicates=req.skip_duplicates,
+            rating_filter=req.rating_filter,
         )
         
         return {

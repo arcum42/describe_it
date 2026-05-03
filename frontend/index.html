@@ -22,8 +22,8 @@
     <script defer src="/static/js/features/shortcuts.js?v=20260503a"></script>
     <script defer src="/static/js/features/export.js?v=20260502a"></script>
     <script defer src="/static/js/features/import.js?v=20260502a"></script>
-    <script defer src="/static/js/features/imageboard-import.js?v=20260503a"></script>
-    <script defer src="/static/app.js?v=20260503a"></script>
+    <script defer src="/static/js/features/imageboard-import.js?v=20260503b"></script>
+    <script defer src="/static/app.js?v=20260503b"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -2502,8 +2502,8 @@
             <!-- Scrollable body -->
             <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
 
-              <!-- Board + Sort row -->
-              <div class="grid grid-cols-2 gap-3">
+              <!-- Board / Sort / Rating row -->
+              <div class="grid grid-cols-3 gap-3">
                 <div>
                   <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Board</label>
                   <select x-model="imageboardImport.selectedBoard"
@@ -2529,6 +2529,16 @@
                       <option value="asc">↑ asc</option>
                     </select>
                   </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Rating</label>
+                  <select x-model="imageboardImport.ratingFilter"
+                          class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 focus:border-amber-500 focus:outline-none">
+                    <option value="any">Any rating</option>
+                    <option value="safe">Safe only</option>
+                    <option value="questionable">Questionable</option>
+                    <option value="explicit">Explicit</option>
+                  </select>
                 </div>
               </div>
 

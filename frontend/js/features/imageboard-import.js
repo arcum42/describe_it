@@ -21,6 +21,7 @@
     app.imageboardImport.sortDirection = 'desc';
     app.imageboardImport.importCount = 10;
     app.imageboardImport.includeTags = true;
+    app.imageboardImport.ratingFilter = 'any';
     app.imageboardImport.previewImages = [];
     app.imageboardImport.totalAvailable = 0;
     app.imageboardImport.statusMessage = '';
@@ -73,7 +74,7 @@
    * Search the selected board and show a preview grid.
    */
   async function searchBoard(app) {
-    const { selectedBoard, query, sortBy, sortDirection } = app.imageboardImport;
+    const { selectedBoard, query, sortBy, sortDirection, ratingFilter } = app.imageboardImport;
 
     if (!selectedBoard) {
       app.imageboardImport.errorMessage = 'Select a board first.';
@@ -100,6 +101,7 @@
           sort_by: sortBy,
           sort_direction: sortDirection,
           preview_count: 6,
+          rating_filter: ratingFilter,
         }),
       });
       const payload = await resp.json();
@@ -124,7 +126,7 @@
    * Import images from the selected board into the current project.
    */
   async function doImport(app) {
-    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags, skipDuplicates } =
+    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags, skipDuplicates, ratingFilter } =
       app.imageboardImport;
 
     if (!app.currentProject?.path) {
@@ -153,6 +155,7 @@
           import_count: importCount,
           include_tags_in_caption: includeTags,
           skip_duplicates: skipDuplicates,
+          rating_filter: ratingFilter,
         }),
       });
       const payload = await resp.json();
