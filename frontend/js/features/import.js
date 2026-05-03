@@ -27,7 +27,34 @@
     }, 'importFolder');
   }
 
+  async function importSingleImage(app) {
+    if (!app.currentProject?.path) {
+      app.errorMessage = 'Open or create a project first.';
+      return;
+    }
+    await app.withSubmitting(async () => {
+      const response = await fetch('/api/projects/import-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_path: app.currentProject.path,
+          source_image: app.importForm.source_image,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail ?? 'Single image import failed');
+      }
+      const result = payload.result;
+      const filename = String(result.source_image).split(/[\\/]/).pop() || result.source_image;
+      app.statusMessage = `Imported image ${filename} (${result.captions_from_files ? 'with caption file' : 'blank caption'}).`;
+      await app.loadImages();
+      await app.loadImageSummary();
+    }, 'importSingleImage');
+  }
+
   features.import = {
     importFolder,
+    importSingleImage,
   };
 })(window);

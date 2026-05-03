@@ -152,6 +152,36 @@ def test_import_folder(tmp_path: Path) -> None:
     assert all(cap for cap in captions_present), f"Some images missing captions: {captions_present}"
 
 
+def test_import_single_image(tmp_path: Path) -> None:
+    """Import one image file directly into a project."""
+    project_path = str(tmp_path / "smoke_import_single.db")
+    image_path = tmp_path / "single.png"
+    caption_path = tmp_path / "single.txt"
+    image_path.write_bytes(_make_png_bytes((10, 120, 220)))
+    caption_path.write_text("single image caption", encoding="utf-8")
+
+    client.post(
+        "/api/projects/create",
+        json={"path": project_path, "name": "Import Single Test", "description": "", "trigger_word": "", "caption_mode": "description"},
+    )
+
+    import_resp = client.post(
+        "/api/projects/import-image",
+        json={"project_path": project_path, "source_image": str(image_path)},
+    )
+    assert import_resp.status_code == 200, import_resp.text
+    result = import_resp.json()["result"]
+    assert result["captions_from_files"] == 1
+    assert result["blank_captions"] == 0
+
+    images_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert images_resp.status_code == 200, images_resp.text
+    images = images_resp.json()["images"]
+    assert len(images) == 1
+    assert images[0]["filename"] == "single.png"
+    assert images[0]["active_caption_preview"] == "single image caption"
+
+
 def test_image_detail_and_content(tmp_path: Path) -> None:
     """Image detail and raw content endpoints return correct data."""
     project_path = str(tmp_path / "smoke_detail.db")

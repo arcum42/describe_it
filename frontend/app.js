@@ -22,6 +22,7 @@ function describeItApp() {
     },
     importForm: {
       source_folder: 'practice_dataset/sample_set',
+      source_image: '',
       replace_existing: false,
     },
     exportForm: {
@@ -1782,6 +1783,14 @@ function describeItApp() {
       const importFeature = window.DescribeItFeatures?.import;
       if (importFeature && typeof importFeature.importFolder === 'function') {
         await importFeature.importFolder(this);
+        return;
+      }
+      this.errorMessage = 'Import module unavailable. Refresh and try again.';
+    },
+    async importSingleImage() {
+      const importFeature = window.DescribeItFeatures?.import;
+      if (importFeature && typeof importFeature.importSingleImage === 'function') {
+        await importFeature.importSingleImage(this);
         return;
       }
       this.errorMessage = 'Import module unavailable. Refresh and try again.';

@@ -1545,6 +1545,20 @@
                   <button @click="importFolder()" :disabled="isActive('importFolder') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
                     Import Folder
                   </button>
+
+                  <div class="pt-1">
+                    <div class="mb-2 flex items-center justify-between">
+                      <h4 class="text-xs font-medium uppercase tracking-[0.2em] text-stone-400">Single Image</h4>
+                      <span class="text-[11px] text-stone-500">optional sidecar .txt</span>
+                    </div>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Image Path
+                      <input x-model="importForm.source_image" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set/img00.png" />
+                    </label>
+                    <button @click="importSingleImage()" :disabled="isActive('importSingleImage') || !currentProject" class="mt-3 rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Import Single Image
+                    </button>
+                  </div>
                 </div>
 
                 <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">

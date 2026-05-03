@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.app_state_service import get_project_session_state, update_project_session_state
 from backend.services.export_service import export_project_dataset, preview_project_export
-from backend.services.import_service import import_folder_into_project
+from backend.services.import_service import import_folder_into_project, import_single_image_into_project
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -35,6 +35,11 @@ class ImportFolderRequest(BaseModel):
     project_path: str = Field(min_length=1)
     source_folder: str = Field(min_length=1)
     replace_existing: bool = False
+
+
+class ImportSingleImageRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    source_image: str = Field(min_length=1)
 
 
 class UpdateSessionStateRequest(BaseModel):
@@ -141,6 +146,18 @@ def import_folder_route(request: ImportFolderRequest) -> dict[str, object]:
             project_path=request.project_path.strip(),
             source_folder=request.source_folder.strip(),
             replace_existing=request.replace_existing,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return {"result": result.__dict__}
+
+
+@router.post("/import-image")
+def import_single_image_route(request: ImportSingleImageRequest) -> dict[str, object]:
+    try:
+        result = import_single_image_into_project(
+            project_path=request.project_path.strip(),
+            source_image=request.source_image.strip(),
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
