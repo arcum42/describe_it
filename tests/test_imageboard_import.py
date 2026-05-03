@@ -833,6 +833,65 @@ class TestE621Client:
         assert "explicit" not in result
         assert "fluffy" in result
 
+    async def test_search_uses_counts_endpoint_for_total_count(self):
+        from backend.llm.imageboard.e621 import E621Client
+
+        c = E621Client(api_key="k", username="u")
+        c.http_client = MagicMock()
+        c.http_client.get = AsyncMock(
+            side_effect=[
+                {
+                    "posts": [
+                        {
+                            "id": 1,
+                            "file": {"url": "https://cdn.e621.net/data/1.jpg"},
+                            "tags": {"general": ["female"]},
+                            "rating": "s",
+                        }
+                    ]
+                },
+                {"counts": {"posts": 3_100_000}},
+            ]
+        )
+
+        result = await c.search(query="female", per_page=20)
+
+        assert result.total_count == 3_100_000
+        assert len(result.images) == 1
+        assert result.images[0].id == 1
+
+    async def test_search_falls_back_when_counts_unavailable(self):
+        from backend.llm.imageboard.e621 import E621Client
+
+        c = E621Client(api_key="k", username="u")
+        c.http_client = MagicMock()
+        c.http_client.get = AsyncMock(
+            side_effect=[
+                {
+                    "posts": [
+                        {
+                            "id": 11,
+                            "file": {"url": "https://cdn.e621.net/data/11.jpg"},
+                            "tags": {"general": ["female"]},
+                            "rating": "s",
+                        },
+                        {
+                            "id": 12,
+                            "file": {"url": "https://cdn.e621.net/data/12.jpg"},
+                            "tags": {"general": ["female"]},
+                            "rating": "s",
+                        },
+                    ]
+                },
+                {"counts": {}},
+            ]
+        )
+
+        result = await c.search(query="female", page=1, per_page=20)
+
+        # Fallback remains conservative when total count cannot be fetched.
+        assert result.total_count == 2
+
 
 class TestTwibooruClient:
     """Tests for Twibooru tag extraction and normalization."""
@@ -965,3 +1024,37 @@ class TestApplyRatingFilter:
     def test_empty_query_rails_returns_just_rating(self):
         svc = ImageboardImportService()
         assert svc._apply_rating_filter("", "danbooru", "safe") == "rating:s"
+
+
+# ---------------------------------------------------------------------------
+# Query normalization
+# ---------------------------------------------------------------------------
+
+class TestNormalizeQueryForBoard:
+    """Tests for board-specific query normalization."""
+
+    def test_e621_parenthetical_tag_is_normalized(self):
+        svc = ImageboardImportService()
+        result = svc._normalize_query_for_board("fluttershy (mlp)", "e621")
+        assert result == "fluttershy_(mlp)"
+
+    def test_e621_parenthetical_with_spaces_is_normalized(self):
+        svc = ImageboardImportService()
+        result = svc._normalize_query_for_board("fluttershy (my little pony)", "e621")
+        assert result == "fluttershy_(my_little_pony)"
+
+    def test_danbooru_commas_become_spaces(self):
+        svc = ImageboardImportService()
+        result = svc._normalize_query_for_board("1girl, smile", "danbooru")
+        assert result == "1girl smile"
+
+    def test_non_rails_query_unchanged(self):
+        svc = ImageboardImportService()
+        result = svc._normalize_query_for_board("fluttershy (mlp)", "derpibooru")
+        assert result == "fluttershy (mlp)"
+
+    def test_normalization_then_rating_filter_for_e621(self):
+        svc = ImageboardImportService()
+        normalized = svc._normalize_query_for_board("fluttershy (mlp)", "e621")
+        result = svc._apply_rating_filter(normalized, "e621", "safe")
+        assert result == "fluttershy_(mlp) rating:s"

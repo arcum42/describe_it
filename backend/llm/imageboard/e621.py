@@ -116,8 +116,12 @@ class E621Client(ImageboardClient):
                 )
                 images.append(image)
 
-            # Try to get total count from response metadata
-            total_count = response.get("count", len(images) * page)
+            # e621 post search often omits total count; fetch it from counts API.
+            total_count = response.get("count") if isinstance(response, dict) else None
+            if not isinstance(total_count, int):
+                total_count = await self._fetch_total_count(query)
+            if not isinstance(total_count, int):
+                total_count = len(images) * page
 
             return SearchResult(
                 images=images,
@@ -129,6 +133,27 @@ class E621Client(ImageboardClient):
         except Exception as e:
             logger.error(f"e621 search failed: {e}")
             raise
+
+    async def _fetch_total_count(self, query: str) -> Optional[int]:
+        """Fetch total post count for a tags query using e621 counts endpoint."""
+        try:
+            response = await self.http_client.get(
+                f"{self.base_url}/counts/posts.json",
+                params={"tags": query},
+            )
+
+            if not isinstance(response, dict):
+                return None
+
+            counts = response.get("counts")
+            if isinstance(counts, dict):
+                posts_count = counts.get("posts")
+                if isinstance(posts_count, int):
+                    return posts_count
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to fetch e621 total count for query '{query}': {e}")
+            return None
 
     async def get_image_details(self, image_id: str | int) -> ImageboardImage:
         """
