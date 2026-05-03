@@ -60,6 +60,7 @@ class ImageboardHTTPClient:
         self.timeout = timeout
         self.max_retries = max_retries
         self.rate_limiter = RateLimiter(min_delay)
+        self._default_headers: dict[str, str] = {}
 
         # Create session with connection pooling
         self._session: Optional[httpx.AsyncClient] = None
@@ -67,12 +68,23 @@ class ImageboardHTTPClient:
     async def get_session(self) -> httpx.AsyncClient:
         """Get or create async HTTP session."""
         if self._session is None:
+            headers = {"User-Agent": self.user_agent}
+            headers.update(self._default_headers)
             self._session = httpx.AsyncClient(
                 timeout=self.timeout,
                 limits=httpx.Limits(max_keepalive_connections=5),
-                headers={"User-Agent": self.user_agent},
+                headers=headers,
             )
         return self._session
+
+    def set_auth_header(self, auth_string: str) -> None:
+        """
+        Set authentication header for this client.
+
+        Args:
+            auth_string: Authorization header value (e.g., "Basic <base64>")
+        """
+        self._default_headers["Authorization"] = auth_string
 
     async def close(self) -> None:
         """Close HTTP session."""
