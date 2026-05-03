@@ -76,6 +76,8 @@ class UpdateSettingsRequest(BaseModel):
     lmstudio_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
     ollama_num_ctx: int | None = Field(default=None, ge=256, le=262144)
     lmstudio_num_ctx: int | None = Field(default=None, ge=256, le=262144)
+    editor_default_image_zoom_mode: str = Field(default="fit", pattern="^(fit|full|percent)$")
+    editor_default_image_zoom_percent: int = Field(default=100, ge=25, le=400)
 
 
 class GenerateWithPresetRequest(BaseModel):
@@ -308,6 +310,8 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         lmstudio_timeout_seconds=request.lmstudio_timeout_seconds,
         ollama_num_ctx=request.ollama_num_ctx,
         lmstudio_num_ctx=request.lmstudio_num_ctx,
+        editor_default_image_zoom_mode=request.editor_default_image_zoom_mode,
+        editor_default_image_zoom_percent=request.editor_default_image_zoom_percent,
     )
 
 

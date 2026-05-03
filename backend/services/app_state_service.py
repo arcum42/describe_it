@@ -17,6 +17,8 @@ DEFAULT_LMSTUDIO_NUM_CTX: int | None = None
 DEFAULT_REOPEN_LAST_PROJECT = True
 DEFAULT_USE_PRESET_BY_DEFAULT = False
 DEFAULT_SHOW_DEBUG_SECTION = False
+DEFAULT_EDITOR_IMAGE_ZOOM_MODE = "fit"
+DEFAULT_EDITOR_IMAGE_ZOOM_PERCENT = 100
 
 
 def _db_path() -> Path:
@@ -110,6 +112,23 @@ def _parse_optional_num_ctx(raw_value: str | None) -> int | None:
     except (TypeError, ValueError):
         return None
     return min(262_144, max(256, value))
+
+
+def _parse_zoom_mode(raw_value: str | None) -> str:
+    normalized = (raw_value or "").strip().lower()
+    if normalized in {"fit", "full", "percent"}:
+        return normalized
+    return DEFAULT_EDITOR_IMAGE_ZOOM_MODE
+
+
+def _parse_zoom_percent(raw_value: str | None) -> int:
+    if raw_value in {None, "", "null"}:
+        return DEFAULT_EDITOR_IMAGE_ZOOM_PERCENT
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return DEFAULT_EDITOR_IMAGE_ZOOM_PERCENT
+    return min(400, max(25, value))
 
 
 def _get_setting(connection: sqlite3.Connection, key: str) -> str | None:
@@ -310,6 +329,8 @@ def get_global_settings() -> dict[str, object]:
         raw_lmstudio_timeout = _get_setting(connection, "lmstudio_timeout_seconds")
         raw_ollama_num_ctx = _get_setting(connection, "ollama_num_ctx")
         raw_lmstudio_num_ctx = _get_setting(connection, "lmstudio_num_ctx")
+        raw_editor_zoom_mode = _get_setting(connection, "editor_default_image_zoom_mode")
+        raw_editor_zoom_percent = _get_setting(connection, "editor_default_image_zoom_percent")
 
     if raw_timeout is None:
         timeout_value = DEFAULT_LLM_TIMEOUT_SECONDS
@@ -354,6 +375,9 @@ def get_global_settings() -> dict[str, object]:
     if lmstudio_num_ctx is None:
         lmstudio_num_ctx = DEFAULT_LMSTUDIO_NUM_CTX
 
+    editor_default_image_zoom_mode = _parse_zoom_mode(raw_editor_zoom_mode)
+    editor_default_image_zoom_percent = _parse_zoom_percent(raw_editor_zoom_percent)
+
     return {
         "llm_timeout_seconds": timeout_value,
         "llm_use_preset_by_default": use_preset_by_default,
@@ -365,6 +389,8 @@ def get_global_settings() -> dict[str, object]:
         "lmstudio_timeout_seconds": lmstudio_timeout_seconds,
         "ollama_num_ctx": ollama_num_ctx,
         "lmstudio_num_ctx": lmstudio_num_ctx,
+        "editor_default_image_zoom_mode": editor_default_image_zoom_mode,
+        "editor_default_image_zoom_percent": editor_default_image_zoom_percent,
     }
 
 
@@ -380,6 +406,8 @@ def update_global_settings(
     lmstudio_timeout_seconds: int | None,
     ollama_num_ctx: int | None,
     lmstudio_num_ctx: int | None,
+    editor_default_image_zoom_mode: str,
+    editor_default_image_zoom_percent: int,
 ) -> dict[str, object]:
     timeout_value = min(900, max(10, int(llm_timeout_seconds)))
     clean_ollama_base_url = ollama_base_url.strip() or DEFAULT_OLLAMA_BASE_URL
@@ -388,6 +416,8 @@ def update_global_settings(
     clean_lmstudio_timeout = None if lmstudio_timeout_seconds is None else min(900, max(10, int(lmstudio_timeout_seconds)))
     clean_ollama_num_ctx = None if ollama_num_ctx is None else min(262_144, max(256, int(ollama_num_ctx)))
     clean_lmstudio_num_ctx = None if lmstudio_num_ctx is None else min(262_144, max(256, int(lmstudio_num_ctx)))
+    clean_editor_zoom_mode = _parse_zoom_mode(editor_default_image_zoom_mode)
+    clean_editor_zoom_percent = min(400, max(25, int(editor_default_image_zoom_percent)))
     with _connect() as connection:
         _ensure_schema(connection)
         _set_setting(connection, "llm_timeout_seconds", str(timeout_value))
@@ -400,6 +430,8 @@ def update_global_settings(
         _set_setting(connection, "lmstudio_timeout_seconds", "" if clean_lmstudio_timeout is None else str(clean_lmstudio_timeout))
         _set_setting(connection, "ollama_num_ctx", "" if clean_ollama_num_ctx is None else str(clean_ollama_num_ctx))
         _set_setting(connection, "lmstudio_num_ctx", "" if clean_lmstudio_num_ctx is None else str(clean_lmstudio_num_ctx))
+        _set_setting(connection, "editor_default_image_zoom_mode", clean_editor_zoom_mode)
+        _set_setting(connection, "editor_default_image_zoom_percent", str(clean_editor_zoom_percent))
         connection.commit()
     return get_global_settings()
 

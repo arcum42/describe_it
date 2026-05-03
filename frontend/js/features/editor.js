@@ -60,6 +60,7 @@
       return;
     }
     try {
+      const previousImageId = app.selectedImage?.id ?? null;
       const requestSeq = (Number(app.selectImageRequestSeq) || 0) + 1;
       app.selectImageRequestSeq = requestSeq;
       const url = new URL(`/api/images/${imageId}`, window.location.origin);
@@ -73,6 +74,9 @@
         return;
       }
       app.selectedImage = payload.image;
+      if (previousImageId !== app.selectedImage.id && typeof app.resetEditorZoomToDefault === 'function') {
+        app.resetEditorZoomToDefault();
+      }
       app.editingCaptionId = null;
       app.editingCaptionText = '';
       const active = app.selectedImage.captions.find((caption) => caption.is_active);

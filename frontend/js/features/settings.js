@@ -31,6 +31,22 @@
     return Math.min(262144, Math.max(256, parsed));
   }
 
+  function normalizeZoomMode(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'fit' || normalized === 'full' || normalized === 'percent') {
+      return normalized;
+    }
+    return 'fit';
+  }
+
+  function normalizeZoomPercent(value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      return 100;
+    }
+    return Math.min(400, Math.max(25, parsed));
+  }
+
   async function loadSettings(app, isStartup = false) {
     try {
       const response = await app.fetchWithRetry('/api/llm/settings', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
@@ -48,6 +64,9 @@
       app.settings.lmstudioTimeoutSeconds = normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
       app.settings.ollamaNumCtx = normalizeOptionalNumCtx(payload.ollama_num_ctx);
       app.settings.lmstudioNumCtx = normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
+      app.settings.editorDefaultImageZoomMode = normalizeZoomMode(payload.editor_default_image_zoom_mode);
+      app.settings.editorDefaultImageZoomPercent = normalizeZoomPercent(payload.editor_default_image_zoom_percent);
+      app.resetEditorZoomToDefault();
       app.applyPresetPreference();
     } catch (error) {
       app.settings.llmTimeoutSeconds = 120;
@@ -60,6 +79,9 @@
       app.settings.lmstudioTimeoutSeconds = '';
       app.settings.ollamaNumCtx = '';
       app.settings.lmstudioNumCtx = '';
+      app.settings.editorDefaultImageZoomMode = 'fit';
+      app.settings.editorDefaultImageZoomPercent = 100;
+      app.resetEditorZoomToDefault();
     }
   }
 
@@ -69,6 +91,8 @@
     app.settings.lmstudioTimeoutSeconds = normalizeOptionalTimeout(app.settings.lmstudioTimeoutSeconds);
     app.settings.ollamaNumCtx = normalizeOptionalNumCtx(app.settings.ollamaNumCtx);
     app.settings.lmstudioNumCtx = normalizeOptionalNumCtx(app.settings.lmstudioNumCtx);
+    app.settings.editorDefaultImageZoomMode = normalizeZoomMode(app.settings.editorDefaultImageZoomMode);
+    app.settings.editorDefaultImageZoomPercent = normalizeZoomPercent(app.settings.editorDefaultImageZoomPercent);
     const defaultPresetId = app.settings.defaultPresetId ? Number(app.settings.defaultPresetId) : null;
     const ollamaTimeoutSeconds = app.settings.ollamaTimeoutSeconds === '' ? null : Number(app.settings.ollamaTimeoutSeconds);
     const lmstudioTimeoutSeconds = app.settings.lmstudioTimeoutSeconds === '' ? null : Number(app.settings.lmstudioTimeoutSeconds);
@@ -90,6 +114,8 @@
           lmstudio_timeout_seconds: lmstudioTimeoutSeconds,
           ollama_num_ctx: ollamaNumCtx,
           lmstudio_num_ctx: lmstudioNumCtx,
+          editor_default_image_zoom_mode: app.settings.editorDefaultImageZoomMode,
+          editor_default_image_zoom_percent: app.settings.editorDefaultImageZoomPercent,
         }),
       });
       const payload = await response.json();
@@ -107,6 +133,9 @@
       app.settings.lmstudioTimeoutSeconds = normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
       app.settings.ollamaNumCtx = normalizeOptionalNumCtx(payload.ollama_num_ctx);
       app.settings.lmstudioNumCtx = normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
+      app.settings.editorDefaultImageZoomMode = normalizeZoomMode(payload.editor_default_image_zoom_mode);
+      app.settings.editorDefaultImageZoomPercent = normalizeZoomPercent(payload.editor_default_image_zoom_percent);
+      app.resetEditorZoomToDefault();
       app.projectSession.reopenLastProject = app.settings.reopenLastProjectOnStartup;
       await app.saveProjectSessionState();
       app.applyPresetPreference();
@@ -142,6 +171,8 @@
     normalizeTimeout,
     normalizeOptionalTimeout,
     normalizeOptionalNumCtx,
+    normalizeZoomMode,
+    normalizeZoomPercent,
     loadSettings,
     saveSettings,
     testConnection,

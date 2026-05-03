@@ -612,11 +612,15 @@ def test_settings_round_trip(tmp_path: Path) -> None:
             "lmstudio_timeout_seconds": None,
             "ollama_num_ctx": 8192,
             "lmstudio_num_ctx": None,
+            "editor_default_image_zoom_mode": "percent",
+            "editor_default_image_zoom_percent": 125,
         },
     )
     assert update_resp.status_code == 200, update_resp.text
     assert update_resp.json()["llm_timeout_seconds"] == 45
     assert update_resp.json()["ollama_num_ctx"] == 8192
+    assert update_resp.json()["editor_default_image_zoom_mode"] == "percent"
+    assert update_resp.json()["editor_default_image_zoom_percent"] == 125
 
     # Restore original timeout so we don't pollute shared state
     client.post(
@@ -632,6 +636,8 @@ def test_settings_round_trip(tmp_path: Path) -> None:
             "lmstudio_timeout_seconds": original.get("lmstudio_timeout_seconds"),
             "ollama_num_ctx": original.get("ollama_num_ctx"),
             "lmstudio_num_ctx": original.get("lmstudio_num_ctx"),
+            "editor_default_image_zoom_mode": original.get("editor_default_image_zoom_mode", "fit"),
+            "editor_default_image_zoom_percent": original.get("editor_default_image_zoom_percent", 100),
         },
     )
 

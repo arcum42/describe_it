@@ -46,6 +46,11 @@ function describeItApp() {
     settingsTab: 'general',
     images: [],
     mainView: 'grid',
+    editorView: {
+      subTab: 'caption', // caption, image, batch_tags
+      zoomMode: 'fit', // fit, full, percent
+      zoomPercent: 100,
+    },
     showOpenProject: false,
     showBrowser: false,
     selectedImage: null,
@@ -228,6 +233,8 @@ function describeItApp() {
       lmstudioTimeoutSeconds: '',
       ollamaNumCtx: '',
       lmstudioNumCtx: '',
+      editorDefaultImageZoomMode: 'fit',
+      editorDefaultImageZoomPercent: 100,
       ragEnabled: false,
     },
     rag: {
@@ -482,6 +489,72 @@ function describeItApp() {
     isTagMode() {
       return this.currentProject?.caption_mode === 'tags';
     },
+    editorSubTabs() {
+      const tabs = [
+        { id: 'caption', label: 'Caption' },
+        { id: 'image', label: 'Image' },
+      ];
+      if (this.isTagMode()) {
+        tabs.push({ id: 'batch_tags', label: 'Batch Tags' });
+      }
+      return tabs;
+    },
+    setEditorSubTab(nextTab) {
+      const allowed = this.editorSubTabs().map((tab) => tab.id);
+      this.editorView.subTab = allowed.includes(nextTab) ? nextTab : 'caption';
+    },
+    ensureEditorSubTab() {
+      const allowed = this.editorSubTabs().map((tab) => tab.id);
+      if (!allowed.includes(this.editorView.subTab)) {
+        this.editorView.subTab = 'caption';
+      }
+    },
+    normalizeEditorZoomPercent(value) {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed)) {
+        return 100;
+      }
+      return Math.min(400, Math.max(25, parsed));
+    },
+    setEditorZoomMode(mode) {
+      const normalized = String(mode || '').trim().toLowerCase();
+      if (!['fit', 'full', 'percent'].includes(normalized)) {
+        this.editorView.zoomMode = 'fit';
+        return;
+      }
+      this.editorView.zoomMode = normalized;
+      if (normalized === 'percent') {
+        this.editorView.zoomPercent = this.normalizeEditorZoomPercent(this.editorView.zoomPercent);
+      }
+    },
+    setEditorZoomPercent(value) {
+      this.editorView.zoomPercent = this.normalizeEditorZoomPercent(value);
+      this.editorView.zoomMode = 'percent';
+    },
+    resetEditorZoomToDefault() {
+      const defaultMode = this.settings.editorDefaultImageZoomMode || 'fit';
+      const defaultPercent = this.normalizeEditorZoomPercent(this.settings.editorDefaultImageZoomPercent);
+      this.editorView.zoomPercent = defaultPercent;
+      this.setEditorZoomMode(defaultMode);
+    },
+    editorZoomPresets() {
+      return [50, 75, 100, 125, 150, 200];
+    },
+    editorImageClasses() {
+      if (this.editorView.zoomMode === 'fit') {
+        return 'h-auto w-full object-contain mx-auto';
+      }
+      return 'h-auto max-w-none object-contain mx-auto';
+    },
+    editorImageStyle() {
+      if (this.editorView.zoomMode === 'percent') {
+        return { width: `${this.normalizeEditorZoomPercent(this.editorView.zoomPercent)}%` };
+      }
+      if (this.editorView.zoomMode === 'full') {
+        return { width: 'auto' };
+      }
+      return {};
+    },
     tagBatchValidation() {
       if (!this.isTagMode()) {
         return { ok: false, message: 'Tag batch tools are only available in tags mode.' };
@@ -520,6 +593,8 @@ function describeItApp() {
       this.projectSession.reopenLastProject = true;
       this.saveProjectSessionState();
       this.selectedImage = null;
+      this.editorView.subTab = 'caption';
+      this.resetEditorZoomToDefault();
       this.editorCaptionText = '';
       this.newCaptionText = '';
       this.tagEditor.activeCaptionId = null;
@@ -557,6 +632,8 @@ function describeItApp() {
       this.currentProject = null;
       this.mainView = 'grid';
       this.selectedImage = null;
+      this.editorView.subTab = 'caption';
+      this.resetEditorZoomToDefault();
       this.images = [];
       this.gridCards = [];
       this.editorCaptionText = '';
