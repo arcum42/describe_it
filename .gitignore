@@ -1,5 +1,6 @@
 .venv/
 .describe_it/
+exports/
 practice_dataset/*
 !practice_dataset/.gitkeep
 projects/*.db

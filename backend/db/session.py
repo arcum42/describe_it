@@ -42,6 +42,20 @@ def _ensure_project_schema(database_path: Path) -> None:
             connection.execute(
                 "ALTER TABLE projects ADD COLUMN context_file_path TEXT NOT NULL DEFAULT ''"
             )
+
+        image_columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(images)").fetchall()
+        }
+        if image_columns:
+            if "source_image_id" not in image_columns:
+                connection.execute("ALTER TABLE images ADD COLUMN source_image_id INTEGER")
+            if "derived_operation" not in image_columns:
+                connection.execute("ALTER TABLE images ADD COLUMN derived_operation TEXT")
+            if "derived_operation_params" not in image_columns:
+                connection.execute("ALTER TABLE images ADD COLUMN derived_operation_params TEXT")
+            if "deleted_at" not in image_columns:
+                connection.execute("ALTER TABLE images ADD COLUMN deleted_at DATETIME")
         connection.commit()
     finally:
         connection.close()

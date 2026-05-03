@@ -37,6 +37,10 @@ class ImageRecord(Base):
     height: Mapped[int | None] = mapped_column(nullable=True)
     included: Mapped[bool] = mapped_column(Boolean, default=True)
     parent_image_id: Mapped[int | None] = mapped_column(ForeignKey("images.id"), nullable=True)
+    source_image_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
+    derived_operation: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    derived_operation_params: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(), nullable=True)
     project: Mapped[ProjectRecord] = relationship(back_populates="images")
     captions: Mapped[list["CaptionRecord"]] = relationship(back_populates="image")
 

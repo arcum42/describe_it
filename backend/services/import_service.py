@@ -104,7 +104,11 @@ def import_folder_into_project(*, project_path: str, source_folder: str, replace
             session.add(caption_record)
             imported_images += 1
 
-        total_images = len(session.scalars(select(ImageRecord).where(ImageRecord.project_id == project.id)).all())
+        total_images = len(
+            session.scalars(
+                select(ImageRecord).where(ImageRecord.project_id == project.id, ImageRecord.deleted_at.is_(None))
+            ).all()
+        )
         session.commit()
 
     return ImportFolderResult(
@@ -128,8 +132,16 @@ def project_image_summary(*, project_path: str) -> dict[str, object]:
         if project is None:
             raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
 
-        images = session.scalars(select(ImageRecord).where(ImageRecord.project_id == project.id).order_by(ImageRecord.id.asc())).all()
-        captions = session.scalars(select(CaptionRecord).join(ImageRecord, CaptionRecord.image_id == ImageRecord.id).where(ImageRecord.project_id == project.id)).all()
+        images = session.scalars(
+            select(ImageRecord)
+            .where(ImageRecord.project_id == project.id, ImageRecord.deleted_at.is_(None))
+            .order_by(ImageRecord.id.asc())
+        ).all()
+        captions = session.scalars(
+            select(CaptionRecord)
+            .join(ImageRecord, CaptionRecord.image_id == ImageRecord.id)
+            .where(ImageRecord.project_id == project.id, ImageRecord.deleted_at.is_(None))
+        ).all()
 
     non_empty_caption_count = sum(1 for caption in captions if caption.text.strip())
     previews = [

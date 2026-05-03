@@ -602,6 +602,8 @@ Phase A: UX restructuring without feature loss
 
 Phase B: Image tools MVP
 
+Status: In progress (backend duplicate/delete/restore slice started 2026-05-02)
+
 - Duplicate and soft delete first.
 - Then crop and scale.
 - Then extract region as new image.
@@ -814,7 +816,7 @@ Latest live run notes (2026-05-02, local app at http://127.0.0.1:7860):
 
 Observed runtime risk:
 
-- Intermittent /api/projects/recent 500 caused by JSONDecodeError while reading recent-project registry; app recovered in-session, but this should be hardened.
+- Previously observed /api/projects/recent JSONDecodeError was fixed by hardening recent-project registry parsing.
 
 Open items to finish A-5:
 
