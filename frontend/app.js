@@ -200,9 +200,18 @@ function describeItApp() {
       await this.autoOpenLastProjectIfNeeded();
     },
     async sleep(ms) {
+      const core = window.DescribeItCore || {};
+      if (typeof core.sleep === 'function') {
+        return core.sleep(ms);
+      }
       return new Promise((resolve) => setTimeout(resolve, ms));
     },
     async fetchWithRetry(resource, options = {}, retryOptions = {}) {
+      const core = window.DescribeItCore || {};
+      if (typeof core.fetchWithRetry === 'function') {
+        return core.fetchWithRetry(resource, options, retryOptions);
+      }
+
       const attempts = Math.max(1, Number(retryOptions.attempts ?? 1));
       const delayMs = Math.max(0, Number(retryOptions.delayMs ?? 150));
       let lastError = null;
@@ -222,6 +231,11 @@ function describeItApp() {
       throw lastError || new Error('Request failed');
     },
     formatApiError(payload, fallbackMessage = 'Request failed') {
+      const core = window.DescribeItCore || {};
+      if (typeof core.formatApiError === 'function') {
+        return core.formatApiError(payload, fallbackMessage);
+      }
+
       const detail = payload?.detail;
       if (typeof detail === 'string' && detail.trim()) {
         return detail;
@@ -243,115 +257,48 @@ function describeItApp() {
       return fallbackMessage;
     },
     normalizeTimeout(value) {
-      const parsed = Number.parseInt(value, 10);
-      if (!Number.isFinite(parsed)) {
-        return 120;
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.normalizeTimeout === 'function') {
+        return settingsFeature.normalizeTimeout(value);
       }
-      return Math.min(900, Math.max(10, parsed));
+      return 120;
     },
     normalizeOptionalTimeout(value) {
-      if (value === '' || value === null || value === undefined) {
-        return '';
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.normalizeOptionalTimeout === 'function') {
+        return settingsFeature.normalizeOptionalTimeout(value);
       }
-      const parsed = Number.parseInt(value, 10);
-      if (!Number.isFinite(parsed)) {
-        return '';
-      }
-      return Math.min(900, Math.max(10, parsed));
+      return '';
     },
     normalizeOptionalNumCtx(value) {
-      if (value === '' || value === null || value === undefined) {
-        return '';
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.normalizeOptionalNumCtx === 'function') {
+        return settingsFeature.normalizeOptionalNumCtx(value);
       }
-      const parsed = Number.parseInt(value, 10);
-      if (!Number.isFinite(parsed)) {
-        return '';
-      }
-      return Math.min(262144, Math.max(256, parsed));
+      return '';
     },
     async loadSettings(isStartup = false) {
-      try {
-        const response = await this.fetchWithRetry('/api/llm/settings', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load settings');
-        }
-        this.settings.llmTimeoutSeconds = this.normalizeTimeout(payload.llm_timeout_seconds);
-        this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
-        this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
-        this.settings.showDebugSection = payload.ui_show_debug_section === true;
-        this.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
-        this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
-        this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
-        this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
-        this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(payload.ollama_num_ctx);
-        this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
-        this.applyPresetPreference();
-      } catch (error) {
-        this.settings.llmTimeoutSeconds = 120;
-        this.settings.usePresetByDefault = false;
-        this.settings.defaultPresetId = '';
-        this.settings.showDebugSection = false;
-        this.settings.ollamaBaseUrl = 'http://127.0.0.1:11434';
-        this.settings.lmstudioBaseUrl = 'http://127.0.0.1:1234';
-        this.settings.ollamaTimeoutSeconds = '';
-        this.settings.lmstudioTimeoutSeconds = '';
-        this.settings.ollamaNumCtx = '';
-        this.settings.lmstudioNumCtx = '';
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.loadSettings === 'function') {
+        await settingsFeature.loadSettings(this, isStartup);
+        return;
       }
+      this.errorMessage = 'Settings module unavailable. Refresh and try again.';
     },
     async saveSettings() {
-      this.settings.llmTimeoutSeconds = this.normalizeTimeout(this.settings.llmTimeoutSeconds);
-      this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.ollamaTimeoutSeconds);
-      this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(this.settings.lmstudioTimeoutSeconds);
-      this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(this.settings.ollamaNumCtx);
-      this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(this.settings.lmstudioNumCtx);
-      const defaultPresetId = this.settings.defaultPresetId ? Number(this.settings.defaultPresetId) : null;
-      const ollamaTimeoutSeconds = this.settings.ollamaTimeoutSeconds === '' ? null : Number(this.settings.ollamaTimeoutSeconds);
-      const lmstudioTimeoutSeconds = this.settings.lmstudioTimeoutSeconds === '' ? null : Number(this.settings.lmstudioTimeoutSeconds);
-      const ollamaNumCtx = this.settings.ollamaNumCtx === '' ? null : Number(this.settings.ollamaNumCtx);
-      const lmstudioNumCtx = this.settings.lmstudioNumCtx === '' ? null : Number(this.settings.lmstudioNumCtx);
-      try {
-        const response = await fetch('/api/llm/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            llm_timeout_seconds: this.settings.llmTimeoutSeconds,
-            llm_use_preset_by_default: this.settings.usePresetByDefault,
-            llm_default_preset_id: defaultPresetId,
-            ui_show_debug_section: this.settings.showDebugSection,
-            ollama_base_url: this.settings.ollamaBaseUrl,
-            lmstudio_base_url: this.settings.lmstudioBaseUrl,
-            ollama_timeout_seconds: ollamaTimeoutSeconds,
-            lmstudio_timeout_seconds: lmstudioTimeoutSeconds,
-            ollama_num_ctx: ollamaNumCtx,
-            lmstudio_num_ctx: lmstudioNumCtx,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to save settings');
-        }
-        this.settings.llmTimeoutSeconds = this.normalizeTimeout(payload.llm_timeout_seconds);
-        this.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
-        this.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
-        this.settings.showDebugSection = payload.ui_show_debug_section === true;
-        this.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
-        this.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
-        this.settings.ollamaTimeoutSeconds = this.normalizeOptionalTimeout(payload.ollama_timeout_seconds);
-        this.settings.lmstudioTimeoutSeconds = this.normalizeOptionalTimeout(payload.lmstudio_timeout_seconds);
-        this.settings.ollamaNumCtx = this.normalizeOptionalNumCtx(payload.ollama_num_ctx);
-        this.settings.lmstudioNumCtx = this.normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
-        this.projectSession.reopenLastProject = this.settings.reopenLastProjectOnStartup;
-        await this.saveProjectSessionState();
-        this.applyPresetPreference();
-        this.statusMessage = `Saved settings. LLM timeout set to ${this.settings.llmTimeoutSeconds}s.`;
-        this.errorMessage = '';
-      } catch (error) {
-        this.errorMessage = error.message;
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.saveSettings === 'function') {
+        await settingsFeature.saveSettings(this);
+        return;
       }
+      this.errorMessage = 'Settings module unavailable. Refresh and try again.';
     },
     async loadProjectSessionState(isStartup = false) {
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.loadProjectSessionState === 'function') {
+        await projectsFeature.loadProjectSessionState(this, isStartup);
+        return;
+      }
       try {
         const response = await this.fetchWithRetry('/api/projects/session-state', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
         const payload = await response.json();
@@ -370,6 +317,11 @@ function describeItApp() {
       }
     },
     async saveProjectSessionState() {
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.saveProjectSessionState === 'function') {
+        await projectsFeature.saveProjectSessionState(this);
+        return;
+      }
       try {
         await fetch('/api/projects/session-state', {
           method: 'POST',
@@ -385,6 +337,11 @@ function describeItApp() {
       }
     },
     async autoOpenLastProjectIfNeeded() {
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.autoOpenLastProjectIfNeeded === 'function') {
+        await projectsFeature.autoOpenLastProjectIfNeeded(this);
+        return;
+      }
       if (!this.projectSession.reopenLastProject || !this.projectSession.lastProjectPath) {
         return;
       }
@@ -417,6 +374,11 @@ function describeItApp() {
       this.uiSection = 'workspace';
     },
     applyProject(project, options = {}) {
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.applyProject === 'function') {
+        projectsFeature.applyProject(this, project, options);
+        return;
+      }
       const preserveMainView = options.preserveMainView === true;
       this.currentProject = project;
       if (!preserveMainView) {
@@ -449,6 +411,11 @@ function describeItApp() {
       this.loadProjectNotes();
     },
     closeProject() {
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.closeProject === 'function') {
+        projectsFeature.closeProject(this);
+        return;
+      }
       const activeCaption = this.selectedImage?.captions?.find((c) => c.is_active);
       const savedText = activeCaption?.text ?? '';
       if (this.selectedImage && this.editorCaptionText !== savedText) {
@@ -498,323 +465,135 @@ function describeItApp() {
       this.loadBrowser(this.projectSession.lastProjectDirectory || null);
     },
     notesActiveItems() {
-      return this.notes.scope === 'global' ? this.notes.globalItems : this.notes.projectItems;
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.notesActiveItems === 'function') {
+        return notesFeature.notesActiveItems(this);
+      }
+      return [];
     },
     newNoteDraft() {
-      this.notes.selectedNoteId = null;
-      this.notes.editor = {
-        id: null,
-        title: '',
-        content: '',
-        format: 'markdown',
-        tags: '',
-        is_archived: false,
-      };
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.newNoteDraft === 'function') {
+        notesFeature.newNoteDraft(this);
+        return;
+      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     selectNote(note) {
-      if (!note) {
-        this.newNoteDraft();
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.selectNote === 'function') {
+        notesFeature.selectNote(this, note);
         return;
       }
-      this.notes.selectedNoteId = note.id;
-      this.notes.editor = {
-        id: note.id,
-        title: note.title ?? '',
-        content: note.content ?? '',
-        format: note.format ?? 'markdown',
-        tags: note.tags ?? '',
-        is_archived: note.is_archived === true,
-      };
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async loadProjectNotes(isStartup = false) {
-      if (!this.currentProject?.path) {
-        this.notes.projectItems = [];
-        if (this.notes.scope === 'project') {
-          this.newNoteDraft();
-        }
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.loadProjectNotes === 'function') {
+        await notesFeature.loadProjectNotes(this, isStartup);
         return;
       }
-      try {
-        const url = new URL('/api/notes', window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        url.searchParams.set('include_archived', this.notes.includeArchived ? 'true' : 'false');
-        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to load project notes'));
-        }
-        this.notes.projectItems = payload.notes ?? [];
-        const selected = this.notes.projectItems.find((item) => item.id === this.notes.selectedNoteId);
-        if (selected) {
-          this.selectNote(selected);
-        } else if (this.notes.scope === 'project') {
-          this.newNoteDraft();
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async loadGlobalNotes(isStartup = false) {
-      try {
-        const url = new URL('/api/global-notes', window.location.origin);
-        url.searchParams.set('include_archived', this.notes.includeArchived ? 'true' : 'false');
-        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to load global notes'));
-        }
-        this.notes.globalItems = payload.notes ?? [];
-        const selected = this.notes.globalItems.find((item) => item.id === this.notes.selectedNoteId);
-        if (selected) {
-          this.selectNote(selected);
-        } else if (this.notes.scope === 'global') {
-          this.newNoteDraft();
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.loadGlobalNotes === 'function') {
+        await notesFeature.loadGlobalNotes(this, isStartup);
+        return;
       }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async refreshNotes() {
-      if (this.notes.scope === 'global') {
-        await this.loadGlobalNotes();
-      } else {
-        await this.loadProjectNotes();
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.refreshNotes === 'function') {
+        await notesFeature.refreshNotes(this);
+        return;
       }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async onNotesScopeChanged() {
-      this.newNoteDraft();
-      await this.refreshNotes();
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.onNotesScopeChanged === 'function') {
+        await notesFeature.onNotesScopeChanged(this);
+        return;
+      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async onNotesArchivedFilterChanged() {
-      await this.refreshNotes();
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.onNotesArchivedFilterChanged === 'function') {
+        await notesFeature.onNotesArchivedFilterChanged(this);
+        return;
+      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async saveNote() {
-      if (this.notes.scope === 'project' && !this.currentProject?.path) {
-        this.errorMessage = 'Open a project to create project notes.';
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.saveNote === 'function') {
+        await notesFeature.saveNote(this);
         return;
       }
-      await this.withSubmitting(async () => {
-        const isUpdate = !!this.notes.editor.id;
-        const endpoint = this.notes.scope === 'global'
-          ? (isUpdate ? '/api/global-notes/update' : '/api/global-notes/create')
-          : (isUpdate ? '/api/notes/update' : '/api/notes/create');
-
-        const body = {
-          title: this.notes.editor.title,
-          content: this.notes.editor.content,
-          format: this.notes.editor.format,
-          tags: this.notes.editor.tags,
-        };
-        if (isUpdate) {
-          body.is_archived = this.notes.editor.is_archived;
-          if (this.notes.scope === 'global') {
-            body.note_id = this.notes.editor.id;
-          } else {
-            body.note_id = this.notes.editor.id;
-            body.project_path = this.currentProject.path;
-          }
-        } else if (this.notes.scope === 'project') {
-          body.project_path = this.currentProject.path;
-        }
-
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to save note'));
-        }
-        const savedNote = payload.note;
-        await this.refreshNotes();
-        this.selectNote(savedNote);
-        this.statusMessage = isUpdate ? 'Note updated.' : 'Note created.';
-      });
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async deleteNote() {
-      if (!this.notes.editor.id) {
-        this.errorMessage = 'Select a note to delete.';
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.deleteNote === 'function') {
+        await notesFeature.deleteNote(this);
         return;
       }
-      if (!window.confirm('Delete this note? This cannot be undone.')) {
-        return;
-      }
-      if (this.notes.scope === 'project' && !this.currentProject?.path) {
-        this.errorMessage = 'Open a project to delete project notes.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const endpoint = this.notes.scope === 'global' ? '/api/global-notes/delete' : '/api/notes/delete';
-        const body = this.notes.scope === 'global'
-          ? { note_id: this.notes.editor.id }
-          : { project_path: this.currentProject.path, note_id: this.notes.editor.id };
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to delete note'));
-        }
-        await this.refreshNotes();
-        this.newNoteDraft();
-        this.statusMessage = 'Note deleted.';
-      });
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     selectedNoteLLMBackend() {
-      return this.llm.backends.find((item) => item.name === this.notes.llm.backend) || null;
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.selectedNoteLLMBackend === 'function') {
+        return notesFeature.selectedNoteLLMBackend(this);
+      }
+      return null;
     },
     selectedNoteLLMModel() {
-      const backend = this.selectedNoteLLMBackend();
-      if (!backend) {
-        return null;
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.selectedNoteLLMModel === 'function') {
+        return notesFeature.selectedNoteLLMModel(this);
       }
-      return backend.models?.find((item) => item.name === this.notes.llm.model) || null;
+      return null;
     },
     availableModelsForNoteLLM() {
-      if (!this.notes.llm.backend) {
-        return [];
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.availableModelsForNoteLLM === 'function') {
+        return notesFeature.availableModelsForNoteLLM(this);
       }
-      return this.availableModelsForBackend(this.notes.llm.backend);
+      return [];
     },
     onNotesLLMBackendChanged() {
-      const models = this.availableModelsForNoteLLM();
-      this.notes.llm.model = models[0]?.name ?? '';
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.onNotesLLMBackendChanged === 'function') {
+        notesFeature.onNotesLLMBackendChanged(this);
+        return;
+      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     syncNotesLLMSelection() {
-      if (!this.llm.backends.length) {
-        this.notes.llm.backend = '';
-        this.notes.llm.model = '';
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.syncNotesLLMSelection === 'function') {
+        notesFeature.syncNotesLLMSelection(this);
         return;
       }
-      if (!this.notes.llm.backend || !this.llm.backends.some((item) => item.name === this.notes.llm.backend)) {
-        this.notes.llm.backend = this.llm.backend || this.llm.backends[0].name;
-      }
-      const models = this.availableModelsForNoteLLM();
-      if (!models.some((item) => item.name === this.notes.llm.model)) {
-        this.notes.llm.model = models[0]?.name ?? '';
-      }
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     buildGeneratedNoteTitle() {
-      const explicit = this.notes.llm.title.trim();
-      if (explicit) {
-        return explicit;
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.buildGeneratedNoteTitle === 'function') {
+        return notesFeature.buildGeneratedNoteTitle(this);
       }
-      const source = this.notes.llm.prompt.trim();
-      if (!source) {
-        return 'LLM Note';
-      }
-      const oneLine = source.replace(/\s+/g, ' ').trim();
-      return oneLine.length > 72 ? `${oneLine.slice(0, 72).trimEnd()}...` : oneLine;
+      return 'LLM Note';
     },
     async generateNoteWithLLM(saveAsNewNote = false) {
-      if (!this.notes.llm.prompt.trim()) {
-        this.errorMessage = 'Enter a prompt for note generation.';
+      const notesFeature = window.DescribeItFeatures?.notes;
+      if (notesFeature && typeof notesFeature.generateNoteWithLLM === 'function') {
+        await notesFeature.generateNoteWithLLM(this, saveAsNewNote);
         return;
       }
-      this.syncNotesLLMSelection();
-      if (!this.notes.llm.backend || !this.notes.llm.model) {
-        this.errorMessage = 'Select an available backend and model first.';
-        return;
-      }
-      if (this.notes.scope === 'project' && !this.currentProject?.path) {
-        this.errorMessage = 'Open a project to generate project notes.';
-        return;
-      }
-      if (this.notes.llm.useSelectedImage && !this.selectedImage?.id) {
-        this.errorMessage = 'Select an image in the editor tab before enabling image context.';
-        return;
-      }
-
-      const toolsEnabled = [];
-      if (this.notes.llm.webSearch) toolsEnabled.push('web_search');
-      if (this.notes.llm.webFetch) toolsEnabled.push('web_fetch');
-      const selectedModel = this.selectedNoteLLMModel();
-      let fallbackNotice = '';
-      if (toolsEnabled.length > 0 && selectedModel && !selectedModel.tool_capable) {
-        toolsEnabled.length = 0;
-        fallbackNotice = ` Model ${this.notes.llm.model} is not tool-capable, so tools were skipped.`;
-      }
-
-      const projectPath = this.currentProject?.path || null;
-      const contextUrls = this.notes.llm.contextUrl.trim() ? [this.notes.llm.contextUrl.trim()] : [];
-      const contextFiles = this.notes.llm.contextFile.trim() ? [this.notes.llm.contextFile.trim()] : [];
-
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/generate-note-text', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            backend: this.notes.llm.backend,
-            model: this.notes.llm.model,
-            prompt: this.notes.llm.prompt,
-            project_path: projectPath,
-            image_id: this.notes.llm.useSelectedImage ? this.selectedImage?.id ?? null : null,
-            timeout_seconds: this.settings.llmTimeoutSeconds,
-            tools_enabled: toolsEnabled,
-            context_urls: contextUrls,
-            context_files: contextFiles,
-            include_project_notes: this.notes.llm.includeProjectNotes,
-            include_global_notes: this.notes.llm.includeGlobalNotes,
-            reasoning_mode: this.notes.llm.reasoningMode,
-            reasoning_visibility: this.notes.llm.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Note generation failed'));
-        }
-
-        const generatedText = payload.text || '';
-        const generatedTitle = this.buildGeneratedNoteTitle();
-        const generatedTags = this.notes.llm.tags.trim();
-        const generatedFormat = this.notes.llm.outputFormat === 'text' ? 'text' : 'markdown';
-
-        this.notes.editor.title = generatedTitle;
-        this.notes.editor.content = generatedText;
-        this.notes.editor.format = generatedFormat;
-        this.notes.editor.tags = generatedTags;
-
-        const log = payload.tool_usage_log?.length ? ` (${payload.tool_usage_log.length} tool/context event(s))` : '';
-        const modeMap = {
-          tool_calls: 'Mode: Tool Calls',
-          context_injection: 'Mode: Context Injection',
-        };
-        const modeLabel = modeMap[payload.generation_mode] || `Mode: ${payload.generation_mode || 'unknown'}`;
-
-        if (!saveAsNewNote) {
-          this.statusMessage = `Generated note draft with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
-          return;
-        }
-
-        const endpoint = this.notes.scope === 'global' ? '/api/global-notes/create' : '/api/notes/create';
-        const body = {
-          title: generatedTitle,
-          content: generatedText,
-          format: generatedFormat,
-          tags: generatedTags,
-        };
-        if (this.notes.scope === 'project') {
-          body.project_path = this.currentProject.path;
-        }
-
-        const saveResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const savePayload = await saveResponse.json();
-        if (!saveResponse.ok) {
-          throw new Error(this.formatApiError(savePayload, 'Failed to save generated note'));
-        }
-
-        const savedNote = savePayload.note;
-        await this.refreshNotes();
-        this.selectNote(savedNote);
-        this.statusMessage = `Generated and saved note with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
-      });
+      this.errorMessage = 'Notes module unavailable. Refresh and try again.';
     },
     async loadHealth(isStartup = false) {
       try {
@@ -826,120 +605,92 @@ function describeItApp() {
       }
     },
     async loadRecentProjects(isStartup = false) {
-      try {
-        const response = await this.fetchWithRetry('/api/projects/recent', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        this.recentProjects = payload.projects ?? [];
-      } catch (error) {
-        this.recentProjects = [];
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.loadRecentProjects === 'function') {
+        await projectsFeature.loadRecentProjects(this, isStartup);
+        return;
       }
+      this.recentProjects = [];
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async loadBrowser(path = null, isStartup = false) {
-      try {
-        const url = new URL('/api/projects/browser', window.location.origin);
-        if (path) {
-          url.searchParams.set('path', path);
-        }
-        const response = await this.fetchWithRetry(url, {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to browse paths');
-        }
-        this.browser = {
-          currentPath: payload.current_path,
-          parentPath: payload.parent_path,
-          directories: payload.directories ?? [],
-          dbFiles: payload.db_files ?? [],
-          roots: payload.roots ?? [],
-        };
-        this.projectSession.lastProjectDirectory = this.browser.currentPath || this.projectSession.lastProjectDirectory;
-        this.saveProjectSessionState();
-      } catch (error) {
-        this.errorMessage = error.message;
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.loadBrowser === 'function') {
+        await browserFeature.loadBrowser(this, path, isStartup);
+        return;
       }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     chooseCreateDirectory(path) {
-      const trimmedName = (this.createForm.name || 'my_project').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'my_project';
-      this.createForm.path = `${path}/${trimmedName}.db`;
-      this.projectSession.lastProjectDirectory = path;
-      this.saveProjectSessionState();
-      this.statusMessage = `Create path set to ${this.createForm.path}`;
-      this.errorMessage = '';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.chooseCreateDirectory === 'function') {
+        browserFeature.chooseCreateDirectory(this, path);
+        return;
+      }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     chooseOpenFile(path) {
-      this.openForm.path = path;
-      const lastSeparator = path.lastIndexOf('/');
-      if (lastSeparator > 0) {
-        this.projectSession.lastProjectDirectory = path.slice(0, lastSeparator);
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.chooseOpenFile === 'function') {
+        browserFeature.chooseOpenFile(this, path);
+        return;
       }
-      this.saveProjectSessionState();
-      this.statusMessage = `Open path set to ${path}`;
-      this.errorMessage = '';
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     chooseExportDirectory(path) {
-      this.exportForm.output_folder = path;
-      this.projectSession.lastProjectDirectory = path;
-      this.saveProjectSessionState();
-      this.exportPreview = null;
-      this.statusMessage = `Export folder set to ${path}`;
-      this.errorMessage = '';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.chooseExportDirectory === 'function') {
+        browserFeature.chooseExportDirectory(this, path);
+        return;
+      }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     clearExportPreview() {
-      this.exportPreview = null;
+      const exportFeature = window.DescribeItFeatures?.export;
+      if (exportFeature && typeof exportFeature.clearExportPreview === 'function') {
+        exportFeature.clearExportPreview(this);
+        return;
+      }
+      this.errorMessage = 'Export module unavailable. Refresh and try again.';
     },
     normalizeExportFormOptions() {
-      if (this.exportForm.clean_output_folder && this.exportForm.overwrite_existing) {
-        this.exportForm.overwrite_existing = false;
+      const exportFeature = window.DescribeItFeatures?.export;
+      if (exportFeature && typeof exportFeature.normalizeExportFormOptions === 'function') {
+        exportFeature.normalizeExportFormOptions(this);
+        return;
       }
-      if (!this.exportForm.create_new_folder) {
-        this.exportForm.new_folder_name = '';
-      }
+      this.errorMessage = 'Export module unavailable. Refresh and try again.';
     },
     async requestExportPreview() {
-      if (!this.currentProject?.path) {
-        this.errorMessage = 'Open or create a project first.';
+      const exportFeature = window.DescribeItFeatures?.export;
+      if (exportFeature && typeof exportFeature.requestExportPreview === 'function') {
+        await exportFeature.requestExportPreview(this);
         return;
       }
-      if (!this.exportForm.output_folder.trim()) {
-        this.errorMessage = 'Select an export output folder first.';
-        return;
-      }
-
-      this.normalizeExportFormOptions();
-      this.errorMessage = '';
-      this.statusMessage = '';
-      try {
-        const response = await fetch('/api/projects/export-preview', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            output_folder: this.exportForm.output_folder,
-            included_only: this.exportForm.included_only,
-            apply_trigger_word: this.exportForm.apply_trigger_word,
-            create_new_folder: this.exportForm.create_new_folder,
-            new_folder_name: this.exportForm.new_folder_name,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Export preview failed');
-        }
-        this.exportPreview = payload.result;
-        this.statusMessage = `Preview ready: ${this.exportPreview.images_to_export} image(s) will be exported.`;
-      } catch (error) {
-        this.exportPreview = null;
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Export module unavailable. Refresh and try again.';
     },
     // Operation tracking helpers for fine-grained submit blocking
     isActive(key) {
+      const core = window.DescribeItCore || {};
+      if (typeof core.isActive === 'function') {
+        return core.isActive(this, key);
+      }
       return this.activeOps.has(key);
     },
     isAnyActive() {
+      const core = window.DescribeItCore || {};
+      if (typeof core.isAnyActive === 'function') {
+        return core.isAnyActive(this);
+      }
       return this.activeOps.size > 0;
     },
     async withSubmitting(fn, operationKey = null) {
+      const core = window.DescribeItCore || {};
+      if (typeof core.withSubmitting === 'function') {
+        await core.withSubmitting(this, fn, operationKey);
+        return;
+      }
+
       // Support both the old behavior (no key = global flag) and new behavior (with key)
       this.isSubmitting = true;
       if (operationKey) {
@@ -964,659 +715,335 @@ function describeItApp() {
       }
     },
     async createProject() {
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/projects/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.createForm),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to create project');
-        }
-        this.applyProject(payload.project);
-        this.statusMessage = `Created project ${payload.project.name}`;
-        await this.loadRecentProjects();
-        await this.loadBrowser(payload.project.path);
-      });
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.createProject === 'function') {
+        await projectsFeature.createProject(this);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async openProject() {
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/projects/open', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.openForm),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to open project');
-        }
-        this.applyProject(payload.project);
-        this.statusMessage = `Opened project ${payload.project.name}`;
-        await this.loadRecentProjects();
-        await this.loadBrowser(payload.project.path);
-      }, 'openProject');
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.openProject === 'function') {
+        await projectsFeature.openProject(this);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async saveMetadata() {
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/projects/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.metadataForm),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to save metadata');
-        }
-        this.applyProject(payload.project);
-        this.statusMessage = `Saved metadata for ${payload.project.name}`;
-        await this.loadRecentProjects();
-      }, 'saveMetadata');
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.saveMetadata === 'function') {
+        await projectsFeature.saveMetadata(this);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async openRecentProject(path) {
-      this.openForm.path = path;
-      await this.openProject();
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.openRecentProject === 'function') {
+        await projectsFeature.openRecentProject(this, path);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     selectedLLMBackend() {
-      return this.llm.backends.find((item) => item.name === this.llm.backend) || null;
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.selectedLLMBackend === 'function') {
+        return llmFeature.selectedLLMBackend(this);
+      }
+      return null;
     },
     selectedLLMModel() {
-      const backend = this.selectedLLMBackend();
-      if (!backend) {
-        return null;
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.selectedLLMModel === 'function') {
+        return llmFeature.selectedLLMModel(this);
       }
-      return backend.models?.find((item) => item.name === this.llm.model) || null;
+      return null;
     },
     modelCapabilityLabel(backendName, modelName) {
-      const backend = this.llm.backends.find((item) => item.name === backendName);
-      const model = backend?.models?.find((item) => item.name === modelName);
-      if (!model) {
-        return '';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.modelCapabilityLabel === 'function') {
+        return llmFeature.modelCapabilityLabel(this, backendName, modelName);
       }
-      const icons = [];
-      if (model.vision_capable) icons.push('👁️');
-      if (model.tool_capable) icons.push('🔨');
-      if (model.reasoning_capable) icons.push('🧠');
-      return icons.join(' ');
+      return '';
     },
     modelOptionLabel(modelInfo) {
-      if (!modelInfo) {
-        return '';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.modelOptionLabel === 'function') {
+        return llmFeature.modelOptionLabel(this, modelInfo);
       }
-      const icons = [];
-      if (modelInfo.vision_capable) icons.push('👁️');
-      if (modelInfo.tool_capable) icons.push('🔨');
-      if (modelInfo.reasoning_capable) icons.push('🧠');
-      return icons.length > 0 ? `${modelInfo.name}  ${icons.join(' ')}` : modelInfo.name;
+      return modelInfo?.name || '';
     },
     availableModelsForBackend(backendName) {
-      const backend = this.llm.backends.find((item) => item.name === backendName);
-      const models = backend?.models ?? [];
-      if (this.llm.showAllModels) {
-        return models;
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.availableModelsForBackend === 'function') {
+        return llmFeature.availableModelsForBackend(this, backendName);
       }
-      return models.filter((model) => model.vision_capable);
+      return [];
     },
     onModelVisibilityFilterChanged() {
-      this.pickDefaultLLMSelection();
-      this.onPresetBackendChanged();
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.onModelVisibilityFilterChanged === 'function') {
+        llmFeature.onModelVisibilityFilterChanged(this);
+        return;
+      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     pickDefaultLLMSelection() {
-      const available = this.llm.backends.filter((item) => item.available);
-      if (available.length === 0) {
-        this.llm.backend = '';
-        this.llm.model = '';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.pickDefaultLLMSelection === 'function') {
+        llmFeature.pickDefaultLLMSelection(this);
         return;
       }
-      if (!available.some((item) => item.name === this.llm.backend)) {
-        this.llm.backend = available[0].name;
-      }
-
-      let models = this.availableModelsForBackend(this.llm.backend);
-      if (models.length === 0) {
-        const fallbackBackend = available.find((item) => this.availableModelsForBackend(item.name).length > 0);
-        if (fallbackBackend) {
-          this.llm.backend = fallbackBackend.name;
-          models = this.availableModelsForBackend(this.llm.backend);
-        }
-      }
-
-      if (!models.some((item) => item.name === this.llm.model)) {
-        this.llm.model = models[0]?.name ?? '';
-      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async loadLLMBackends(isStartup = false) {
-      try {
-        const response = await this.fetchWithRetry('/api/llm/backends', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load LLM backends');
-        }
-        this.llm.backends = payload.backends ?? [];
-        this.pickDefaultLLMSelection();
-        this.onPresetBackendChanged();
-        this.syncNotesLLMSelection();
-      } catch (error) {
-        this.llm.backends = [];
-        this.errorMessage = error.message;
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.loadLLMBackends === 'function') {
+        await llmFeature.loadLLMBackends(this, isStartup);
+        return;
       }
+      this.llm.backends = [];
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     onLLMBackendChanged() {
-      const models = this.availableModelsForBackend(this.llm.backend);
-      this.llm.model = models[0]?.name ?? '';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.onLLMBackendChanged === 'function') {
+        llmFeature.onLLMBackendChanged(this);
+        return;
+      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     onPresetBackendChanged() {
-      let models = this.availableModelsForBackend(this.llm.presetForm.backend);
-      if (models.length === 0) {
-        const backend = this.llm.backends.find((item) => item.name === this.llm.presetForm.backend);
-        models = backend?.models ?? [];
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.onPresetBackendChanged === 'function') {
+        llmFeature.onPresetBackendChanged(this);
+        return;
       }
-      if (!models.some((item) => item.name === this.llm.presetForm.modelName)) {
-        this.llm.presetForm.modelName = models[0]?.name ?? '';
-      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     resetPresetForm() {
-      this.llm.presetForm = {
-        id: null,
-        name: '',
-        backend: this.llm.backends.some((item) => item.name === 'ollama') ? 'ollama' : (this.llm.backends[0]?.name ?? ''),
-        modelName: '',
-        captionModeStrategy: 'auto',
-        systemPrompt: '',
-        toolWebSearch: false,
-        toolWebFetch: false,
-        contextUrlTemplate: '',
-        contextFileTemplate: '',
-        includeProjectNotes: false,
-        includeGlobalNotes: false,
-        reasoningMode: 'off',
-        reasoningVisibility: 'hidden',
-      };
-      this.onPresetBackendChanged();
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.resetPresetForm === 'function') {
+        llmFeature.resetPresetForm(this);
+        return;
+      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     applyPresetToForm(preset) {
-      this.llm.presetForm = {
-        id: preset.id,
-        name: preset.name,
-        backend: preset.backend,
-        modelName: preset.model_name,
-        captionModeStrategy: preset.caption_mode_strategy || 'auto',
-        systemPrompt: preset.system_prompt ?? '',
-        toolWebSearch: preset.tool_web_search === true,
-        toolWebFetch: preset.tool_web_fetch === true,
-        contextUrlTemplate: preset.context_url_template ?? '',
-        contextFileTemplate: preset.context_file_template ?? '',
-        includeProjectNotes: preset.include_project_notes === true,
-        includeGlobalNotes: preset.include_global_notes === true,
-        reasoningMode: preset.reasoning_mode || 'off',
-        reasoningVisibility: preset.reasoning_visibility || 'hidden',
-      };
-      this.llm.selectedPresetId = String(preset.id);
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.applyPresetToForm === 'function') {
+        llmFeature.applyPresetToForm(this, preset);
+        return;
+      }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async loadLLMPresets(isStartup = false) {
-      try {
-        const response = await this.fetchWithRetry('/api/llm/presets', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load presets');
-        }
-        this.llm.presets = payload.presets ?? [];
-        if (this.llm.selectedPresetId && !this.llm.presets.some((preset) => String(preset.id) === this.llm.selectedPresetId)) {
-          this.llm.selectedPresetId = '';
-        }
-        if (this.settings.defaultPresetId && !this.llm.presets.some((preset) => String(preset.id) === this.settings.defaultPresetId)) {
-          this.settings.defaultPresetId = '';
-        }
-        this.applyPresetPreference();
-      } catch (error) {
-        this.errorMessage = error.message;
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.loadLLMPresets === 'function') {
+        await llmFeature.loadLLMPresets(this, isStartup);
+        return;
       }
+      this.llm.presets = [];
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async createPreset() {
-      if (!this.llm.presetForm.name.trim()) {
-        this.errorMessage = 'Preset name is required.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.createPreset === 'function') {
+        await llmFeature.createPreset(this);
         return;
       }
-      if (!this.llm.presetForm.backend) {
-        this.errorMessage = 'Select a backend for the preset.';
-        return;
-      }
-      if (!this.llm.presetForm.modelName) {
-        this.errorMessage = 'Select a model for the preset.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/presets/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: this.llm.presetForm.name.trim(),
-            backend: this.llm.presetForm.backend,
-            model_name: this.llm.presetForm.modelName,
-            caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
-            system_prompt: this.llm.presetForm.systemPrompt,
-            tool_web_search: this.llm.presetForm.toolWebSearch,
-            tool_web_fetch: this.llm.presetForm.toolWebFetch,
-            context_url_template: this.llm.presetForm.contextUrlTemplate,
-            context_file_template: this.llm.presetForm.contextFileTemplate,
-            include_project_notes: this.llm.presetForm.includeProjectNotes,
-            include_global_notes: this.llm.presetForm.includeGlobalNotes,
-            reasoning_mode: this.llm.presetForm.reasoningMode,
-            reasoning_visibility: this.llm.presetForm.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to create preset'));
-        }
-        await this.loadLLMPresets();
-        this.applyPresetToForm(payload.preset);
-        this.statusMessage = `Created preset ${payload.preset.name}.`;
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async updatePreset() {
-      if (!this.llm.presetForm.id) {
-        this.errorMessage = 'Select a preset to update.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.updatePreset === 'function') {
+        await llmFeature.updatePreset(this);
         return;
       }
-      if (!this.llm.presetForm.name.trim()) {
-        this.errorMessage = 'Preset name is required.';
-        return;
-      }
-      if (!this.llm.presetForm.backend) {
-        this.errorMessage = 'Select a backend for the preset.';
-        return;
-      }
-      if (!this.llm.presetForm.modelName) {
-        this.errorMessage = 'Select a model for the preset.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/presets/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            preset_id: this.llm.presetForm.id,
-            name: this.llm.presetForm.name.trim(),
-            backend: this.llm.presetForm.backend,
-            model_name: this.llm.presetForm.modelName,
-            caption_mode_strategy: this.llm.presetForm.captionModeStrategy,
-            system_prompt: this.llm.presetForm.systemPrompt,
-            tool_web_search: this.llm.presetForm.toolWebSearch,
-            tool_web_fetch: this.llm.presetForm.toolWebFetch,
-            context_url_template: this.llm.presetForm.contextUrlTemplate,
-            context_file_template: this.llm.presetForm.contextFileTemplate,
-            include_project_notes: this.llm.presetForm.includeProjectNotes,
-            include_global_notes: this.llm.presetForm.includeGlobalNotes,
-            reasoning_mode: this.llm.presetForm.reasoningMode,
-            reasoning_visibility: this.llm.presetForm.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to update preset'));
-        }
-        await this.loadLLMPresets();
-        this.applyPresetToForm(payload.preset);
-        this.statusMessage = `Updated preset ${payload.preset.name}.`;
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async deletePreset() {
-      if (!this.llm.presetForm.id) {
-        this.errorMessage = 'Select a preset to delete.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.deletePreset === 'function') {
+        await llmFeature.deletePreset(this);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/presets/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            preset_id: this.llm.presetForm.id,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to delete preset');
-        }
-        await this.loadLLMPresets();
-        this.resetPresetForm();
-        this.llm.selectedPresetId = '';
-        this.statusMessage = `Deleted preset ${payload.deleted_preset_id}.`;
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     onSelectedPresetChanged() {
-      const preset = this.llm.presets.find((item) => String(item.id) === String(this.llm.selectedPresetId));
-      if (preset) {
-        this.applyPresetToForm(preset);
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.onSelectedPresetChanged === 'function') {
+        llmFeature.onSelectedPresetChanged(this);
+        return;
       }
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     batchIsActive() {
-      return ['queued', 'running', 'paused', 'failed'].includes(this.batch.status);
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchIsActive === 'function') {
+        return batchFeature.batchIsActive(this);
+      }
+      return false;
     },
     batchCanPause() {
-      return this.batch.status === 'running' || this.batch.status === 'queued';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchCanPause === 'function') {
+        return batchFeature.batchCanPause(this);
+      }
+      return false;
     },
     batchCanResume() {
-      return this.batch.status === 'paused' || this.batch.status === 'failed';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchCanResume === 'function') {
+        return batchFeature.batchCanResume(this);
+      }
+      return false;
     },
     batchCanCancel() {
-      return this.batch.status === 'running' || this.batch.status === 'queued' || this.batch.status === 'paused' || this.batch.status === 'failed';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchCanCancel === 'function') {
+        return batchFeature.batchCanCancel(this);
+      }
+      return false;
     },
     batchProgressPercent() {
-      if (!this.batch.total) {
-        return 0;
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchProgressPercent === 'function') {
+        return batchFeature.batchProgressPercent(this);
       }
-      return Math.round((this.batch.completed / this.batch.total) * 100);
+      return 0;
     },
     batchCurrentImageSrc() {
-      if (!this.batch.currentImageId) {
-        return '';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchCurrentImageSrc === 'function') {
+        return batchFeature.batchCurrentImageSrc(this);
       }
-      return this.imageSrc(this.batch.currentImageId);
+      return '';
     },
     batchResultsExportUrl() {
-      if (!this.batch.jobId) {
-        return '';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchResultsExportUrl === 'function') {
+        return batchFeature.batchResultsExportUrl(this);
       }
-      return `/api/llm/batch-jobs/${this.batch.jobId}/results/export`;
+      return '';
     },
     filteredBatchHistory() {
-      if (this.batch.historyStatusFilter === 'all') {
-        return this.batch.history;
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.filteredBatchHistory === 'function') {
+        return batchFeature.filteredBatchHistory(this);
       }
-      return this.batch.history.filter((job) => job.status === this.batch.historyStatusFilter);
+      return [];
     },
     formatBatchTimestamp(value) {
-      if (!value) {
-        return '-';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.formatBatchTimestamp === 'function') {
+        return batchFeature.formatBatchTimestamp(this, value);
       }
-      const parsed = new Date(value);
-      if (Number.isNaN(parsed.getTime())) {
-        return String(value);
-      }
-      return parsed.toLocaleString();
+      return value ? String(value) : '-';
     },
     batchResultTextPreview(value, maxLength = 120) {
-      if (!value) {
-        return '-';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.batchResultTextPreview === 'function') {
+        return batchFeature.batchResultTextPreview(this, value, maxLength);
       }
-      if (value.length <= maxLength) {
-        return value;
-      }
-      return `${value.slice(0, maxLength - 1)}...`;
+      return value ? String(value) : '-';
     },
     _applyBatchJob(job) {
-      this.batch.jobId = job.id || '';
-      this.batch.status = job.status || 'idle';
-      this.batch.total = Number(job.total || 0);
-      this.batch.completed = Number(job.completed || 0);
-      this.batch.succeeded = Number(job.succeeded || 0);
-      this.batch.failed = Number(job.failed || 0);
-      this.batch.currentImageId = job.current_image_id || null;
-      this.batch.currentFilename = job.current_filename || '';
-      this.batch.currentGeneratedText = job.current_generated_text || '';
-      this.batch.lastError = job.last_error || '';
-      if (job.target) {
-        this.batch.target = job.target;
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.applyBatchJob === 'function') {
+        batchFeature.applyBatchJob(this, job);
+        return;
       }
-      if (typeof job.use_preset === 'boolean') {
-        this.batch.usePreset = job.use_preset;
-      }
-      if (job.output_mode) {
-        this.batch.outputMode = job.output_mode;
-      }
-      if (typeof job.skip_on_failure === 'boolean') {
-        this.batch.skipOnFailure = job.skip_on_failure;
-      }
-      if (typeof job.retry_count === 'number') {
-        this.batch.retryCount = job.retry_count;
-      }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     _startBatchPolling(jobId) {
-      if (this.batchPollTimer) {
-        clearInterval(this.batchPollTimer);
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.startBatchPolling === 'function') {
+        batchFeature.startBatchPolling(this, jobId);
+        return;
       }
-      this.batchPollTimer = setInterval(() => {
-        this.pollBatchJob(jobId);
-      }, 1200);
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     _stopBatchPollingIfTerminal(status) {
-      if (['completed', 'cancelled', 'paused', 'failed'].includes(status)) {
-        if (this.batchPollTimer) {
-          clearInterval(this.batchPollTimer);
-          this.batchPollTimer = null;
-        }
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.stopBatchPollingIfTerminal === 'function') {
+        batchFeature.stopBatchPollingIfTerminal(this, status);
+        return;
       }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async loadLatestBatchJob() {
-      if (!this.currentProject?.path) {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.loadLatestBatchJob === 'function') {
+        await batchFeature.loadLatestBatchJob(this);
         return;
       }
-      try {
-        const url = new URL('/api/llm/batch-jobs', window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        const response = await fetch(url);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load batch jobs');
-        }
-        const latest = (payload.jobs || [])[0];
-        this.batch.history = payload.jobs || [];
-        if (!latest) {
-          this.batch.results = [];
-          return;
-        }
-        this._applyBatchJob(latest);
-        await this.loadBatchResults(latest.id);
-        if (this.batchCanCancel()) {
-          this._startBatchPolling(latest.id);
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async loadBatchHistory() {
-      if (!this.currentProject?.path) {
-        this.batch.history = [];
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.loadBatchHistory === 'function') {
+        await batchFeature.loadBatchHistory(this);
         return;
       }
-      try {
-        const url = new URL('/api/llm/batch-jobs', window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        const response = await fetch(url);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load batch jobs');
-        }
-        this.batch.history = payload.jobs || [];
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async loadBatchResults(jobId = null) {
-      const targetJobId = jobId || this.batch.jobId;
-      if (!targetJobId) {
-        this.batch.results = [];
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.loadBatchResults === 'function') {
+        await batchFeature.loadBatchResults(this, jobId);
         return;
       }
-      try {
-        const response = await fetch(`/api/llm/batch-jobs/${targetJobId}/results?limit=500`);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load batch results');
-        }
-        this.batch.results = payload.results || [];
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async selectBatchJob(jobId) {
-      this.batch.jobId = jobId;
-      await this.pollBatchJob(jobId);
-      await this.loadBatchHistory();
-      await this.loadBatchResults(jobId);
-      if (this.batchCanCancel()) {
-        this._startBatchPolling(jobId);
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.selectBatchJob === 'function') {
+        await batchFeature.selectBatchJob(this, jobId);
+        return;
       }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async pollBatchJob(jobId = null) {
-      const targetJobId = jobId || this.batch.jobId;
-      if (!targetJobId) {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.pollBatchJob === 'function') {
+        await batchFeature.pollBatchJob(this, jobId);
         return;
       }
-      try {
-        const response = await fetch(`/api/llm/batch-jobs/${targetJobId}`);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to poll batch job');
-        }
-        const job = payload.job;
-        this._applyBatchJob(job);
-        this._stopBatchPollingIfTerminal(job.status);
-        await this.loadBatchResults(job.id);
-
-        if (job.status === 'completed') {
-          this.statusMessage = `Batch complete: ${job.succeeded}/${job.total} succeeded, ${job.failed} failed.`;
-          await this.loadImages();
-          await this.loadImageSummary();
-          await this.loadBatchHistory();
-        }
-        if (job.status === 'cancelled') {
-          this.statusMessage = `Batch cancelled: ${job.completed}/${job.total} processed (${job.succeeded} succeeded, ${job.failed} failed).`;
-          await this.loadImages();
-          await this.loadImageSummary();
-          await this.loadBatchHistory();
-        }
-        if (job.status === 'failed') {
-          this.errorMessage = job.last_error || 'Batch failed.';
-          this.statusMessage = `Batch failed after ${job.completed}/${job.total} images. You can resume to continue.`;
-          await this.loadBatchHistory();
-        }
-        if (job.status === 'paused') {
-          this.statusMessage = `Batch paused at ${job.completed}/${job.total}.`;
-          await this.loadBatchHistory();
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     cancelBatchGeneration() {
-      if (!this.batch.jobId) {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.cancelBatchGeneration === 'function') {
+        batchFeature.cancelBatchGeneration(this);
         return;
       }
-      fetch('/api/llm/batch-jobs/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: this.batch.jobId }),
-      })
-        .then((response) => response.json())
-        .then((payload) => {
-          if (payload?.job) {
-            this._applyBatchJob(payload.job);
-          }
-          this.statusMessage = 'Cancelling batch after current image...';
-          this.loadBatchHistory();
-        })
-        .catch((error) => {
-          this.errorMessage = error.message;
-        });
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     pauseBatchGeneration() {
-      if (!this.batch.jobId) {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.pauseBatchGeneration === 'function') {
+        batchFeature.pauseBatchGeneration(this);
         return;
       }
-      fetch('/api/llm/batch-jobs/pause', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: this.batch.jobId }),
-      })
-        .then((response) => response.json())
-        .then((payload) => {
-          if (payload?.job) {
-            this._applyBatchJob(payload.job);
-          }
-          this.statusMessage = 'Pause requested. Job will pause after current image.';
-          this.loadBatchHistory();
-        })
-        .catch((error) => {
-          this.errorMessage = error.message;
-        });
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     resumeBatchGeneration() {
-      if (!this.batch.jobId) {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.resumeBatchGeneration === 'function') {
+        batchFeature.resumeBatchGeneration(this);
         return;
       }
-      fetch('/api/llm/batch-jobs/resume', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: this.batch.jobId }),
-      })
-        .then((response) => response.json())
-        .then((payload) => {
-          if (payload?.job) {
-            this._applyBatchJob(payload.job);
-            this._startBatchPolling(this.batch.jobId);
-          }
-          this.statusMessage = 'Batch resumed.';
-          this.loadBatchHistory();
-        })
-        .catch((error) => {
-          this.errorMessage = error.message;
-        });
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     async startBatchGeneration() {
-      if (!this.currentProject?.path) {
-        this.errorMessage = 'Open a project first.';
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.startBatchGeneration === 'function') {
+        await batchFeature.startBatchGeneration(this);
         return;
       }
-
-      this.errorMessage = '';
-      this.statusMessage = '';
-      if (this.batch.usePreset && !this.llm.selectedPresetId) {
-        this.errorMessage = 'Choose a preset before starting batch generation.';
-        return;
-      }
-      if (!this.batch.usePreset && (!this.llm.backend || !this.llm.model)) {
-        this.errorMessage = 'Select backend and model before starting manual batch generation.';
-        return;
-      }
-
-      this.batch.lastError = '';
-      this.batch.currentGeneratedText = '';
-      this.batch.currentFilename = '';
-      this.batch.currentImageId = null;
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/batch-jobs/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            target: this.batch.target,
-            use_preset: this.batch.usePreset,
-            preset_id: this.batch.usePreset && this.llm.selectedPresetId ? Number(this.llm.selectedPresetId) : null,
-            backend: this.batch.usePreset ? '' : this.llm.backend,
-            model: this.batch.usePreset ? '' : this.llm.model,
-            extra_instructions: this.batch.usePreset ? '' : this.llm.extraInstructions,
-            timeout_seconds: this.settings.llmTimeoutSeconds,
-            make_active: this.llm.makeActive,
-            output_mode: this.batch.outputMode,
-            skip_on_failure: this.batch.skipOnFailure,
-            retry_count: Number(this.batch.retryCount || 0),
-            reasoning_mode: this.batch.usePreset ? 'off' : this.llm.tools.reasoningMode,
-            reasoning_visibility: this.batch.usePreset ? 'hidden' : this.llm.tools.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to start batch job');
-        }
-        const job = payload.job;
-        this._applyBatchJob(job);
-        this._startBatchPolling(job.id);
-        await this.loadBatchHistory();
-        await this.loadBatchResults(job.id);
-        this.statusMessage = 'Batch job started.';
-      });
+      this.errorMessage = 'Batch module unavailable. Refresh and try again.';
     },
     applyPresetPreference() {
       const selectedExists = this.llm.presets.some((item) => String(item.id) === String(this.llm.selectedPresetId));
@@ -1638,511 +1065,167 @@ function describeItApp() {
       }
     },
     async generateCaptionWithPreset() {
-      if (!this.currentProject?.path || !this.selectedImage) {
-        this.errorMessage = 'Open a project and select an image first.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.generateCaptionWithPreset === 'function') {
+        await llmFeature.generateCaptionWithPreset(this);
         return;
       }
-      if (!this.llm.selectedPresetId) {
-        this.errorMessage = 'Choose a preset first.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/generate-with-preset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            preset_id: Number(this.llm.selectedPresetId),
-            make_active: this.llm.makeActive,
-            timeout_seconds: this.settings.llmTimeoutSeconds,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Preset generation failed');
-        }
-        const modeMap = {
-          tool_calls: 'Mode: Tool Calls',
-          context_injection: 'Mode: Context Injection',
-        };
-        const modeLabel = modeMap[payload.preset?.generation_mode] || '';
-        const events = payload.preset?.tool_usage_log?.length || 0;
-        const eventLabel = events > 0 ? ` (${events} tool/context event(s))` : '';
-        this.statusMessage = `Generated caption with preset ${payload.preset.name}${eventLabel}.${modeLabel ? ` ${modeLabel}.` : ''}`;
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async generateCaptionWithLLM() {
-      if (!this.currentProject?.path || !this.selectedImage) {
-        this.errorMessage = 'Open a project and select an image first.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.generateCaptionWithLLM === 'function') {
+        await llmFeature.generateCaptionWithLLM(this);
         return;
       }
-      if (!this.llm.backend || !this.llm.model) {
-        this.errorMessage = 'Select an available backend and model first.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/generate-caption', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            backend: this.llm.backend,
-            model: this.llm.model,
-            extra_instructions: this.llm.extraInstructions,
-            make_active: this.llm.makeActive,
-            timeout_seconds: this.settings.llmTimeoutSeconds,
-            reasoning_mode: this.llm.tools.reasoningMode,
-            reasoning_visibility: this.llm.tools.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Caption generation failed');
-        }
-        this.statusMessage = `Generated caption with ${payload.backend}/${payload.model}.`;
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async generateCaptionWithTools() {
-      if (!this.currentProject?.path || !this.selectedImage) {
-        this.errorMessage = 'Open a project and select an image first.';
+      const llmFeature = window.DescribeItFeatures?.llm;
+      if (llmFeature && typeof llmFeature.generateCaptionWithTools === 'function') {
+        await llmFeature.generateCaptionWithTools(this);
         return;
       }
-      if (!this.llm.backend || !this.llm.model) {
-        this.errorMessage = 'Select an available backend and model first.';
-        return;
-      }
-      const toolsEnabled = [];
-      if (this.llm.tools.webSearch) toolsEnabled.push('web_search');
-      if (this.llm.tools.webFetch) toolsEnabled.push('web_fetch');
-      const selectedModel = this.selectedLLMModel();
-      let fallbackNotice = '';
-      if (toolsEnabled.length > 0 && selectedModel && !selectedModel.tool_capable) {
-        toolsEnabled.length = 0;
-        fallbackNotice = ` Model ${this.llm.model} is not tool-capable, so tools were skipped.`;
-      }
-      const contextUrls = this.llm.tools.contextUrl.trim() ? [this.llm.tools.contextUrl.trim()] : [];
-      const contextFiles = this.llm.tools.contextFile.trim() ? [this.llm.tools.contextFile.trim()] : [];
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/llm/generate-caption-with-tools', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            backend: this.llm.backend,
-            model: this.llm.model,
-            extra_instructions: this.llm.extraInstructions,
-            make_active: this.llm.makeActive,
-            timeout_seconds: this.settings.llmTimeoutSeconds,
-            tools_enabled: toolsEnabled,
-            context_urls: contextUrls,
-            context_files: contextFiles,
-            include_project_notes: this.llm.tools.includeProjectNotes,
-            include_global_notes: this.llm.tools.includeGlobalNotes,
-            reasoning_mode: this.llm.tools.reasoningMode,
-            reasoning_visibility: this.llm.tools.reasoningVisibility,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Caption generation failed');
-        }
-        const log = payload.tool_usage_log?.length ? ` (${payload.tool_usage_log.length} tool/context event(s))` : '';
-        const modeMap = {
-          tool_calls: 'Mode: Tool Calls',
-          context_injection: 'Mode: Context Injection',
-        };
-        const modeLabel = modeMap[payload.generation_mode] || `Mode: ${payload.generation_mode || 'unknown'}`;
-        this.statusMessage = `Generated caption with ${payload.backend}/${payload.model}${log}. ${modeLabel}.${fallbackNotice}`;
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     async loadImageSummary() {
-      if (!this.currentProject?.path) {
-        this.imageSummary = { count: 0, non_empty_caption_count: 0, blank_caption_count: 0, previews: [] };
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.loadImageSummary === 'function') {
+        await editorFeature.loadImageSummary(this);
         return;
       }
-      try {
-        const url = new URL('/api/images/summary', window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        const response = await fetch(url);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load image summary');
-        }
-        this.imageSummary = payload;
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async loadImages() {
-      if (!this.currentProject?.path) {
-        this.images = [];
-        this.gridCards = [];
-        this.selectedImage = null;
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.loadImages === 'function') {
+        await editorFeature.loadImages(this);
         return;
       }
-      try {
-        const url = new URL('/api/images/list', window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        const response = await fetch(url);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load images');
-        }
-        this.images = payload.images ?? [];
-        this.gridCards = this.images.map((item) => ({
-          id: item.id,
-          label: item.filename,
-          status: item.included ? 'included' : 'excluded',
-          active_caption_preview: item.active_caption_preview,
-        }));
-        if (this.images.length > 0 && !this.selectedImage) {
-          await this.selectImage(this.images[0].id, false);
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async selectImage(imageId, switchToEditor = true) {
-      if (!this.currentProject?.path) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.selectImage === 'function') {
+        await editorFeature.selectImage(this, imageId, switchToEditor);
         return;
       }
-      try {
-        const url = new URL(`/api/images/${imageId}`, window.location.origin);
-        url.searchParams.set('project_path', this.currentProject.path);
-        const response = await fetch(url);
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load image details');
-        }
-        this.selectedImage = payload.image;
-        this.editingCaptionId = null;
-        this.editingCaptionText = '';
-        const active = this.selectedImage.captions.find((caption) => caption.is_active);
-        this.editorCaptionText = active ? active.text : '';
-        if (switchToEditor) {
-          this.mainView = 'editor';
-        }
-      } catch (error) {
-        this.errorMessage = error.message;
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     imageSrc(imageId) {
-      if (!this.currentProject?.path) {
-        return '';
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.imageSrc === 'function') {
+        return editorFeature.imageSrc(this, imageId);
       }
-      const url = new URL(`/api/images/${imageId}/content`, window.location.origin);
-      url.searchParams.set('project_path', this.currentProject.path);
-      return url.toString();
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+      return '';
     },
     async toggleIncluded() {
-      if (!this.currentProject?.path || !this.selectedImage) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.toggleIncluded === 'function') {
+        await editorFeature.toggleIncluded(this);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch(`/api/images/${this.selectedImage.id}/included`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            included: !this.selectedImage.included,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to update include state');
-        }
-        this.selectedImage.included = payload.included;
-        this.statusMessage = payload.included ? 'Image included in export set.' : 'Image excluded from export set.';
-        await this.loadImages();
-        await this.loadImageSummary();
-        await this.selectImage(this.selectedImage.id, false);
-      }, 'toggleIncluded');
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async saveActiveCaption() {
-      if (!this.currentProject?.path || !this.selectedImage) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.saveActiveCaption === 'function') {
+        await editorFeature.saveActiveCaption(this);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/captions/update-active', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            text: this.editorCaptionText,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to save caption');
-        }
-        this.statusMessage = 'Active caption saved.';
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      }, 'saveCaption');
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async addCaptionCandidate(makeActive = true) {
-      if (!this.currentProject?.path || !this.selectedImage) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.addCaptionCandidate === 'function') {
+        await editorFeature.addCaptionCandidate(this, makeActive);
         return;
       }
-      const text = this.newCaptionText.trim();
-      if (!text) {
-        this.errorMessage = 'Enter caption text before adding a candidate.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/captions/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            text,
-            make_active: makeActive,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to create caption candidate');
-        }
-        this.newCaptionText = '';
-        this.statusMessage = makeActive ? 'Created and activated new caption candidate.' : 'Created new caption candidate.';
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async setActiveCaption(captionId) {
-      if (!this.currentProject?.path || !this.selectedImage) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.setActiveCaption === 'function') {
+        await editorFeature.setActiveCaption(this, captionId);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/captions/set-active', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            caption_id: captionId,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to set active caption');
-        }
-        this.statusMessage = 'Active caption updated.';
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     startEditCaption(caption) {
-      if (!caption) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startEditCaption === 'function') {
+        editorFeature.startEditCaption(this, caption);
         return;
       }
-      this.editingCaptionId = caption.id;
-      this.editingCaptionText = caption.text || '';
-      this.errorMessage = '';
-      this.statusMessage = '';
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     cancelEditCaption() {
-      this.editingCaptionId = null;
-      this.editingCaptionText = '';
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.cancelEditCaption === 'function') {
+        editorFeature.cancelEditCaption(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async saveEditedCaption(caption) {
-      if (!this.currentProject?.path || !this.selectedImage || !caption) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.saveEditedCaption === 'function') {
+        await editorFeature.saveEditedCaption(this, caption);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/captions/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            caption_id: caption.id,
-            text: this.editingCaptionText,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to update caption');
-        }
-        this.cancelEditCaption();
-        this.statusMessage = 'Caption updated.';
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async deleteCaption(caption) {
-      if (!this.currentProject?.path || !this.selectedImage || !caption) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.deleteCaption === 'function') {
+        await editorFeature.deleteCaption(this, caption);
         return;
       }
-      const confirmDelete = window.confirm('Delete this caption? This cannot be undone.');
-      if (!confirmDelete) {
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/captions/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            image_id: this.selectedImage.id,
-            caption_id: caption.id,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to delete caption');
-        }
-        this.statusMessage = 'Caption deleted.';
-        await this.selectImage(this.selectedImage.id, false);
-        await this.loadImages();
-        await this.loadImageSummary();
-      });
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async importFolder() {
-      if (!this.currentProject?.path) {
-        this.errorMessage = 'Open or create a project first.';
+      const importFeature = window.DescribeItFeatures?.import;
+      if (importFeature && typeof importFeature.importFolder === 'function') {
+        await importFeature.importFolder(this);
         return;
       }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/projects/import-folder', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            source_folder: this.importForm.source_folder,
-            replace_existing: this.importForm.replace_existing,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Import failed');
-        }
-        const result = payload.result;
-        this.statusMessage = `Imported ${result.imported_images} images (${result.captions_from_files} with captions, ${result.blank_captions} blank).`;
-        await this.loadImages();
-        await this.loadImageSummary();
-      }, 'importFolder');
+      this.errorMessage = 'Import module unavailable. Refresh and try again.';
     },
     async exportProjectDataset() {
-      if (!this.currentProject?.path) {
-        this.errorMessage = 'Open or create a project first.';
+      const exportFeature = window.DescribeItFeatures?.export;
+      if (exportFeature && typeof exportFeature.exportProjectDataset === 'function') {
+        await exportFeature.exportProjectDataset(this);
         return;
       }
-      if (!this.exportForm.output_folder.trim()) {
-        this.errorMessage = 'Select an export output folder first.';
-        return;
-      }
-      this.normalizeExportFormOptions();
-      if (this.exportForm.clean_output_folder && this.exportForm.overwrite_existing) {
-        this.errorMessage = 'Choose either clean output folder or overwrite existing files.';
-        return;
-      }
-      await this.withSubmitting(async () => {
-        const response = await fetch('/api/projects/export', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            project_path: this.currentProject.path,
-            output_folder: this.exportForm.output_folder,
-            included_only: this.exportForm.included_only,
-            apply_trigger_word: this.exportForm.apply_trigger_word,
-            include_metadata: this.exportForm.include_metadata,
-            overwrite_existing: this.exportForm.overwrite_existing,
-            clean_output_folder: this.exportForm.clean_output_folder,
-            create_new_folder: this.exportForm.create_new_folder,
-            new_folder_name: this.exportForm.new_folder_name,
-            include_project_notes: this.exportForm.include_project_notes,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Export failed');
-        }
-        const result = payload.result;
-        const collisionSuffix = result.skipped_due_to_collision ? `, ${result.skipped_due_to_collision} skipped due to collisions` : '';
-        const blobSuffix = result.skipped_missing_blob ? `, ${result.skipped_missing_blob} missing image data` : '';
-        const metadataSuffix = result.metadata_written && result.metadata_file ? ' Metadata manifest written.' : '';
-        const notesSuffix = result.exported_notes ? ` ${result.exported_notes} note(s) exported to notes/.` : '';
-        this.statusMessage = `Exported ${result.exported_images} images to ${result.output_folder}${result.skipped_images ? ` (${result.skipped_images} skipped${collisionSuffix}${blobSuffix})` : ''}.${metadataSuffix}${notesSuffix}`;
-        this.exportPreview = null;
-      }, 'exportDataset');
+      this.errorMessage = 'Export module unavailable. Refresh and try again.';
     },
     async testConnection(backend) {
-      const urlKey = backend === 'ollama' ? 'ollamaBaseUrl' : 'lmstudioBaseUrl';
-      const testingKey = backend === 'ollama' ? 'ollamaTesting' : 'lmstudioTesting';
-      this.connectionTest[testingKey] = true;
-      this.connectionTest[backend] = null;
-      try {
-        const response = await fetch('/api/llm/test-connection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ backend, url: this.settings[urlKey] }),
-        });
-        const payload = await response.json();
-        this.connectionTest[backend] = payload;
-      } catch (error) {
-        this.connectionTest[backend] = { ok: false, message: error.message };
-      } finally {
-        this.connectionTest[testingKey] = false;
-      }
-    },
-    async checkRAGStatus() {
-      try {
-        const response = await fetch('/api/llm/rag/status');
-        const payload = await response.json();
-        if (response.ok) {
-          this.rag.enabled = payload.rag_enabled ?? false;
-        }
-      } catch (error) {
-        this.rag.enabled = false;
-      }
-    },
-    async rebuildEmbeddings() {
-      if (!this.currentProject?.path) {
-        this.errorMessage = 'Open or create a project first.';
+      const settingsFeature = window.DescribeItFeatures?.settings;
+      if (settingsFeature && typeof settingsFeature.testConnection === 'function') {
+        await settingsFeature.testConnection(this, backend);
         return;
       }
-      this.rag.isRebuildingEmbeddings = true;
-      this.rag.embeddingsStatus = 'Rebuilding embeddings...';
-      this.errorMessage = '';
-      this.statusMessage = '';
-      try {
-        const response = await fetch('/api/llm/rag/rebuild-embeddings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ project_path: this.currentProject.path }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to rebuild embeddings');
-        }
-        const result = payload.result;
-        this.rag.embeddingsStatus = `Indexed ${result.indexed} captions`;
-        this.statusMessage = `Embeddings rebuilt: ${result.indexed} captions indexed`;
-      } catch (error) {
-        this.errorMessage = error.message;
-        this.rag.embeddingsStatus = 'Failed to rebuild embeddings';
-      } finally {
-        this.rag.isRebuildingEmbeddings = false;
+      this.errorMessage = 'Settings module unavailable. Refresh and try again.';
+    },
+    async checkRAGStatus() {
+      const ragFeature = window.DescribeItFeatures?.rag;
+      if (ragFeature && typeof ragFeature.checkRAGStatus === 'function') {
+        await ragFeature.checkRAGStatus(this);
+        return;
       }
+      this.rag.enabled = false;
+      this.errorMessage = 'RAG module unavailable. Refresh and try again.';
+    },
+    async rebuildEmbeddings() {
+      const ragFeature = window.DescribeItFeatures?.rag;
+      if (ragFeature && typeof ragFeature.rebuildEmbeddings === 'function') {
+        await ragFeature.rebuildEmbeddings(this);
+        return;
+      }
+      this.rag.isRebuildingEmbeddings = false;
+      this.rag.embeddingsStatus = 'RAG module unavailable';
+      this.errorMessage = 'RAG module unavailable. Refresh and try again.';
     },
   };
 }

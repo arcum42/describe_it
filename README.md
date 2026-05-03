@@ -46,9 +46,22 @@ pip install -r requirements-optional.txt
 
 See [PHASE_7_RAG_GUIDE.md](PHASE_7_RAG_GUIDE.md) for setup and usage.
 
+## Frontend Contributor Notes
+
+- Baseline runtime must stay Python-only: users should only need venv + `pip install -r requirements.txt` + `python run.py`.
+- Do not require Node.js/npm for normal app usage.
+- Lightweight frontend libraries are allowed when they reduce complexity.
+- Preferred order for adding UI libraries:
+	1. CDN include
+	2. vendored static files under `frontend/`
+	3. optional contributor-only tooling if needed
+- If contributor tooling is added, generated frontend assets should be committed so runtime still works without Node.
+- Keep `frontend/` static-first and served by FastAPI.
+
 ## Guides
 
 - [BATCH_GUIDE.md](BATCH_GUIDE.md) — Presets, caption modes, backend settings, and batch workflows
 - [PHASE_6_EXPORT_GUIDE.md](PHASE_6_EXPORT_GUIDE.md) — Exporting datasets for training
 - [PHASE_7_RAG_GUIDE.md](PHASE_7_RAG_GUIDE.md) — Semantic search and RAG integration
+- [FRONTEND_MODULE_PLAN.md](FRONTEND_MODULE_PLAN.md) — Incremental module split plan for `frontend/app.js`
 
