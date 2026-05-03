@@ -47,7 +47,7 @@ class ImageboardImportRequest(BaseModel):
 class BatchSearchRequest(BaseModel):
     """Request for batch search across multiple boards."""
 
-    boards: list[str] = Field(min_items=1, max_items=5)
+    boards: list[str] = Field(min_length=1, max_length=5)
     query: str = Field(min_length=1)
     per_board_count: int = Field(default=5, ge=1, le=20)
 

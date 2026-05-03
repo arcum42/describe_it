@@ -85,7 +85,7 @@ External imageboard APIs
 
 ---
 
-## Phase 0: API Credentials Management (Foundation)
+## Phase 0: API Credentials Management (Foundation) ✅ COMPLETE
 
 **Goal:** Store and manage imageboard API keys securely before any import operations.
 
@@ -311,7 +311,7 @@ class E621Client(ImageboardClient):
 
 ---
 
-## Phase 1: Abstract Imageboard Client Framework
+## Phase 1: Abstract Imageboard Client Framework ✅ COMPLETE
 
 **Goal:** Create extensible architecture for imageboard APIs.
 
@@ -411,7 +411,7 @@ class E621Client(ImageboardClient):
 
 ---
 
-## Phase 2: Core Imageboard API Clients
+## Phase 2: Core Imageboard API Clients ✅ COMPLETE
 
 **Goal:** Implement clients for the initial set of boards (Derpibooru, Danbooru, e621, Twibooru, Tantabus).
 
@@ -1236,7 +1236,7 @@ GET /api/v3/search/posts  (note: "posts" not "images")
 
 ---
 
-## Phase 3: Imageboard Import Service
+## Phase 3: Imageboard Import Service ✅ COMPLETE
 
 **Goal:** Create service layer to orchestrate searches, previews, and downloads.
 
@@ -1341,7 +1341,7 @@ GET /api/v3/search/posts  (note: "posts" not "images")
 
 ---
 
-## Phase 4: Imageboard Import Router
+## Phase 4: Imageboard Import Router ✅ COMPLETE
 
 **Goal:** Expose imageboard import via REST API.
 
@@ -1421,7 +1421,7 @@ GET /api/v3/search/posts  (note: "posts" not "images")
 
 ---
 
-## Phase 5: Frontend UI Components
+## Phase 5: Frontend UI Components ✅ COMPLETE
 
 **Goal:** Build UI for searching and importing from imageboards.
 
@@ -1459,7 +1459,7 @@ GET /api/v3/search/posts  (note: "posts" not "images")
 
 ---
 
-## Phase 6: Testing & Refinement
+## Phase 6: Testing & Refinement ⬜ IN PROGRESS
 
 **Goal:** Ensure quality and robustness across boards.
 
@@ -1517,9 +1517,11 @@ GET /api/v3/search/posts  (note: "posts" not "images")
    - Exclude/include specific tags before import
    - Map board tags to project tags
 
-8. **Duplicate Detection**
-   - Check if images already in project before downloading
-   - Warn user about potential duplicates
+8. **Duplicate Detection** ✅ COMPLETE
+   - SHA-256 hash of `original_blob` content checked before insert
+   - `skip_duplicates` option (default on) exposed in import modal
+   - Duplicates within same batch also caught (hash set updated after each insert)
+   - `duplicate_count` reported in import result and status message
 
 9. **Async Progress Reporting**
    - WebSocket or Server-Sent Events for real-time import progress
