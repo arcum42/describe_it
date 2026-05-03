@@ -1490,10 +1490,10 @@ GET /api/v3/search/posts  (note: "posts" not "images")
    - Store optional API keys securely in app state (encrypted if possible).
    - Per-board auth UI.
 
-2. **Advanced Search Filters**
-   - Rating filter (safe/suggestive/explicit)
-   - Date range filter
-   - User-specified tag exclusions (e.g., "NOT tagged:oc")
+2. **Advanced Search Filters** ✅ COMPLETE (rating filter)
+   - Rating filter dropdown (Any / Safe / Questionable / Explicit) in import modal
+   - Board-aware query injection: Philomena boards use comma-separated tag; Rails boards use `rating:s/q/e`
+   - Also: Date range filter, user-specified tag exclusions — not yet implemented
 
 3. **Caching**
    - In-memory cache of recent searches to avoid duplicate API calls.
@@ -1509,9 +1509,9 @@ GET /api/v3/search/posts  (note: "posts" not "images")
    - e621 favorites lists
    - Twibooru equivalents
 
-6. **Source Attribution**
-   - Automatically include source URL in captions or metadata
-   - Link image back to original board page
+6. **Source Attribution** ✅ COMPLETE
+   - `source_url` from each board appended to caption text as `| source:<url>`
+   - Users can trace imported images back to original board page
 
 7. **Tag Filtering**
    - Exclude/include specific tags before import
