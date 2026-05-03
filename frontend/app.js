@@ -1843,6 +1843,7 @@ function describeItApp() {
         await feature.loadImageboardCredentials(this);
         
         // Initialize forms for each board
+        if (!this.imageboards.forms) this.imageboards.forms = {};
         if (this.imageboards.boards && this.imageboards.boards.length > 0) {
           for (const board of this.imageboards.boards) {
             if (!this.imageboards.forms[board.board_id]) {

@@ -11,7 +11,8 @@
       }
       app.imageboards = {
         boards: payload.boards || [],
-        credentials: [],
+        credentials: app.imageboards?.credentials || [],
+        forms: app.imageboards?.forms || {},
       };
     } catch (error) {
       app.imageboards = {

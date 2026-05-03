@@ -11,7 +11,7 @@
     <script defer src="/static/js/core/errors.js?v=20260502a"></script>
     <script defer src="/static/js/core/ops.js?v=20260502a"></script>
     <script defer src="/static/js/features/settings.js?v=20260502a"></script>
-    <script defer src="/static/js/features/imageboard-settings.js?v=20260502a"></script>
+    <script defer src="/static/js/features/imageboard-settings.js?v=20260503a"></script>
     <script defer src="/static/js/features/projects.js?v=20260502a"></script>
     <script defer src="/static/js/features/browser.js?v=20260502a"></script>
     <script defer src="/static/js/features/rag.js?v=20260502a"></script>
@@ -2347,10 +2347,10 @@
                             <p class="text-xs text-stone-500" x-text="board.base_url"></p>
                           </div>
                           <template x-if="imageboards.credentials">
-                            <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id)">
+                            <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key)">
                               <span class="rounded-full bg-green-900/30 px-2 py-1 text-xs text-green-300">Configured</span>
                             </template>
-                            <template x-if="!imageboards.credentials.find(c => c.board_id === board.board_id)">
+                            <template x-if="!imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key)">
                               <span class="rounded-full bg-stone-800/50 px-2 py-1 text-xs text-stone-400">Not configured</span>
                             </template>
                           </template>
@@ -2386,7 +2386,7 @@
                             >
                               Save
                             </button>
-                            <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id)">
+                            <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key)">
                               <button
                                 type="button"
                                 @click="deleteImageboardCredential(board.board_id)"
@@ -2406,6 +2406,13 @@
                   <div class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-500">
                     No imageboard services available. Check server configuration.
                   </div>
+                </template>
+
+                <template x-if="statusMessage && settingsTab === 'imageboards'">
+                  <div class="rounded-xl border border-green-700 bg-green-900/20 px-4 py-3 text-sm text-green-300" x-text="statusMessage"></div>
+                </template>
+                <template x-if="errorMessage && settingsTab === 'imageboards'">
+                  <div class="rounded-xl border border-red-700 bg-red-900/20 px-4 py-3 text-sm text-red-300" x-text="errorMessage"></div>
                 </template>
               </div>
             </section>
