@@ -28,12 +28,17 @@
       return;
     }
     try {
+      const requestSeq = (Number(app.loadImagesRequestSeq) || 0) + 1;
+      app.loadImagesRequestSeq = requestSeq;
       const url = new URL('/api/images/list', window.location.origin);
       url.searchParams.set('project_path', app.currentProject.path);
       const response = await fetch(url);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.detail ?? 'Failed to load images');
+      }
+      if (app.loadImagesRequestSeq !== requestSeq) {
+        return;
       }
       app.images = payload.images ?? [];
       app.gridCards = app.images.map((item) => ({
@@ -55,12 +60,17 @@
       return;
     }
     try {
+      const requestSeq = (Number(app.selectImageRequestSeq) || 0) + 1;
+      app.selectImageRequestSeq = requestSeq;
       const url = new URL(`/api/images/${imageId}`, window.location.origin);
       url.searchParams.set('project_path', app.currentProject.path);
       const response = await fetch(url);
       const payload = await response.json();
       if (!response.ok) {
         throw new Error(payload.detail ?? 'Failed to load image details');
+      }
+      if (app.selectImageRequestSeq !== requestSeq) {
+        return;
       }
       app.selectedImage = payload.image;
       app.editingCaptionId = null;

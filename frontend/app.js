@@ -185,19 +185,24 @@ function describeItApp() {
       roots: [],
     },
     gridCards: [],
+    loadImagesRequestSeq: 0,
+    selectImageRequestSeq: 0,
     async init() {
-      await Promise.all([
-        this.loadHealth(true),
+      const deferredStartupTasks = [
         this.loadRecentProjects(true),
         this.loadLLMBackends(true),
         this.loadSettings(true),
         this.loadLLMPresets(true),
         this.loadGlobalNotes(true),
-        this.loadProjectSessionState(true),
         this.checkRAGStatus(),
+      ];
+      await Promise.all([
+        this.loadHealth(true),
+        this.loadProjectSessionState(true),
       ]);
       await this.loadBrowser(this.projectSession.lastProjectDirectory || null, true);
       await this.autoOpenLastProjectIfNeeded();
+      await Promise.all(deferredStartupTasks);
     },
     async sleep(ms) {
       const core = window.DescribeItCore || {};
