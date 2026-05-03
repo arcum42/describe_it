@@ -463,7 +463,13 @@ Planned operations:
 4. Scale
 - Resize by percent and/or target width/height, with aspect lock.
 
-5. Extract region as new image
+5. Flip
+- Horizontal and vertical flipping with preview + apply.
+
+6. Rotate
+- 90/180/270 degree rotation with preview + apply.
+
+7. Extract region as new image
 - Draw rectangle over source image and create a new image from selected region.
 - Default carry-over is all caption candidates from the source image.
 
@@ -550,7 +556,7 @@ Compatibility detail:
 - Right: stacked panels
 	- active caption editor
 	- candidate list
-	- image tools (duplicate/delete/crop/scale/extract)
+	- image tools (duplicate/delete/crop/scale/flip/rotate/extract)
 
 ### 16.3 Captions screen
 
@@ -573,6 +579,8 @@ Planned additions to support redesign:
 - delete/restore image endpoint
 - crop endpoint
 - scale endpoint
+- flip endpoint
+- rotate endpoint
 - extract region endpoint
 
 2. Caption batch edit service and endpoints
@@ -602,22 +610,36 @@ Phase A: UX restructuring without feature loss
 
 Phase B: Image tools MVP
 
-Status: In progress (backend duplicate/delete/restore slice started 2026-05-02)
+Status: Completed (backend duplicate/delete/restore/crop/scale/flip/rotate/extract plus frontend editor controls with presets, inline validation, and mobile-density refinement wired 2026-05-03)
 
 - Duplicate and soft delete first.
-- Then crop and scale.
+- Then crop, scale, flip, and rotate.
 - Then extract region as new image.
 
 Phase C: Batch caption operations
+
+Status: Completed (backend preview/apply/undo/operations endpoints + editor-side batch replace panel with preview, apply, undo, and history wired, including fixed multi-step undo-latest behavior, 2026-05-03)
 
 - Find/replace preview + apply + audit trail.
 - Add multi-step undo over operation history.
 
 Phase D: Polish and optimization
 
-- Keyboard shortcuts for image tools.
-- Improved filtering/search in Library.
-- Performance tuning for large projects.
+Status: Completed (keyboard shortcuts for image tools, Library filtering/search, and grid pagination implemented 2026-05-03)
+
+- Keyboard shortcuts for image tools (D=duplicate, Delete/Shift+D=delete, F=flip, R=rotate, C=crop, S=scale, E=extract, ?=help).
+- Improved filtering/search in Library (search by filename, filter by inclusion/caption status, sort by name/status/caption count, paginate results).
+- Performance tuning for large projects (grid page size limiting for efficient rendering).
+
+Phase E: Advanced tag management
+
+Status: Completed (backend tag APIs/services, frontend tag bubble editor with inline edit + drag/keyboard reorder, batch tag operations, and statistics panel implemented 2026-05-03)
+
+- Active tag editor in tags mode with category color coding.
+- Inline tag rename and remove operations per active caption.
+- Drag-and-drop and keyboard left/right controls for tag order changes.
+- Batch add/remove/clear operations scoped to included, all, or selected image.
+- Tag usage statistics panel with top tag frequency overview.
 
 ## 19. Acceptance criteria
 
@@ -934,6 +956,7 @@ Request body:
 - height: integer > 0 (required for dimensions mode)
 - keep_aspect_ratio: boolean (default true)
 - upscale: boolean (default false)
+- output_name: optional string
 - include_captions: boolean (default true)
 - caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
 
@@ -951,7 +974,53 @@ Validation:
 
 - if upscale=false, target dimensions must not exceed source bounds
 
-### 22.5 Extract region as new image
+### 22.5 Flip image
+
+Endpoint:
+
+- POST /api/images/{image_id}/flip
+
+Request body:
+
+- mode: "horizontal" | "vertical" | "both"
+- output_name: optional string
+- include_captions: boolean (default true)
+- caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image
+	- operation:
+		- type: "flip"
+		- params
+
+### 22.6 Rotate image
+
+Endpoint:
+
+- POST /api/images/{image_id}/rotate
+
+Request body:
+
+- angle: 90 | 180 | 270
+- output_name: optional string
+- include_captions: boolean (default true)
+- caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image
+	- operation:
+		- type: "rotate"
+		- params
+
+### 22.7 Extract region as new image
 
 Endpoint:
 
@@ -979,7 +1048,7 @@ Notes:
 
 - Functionally similar to crop, but semantically treated as asset extraction for dataset authoring.
 
-### 22.6 Shared response object expectations
+### 22.8 Shared response object expectations
 
 For all derived-image endpoints, new_image should include:
 
@@ -1112,7 +1181,7 @@ Minimum backend tests to add once implementation starts:
 - soft delete hides from list by default
 - restore returns image to normal listing
 
-3. Crop/scale/extract
+3. Crop/scale/flip/rotate/extract
 - validates bounds and dimensions
 - produces derived image with lineage fields
 
