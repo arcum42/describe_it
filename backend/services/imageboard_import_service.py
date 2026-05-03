@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Optional
 
-from backend.db.models import ImageRecord, CaptionRecord
+from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
 from backend.db.session import create_sqlite_session_factory
 from backend.llm.imageboard import (
     DanbooruClient,
@@ -291,16 +291,27 @@ class ImageboardImportService:
         if not image_bytes:
             raise ValueError("Failed to download image")
 
-        # Determine filename from title or ID
-        filename = f"{board_id}_{image_data.id}.jpg"
+        # Derive file extension from URL; fall back to .jpg
+        url_path = image_data.image_url.split("?")[0]
+        ext = url_path.rsplit(".", 1)[-1].lower() if "." in url_path else "jpg"
+        if ext not in {"jpg", "jpeg", "png", "gif", "webp"}:
+            ext = "jpg"
+        filename = f"{board_id}_{image_data.id}.{ext}"
 
         # Create image record
         with session_factory() as session:
+            project = session.scalar(select(ProjectRecord).limit(1))
+            if project is None:
+                raise ValueError("No project record found in database")
+
             image_record = ImageRecord(
+                project_id=project.id,
                 filename=filename,
-                image_blob=image_bytes,
-                width=0,  # Would need image analysis to get real dimensions
-                height=0,
+                original_blob=image_bytes,
+                working_blob=None,
+                width=None,
+                height=None,
+                included=True,
             )
             session.add(image_record)
             session.flush()  # Get the ID
