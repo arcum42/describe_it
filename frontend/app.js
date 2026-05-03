@@ -43,9 +43,9 @@ function describeItApp() {
       previews: [],
     },
     uiSection: 'workspace',
+    settingsTab: 'general',
     images: [],
     mainView: 'grid',
-    sidebarMode: 'create',
     showOpenProject: false,
     showBrowser: false,
     selectedImage: null,
@@ -369,11 +369,15 @@ function describeItApp() {
         await this.saveProjectSessionState();
       }
     },
-    openSettings() {
+    openSettings(tab = 'general') {
       this.uiSection = 'settings';
+      this.settingsTab = tab;
       this.errorMessage = '';
       this.statusMessage = '';
       this.checkRAGStatus();
+    },
+    openPresetSettings() {
+      this.openSettings('presets');
     },
     openWorkspace() {
       this.uiSection = 'workspace';

@@ -22,7 +22,8 @@ The UI has three persistent areas:
 	- Settings view
 
 2. Left sidebar
-- Project lifecycle controls (create/open, current project metadata, close/switch).
+- No-project mode: compact app status/help and filesystem browser access.
+- Project-open mode: current project metadata and close/switch controls.
 - Filesystem browser for selecting directories and DB files.
 - Global status and error message area.
 - Recent projects list.
@@ -49,12 +50,12 @@ On app init, the UI does all of the following:
 	- workspace
 	- settings
 - mainView controls workspace tab:
-	- grid, editor, llm, batch, notes, import, export
+	- grid, editor, batch, notes, io
 
 ### 3.3 Guardrails and disabled states
 
 - Editor tab is disabled when no image is selected.
-- Import and Export tabs are disabled when no project is open.
+- Data I/O tab is available only when a project is open.
 - Many actions are disabled while operations are active.
 - Closing a project prompts confirmation if active-caption edits are unsaved.
 
@@ -62,14 +63,13 @@ On app init, the UI does all of the following:
 
 ### 4.1 No project open state
 
-The sidebar shows a Create/Open toggle panel.
+The sidebar is intentionally compact.
 
-- Create project form:
-	- name
-	- DB path
-	- description
-- Open project form:
-	- existing DB path
+- Small app-status/help panel
+- Filesystem browser access
+- Global status/error area
+
+Primary Create/Open/Recent workflows are now rendered in Home mode in the main content area.
 
 ### 4.2 Project open state
 
@@ -168,33 +168,7 @@ Sections:
 	- add and activate
 	- add as candidate
 
-## 5.3 LLM tab (Preset manager)
-
-Purpose:
-- Manage reusable global LLM presets (shared across projects).
-
-Features:
-
-- Preset list and selection.
-- Create/Edit form fields:
-	- name
-	- backend
-	- model
-	- caption mode strategy (auto/description/tags)
-	- prompt template
-	- tool toggles (web_search/web_fetch)
-	- include project/global notes
-	- reasoning mode and output
-	- context URL template
-	- context file template
-- Supported placeholders are shown in-UI.
-- Actions:
-	- create
-	- update
-	- delete
-	- reset to new draft
-
-## 5.4 Batch tab
+## 5.3 Batch tab
 
 Purpose:
 - Run caption generation across multiple images with job tracking.
@@ -230,7 +204,7 @@ Monitoring:
 - per-image result table
 - CSV export for selected job results
 
-## 5.5 Notes tab
+## 5.4 Notes tab
 
 Purpose:
 - Manage reusable textual context and optional AI-assisted note drafting.
@@ -268,23 +242,22 @@ LLM Note Assistant:
 	- generate draft
 	- generate and save new note
 
-## 5.6 Import tab
+## 5.5 Data I/O tab
 
 Purpose:
-- Import dataset folder contents into current project.
+- Import and export workflows in one screen.
 
-Controls:
+Layout:
+
+- Import and Export cards shown together (side-by-side on wide screens, stacked on smaller screens).
+
+Import controls:
 
 - source folder path
 - replace existing images toggle
 - import action button
 
-## 5.7 Export tab
-
-Purpose:
-- Export image/caption dataset from current project.
-
-Controls:
+Export controls:
 
 - output folder (with sidebar browser assist)
 - create new subfolder + optional folder name
@@ -295,7 +268,7 @@ Controls:
 - overwrite existing files
 - clean output folder
 
-Flow:
+Export flow:
 
 - Request export preview
 - Review preview stats and overwrite warnings
@@ -305,7 +278,12 @@ Flow:
 
 Settings is not a workspace tab. It is a separate uiSection opened from the top-right button.
 
-Panels:
+Settings sub-tabs:
+
+- General
+- Presets
+
+General panels:
 
 1. LLM Defaults
 - global timeout
@@ -330,6 +308,27 @@ Panels:
 5. Debug (collapsible)
 - RAG availability and rebuild embeddings action
 - backend diagnostics with online/offline and model counts
+
+Presets panel:
+
+- Preset list and selection
+- Create/Edit form fields:
+	- name
+	- backend
+	- model
+	- caption mode strategy (auto/description/tags)
+	- prompt template
+	- tool toggles (web_search/web_fetch)
+	- include project/global notes
+	- reasoning mode and output
+	- context URL template
+	- context file template
+- Supported placeholders are shown in-UI
+- Actions:
+	- create
+	- update
+	- delete
+	- reset to new draft
 
 Actions:
 
@@ -456,7 +455,7 @@ Planned operations:
 - Creates a new image record with copied bytes and inherited active caption/candidates policy.
 
 2. Delete image
-- Soft-delete first (recoverable), optional permanent delete later.
+- Soft-delete by default, with an explicit permanent delete action.
 
 3. Crop
 - Rectangular crop with preview and apply.
@@ -466,7 +465,7 @@ Planned operations:
 
 5. Extract region as new image
 - Draw rectangle over source image and create a new image from selected region.
-- Optional carry-over of source caption as starter candidate.
+- Default carry-over is all caption candidates from the source image.
 
 Data safety model:
 
@@ -489,7 +488,7 @@ Add caption maintenance tools under Captions and optionally Batch:
 	- selected subset
 - Modes:
 	- plain text
-	- regex (optional advanced mode)
+	- regex
 	- case sensitive toggle
 - Preview first, then apply.
 
@@ -501,7 +500,7 @@ Add caption maintenance tools under Captions and optionally Batch:
 
 3. Safety
 - show impacted caption count before apply
-- one-click undo for last bulk operation (project session level)
+- multi-step undo history for bulk operations
 
 ## 14. Data I/O merge plan
 
@@ -579,7 +578,7 @@ Planned additions to support redesign:
 2. Caption batch edit service and endpoints
 - preview replace operation endpoint
 - apply replace operation endpoint
-- optional undo endpoint
+- undo endpoint with operation history support
 
 3. Schema additions (proposed)
 - images table:
@@ -587,7 +586,7 @@ Planned additions to support redesign:
 	- source_image_id nullable FK (derived image lineage)
 	- derived_operation nullable string
 	- derived_operation_params nullable JSON/text
-- caption_bulk_ops table (optional but recommended for audit/undo)
+- caption_bulk_ops table (required for multi-step audit/undo)
 
 4. API compatibility
 - existing endpoints remain stable for current views while new UI is phased in.
@@ -610,7 +609,7 @@ Phase B: Image tools MVP
 Phase C: Batch caption operations
 
 - Find/replace preview + apply + audit trail.
-- Add lightweight undo for last operation.
+- Add multi-step undo over operation history.
 
 Phase D: Polish and optimization
 
@@ -629,21 +628,499 @@ The redesign is successful when:
 - Image editing operations are non-destructive and auditable.
 - Batch caption replace supports preview-before-apply and scoped targeting.
 
-## 20. Open decisions
+## 20. Decision status
 
-Before implementation, confirm:
+Confirmed decisions:
 
 1. Deletion policy
-- soft delete only, or soft + permanent delete action
+- soft + permanent delete action
 
 2. Derived caption behavior
-- duplicate/extract should copy active caption only, all candidates, or none by default
+- duplicate/extract should copy all candidates by default
 
 3. Regex support
-- include regex find/replace in MVP or phase it after plain text mode
+- include regex find/replace in MVP
 
 4. Undo depth
-- single-step undo vs multi-step operation history
+- multi-step operation history
 
 5. Mobile priority
-- whether full editing tools must be first-class on smaller screens or desktop-first for MVP
+- desktop-first for MVP; mobile is not a priority
+
+## 21. Phase A ticket breakdown (frontend-first restructuring)
+
+This section translates Phase A into executable tickets. Goal: reshape IA and navigation without removing functionality.
+
+### A-1: Add Home mode for no-project state
+
+Status: Implemented (2026-05-02)
+
+Scope:
+
+- Add new no-project Home canvas in workspace area.
+- Move Create/Open forms and Recent Projects from sidebar into Home canvas.
+- Keep sidebar minimal when no project is open.
+
+Tasks:
+
+- Add ui state for home-mode rendering when currentProject is null.
+- Move/reuse existing create/open/recent controls into main content template.
+- Keep existing actions unchanged (createProject, openProject, openRecentProject).
+
+Acceptance:
+
+- User can create/open/reopen projects from Home without using sidebar forms.
+- Existing project open/close behavior still works.
+
+### A-2: Sidebar split by project-open state
+
+Status: Implemented (2026-05-02)
+
+Scope:
+
+- Open project: show metadata/actions/browser/status.
+- No project: show compact app info and optional browser launcher.
+
+Tasks:
+
+- Add explicit sidebar sections for "project-open" and "no-project".
+- Keep project metadata editor and close/switch actions only in open state.
+- Keep filesystem browser accessible in both states (reduced footprint in no-project state).
+
+Acceptance:
+
+- Sidebar contains no create/open forms when no project is open.
+- Metadata edit controls are hidden when no project is open.
+
+### A-3: Merge Import and Export into Data I/O tab
+
+Status: Implemented (2026-05-02)
+
+Scope:
+
+- Replace separate Import and Export tab buttons with one Data I/O tab.
+- Render import and export cards in one screen.
+
+Tasks:
+
+- Update mainView options: remove import/export tab buttons, add io tab.
+- Move existing import/export form blocks under io view.
+- Keep all options and buttons (including export preview) unchanged.
+
+Acceptance:
+
+- All import/export options remain available.
+- Existing backend endpoints are reused unchanged.
+
+### A-4: Move preset management to Settings
+
+Status: Implemented (2026-05-02)
+
+Scope:
+
+- Remove LLM presets manager from workspace tab strip.
+- Add Settings sub-tab for preset management.
+
+Tasks:
+
+- Add settings sub-navigation state (for example settingsTab).
+- Mount current presets manager UI into Settings > Presets.
+- Add "Manage Presets" links from generation UI to Settings > Presets.
+
+Acceptance:
+
+- Presets can still be created/updated/deleted.
+- Preset selectors in editor/batch continue to function.
+
+### A-5: Preserve behavior parity regression checks
+
+Status: Completed (2026-05-02 live browser pass)
+
+Scope:
+
+- Guard against functional regressions while layout changes.
+
+Tasks:
+
+- Add/update smoke test checklist covering:
+	- create/open/close/switch project
+	- grid -> editor image selection
+	- manual caption save and candidate ops
+	- preset generation and manual generation
+	- batch start/pause/resume/cancel
+	- notes CRUD and note generation
+	- import + export preview + export run
+- Add targeted UI/API regression tests where feasible.
+
+Acceptance:
+
+- All existing tests remain green.
+- Manual smoke checklist passes for updated navigation.
+
+### A-5.1 Parity execution checklist (current)
+
+Automated verification:
+
+- Backend/API regression suite: pass
+- Command: ./.venv/bin/python -m pytest -q
+- Latest result: 51 passed, 1 warning
+
+Manual smoke checklist for updated IA:
+
+1. Home and project lifecycle
+- Create project from Home
+- Open existing project from Home
+- Open a recent project from Home
+- Close current project and return to Home
+- Switch project from sidebar when project is open
+
+2. Library and editor flow
+- Select image in Grid and verify editor state updates
+- Save active caption edits
+- Candidate operations: create, activate, edit, delete
+
+3. Caption generation
+- Manual single-image generation path
+- Preset generation path
+- Manage Presets shortcut opens Settings > Presets
+
+4. Batch operations
+- Start batch job
+- Pause batch job
+- Resume batch job
+- Cancel batch job
+
+5. Notes workflows
+- Project note CRUD
+- Global note CRUD
+- Generate note draft and generate+save paths
+
+6. Data I/O workflows
+- Import folder with replace_existing off/on
+- Request export preview
+- Run export after preview
+
+Latest live run notes (2026-05-02, local app at http://127.0.0.1:7860):
+
+- PASS: Open existing project from Home, close to Home, reopen from Recent Projects, and Switch Project panel toggle.
+- PASS: Grid -> Editor selection, active caption save, and candidate activate flow.
+- PASS: Manage Presets shortcut from Editor opens Settings > Presets.
+- PASS: Data I/O tab shows merged import/export cards with full controls.
+- PASS: Export preview and export run completed (46 images exported, notes exported).
+- PASS: Import run completed after correcting source path to practice_dataset/CheerBear (46 images imported).
+- PASS: Batch control transitions validated in live job: Start, Pause request, Resume, Cancel.
+- PASS: Manual single-image generation and preset generation were re-run and validated.
+- PASS: Notes workflows re-run: project/global create-update-delete plus note assistant Generate Draft and Generate + Save.
+
+Observed runtime risk:
+
+- Intermittent /api/projects/recent 500 caused by JSONDecodeError while reading recent-project registry; app recovered in-session, but this should be hardened.
+
+Open items to finish A-5:
+
+- None.
+
+### A-6: Incremental delivery strategy
+
+Recommended PR sequence:
+
+1. PR-A1: Home mode + sidebar no-project cleanup
+2. PR-A2: Data I/O merge
+3. PR-A3: Presets move to Settings
+4. PR-A4: UX polish + regression fixes
+
+Each PR should preserve backend API contracts and keep app runnable with Python-only setup.
+
+## 22. API contract draft: image editing endpoints
+
+These endpoints are additive and do not replace existing image/caption APIs.
+
+Base prefix: /api/images
+
+### 22.1 Duplicate image
+
+Endpoint:
+
+- POST /api/images/{image_id}/duplicate
+
+Request body:
+
+- include_captions: boolean (default true)
+- copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image: full image summary object
+	- copied_caption_count
+
+Errors:
+
+- 404 image not found
+- 409 duplicate conflict (rare)
+
+### 22.2 Soft delete / restore image
+
+Endpoints:
+
+- POST /api/images/{image_id}/delete
+- POST /api/images/{image_id}/restore
+
+Request body (delete):
+
+- mode: "soft" | "hard" (default "soft")
+- hard delete requires explicit confirmation in request payload (for example confirm_hard_delete=true)
+
+Response:
+
+- 200 OK
+- payload:
+	- image_id
+	- deleted_at (null on restore)
+	- mode
+
+Notes:
+
+- Soft-deleted images are hidden from default list endpoints.
+- Optional include_deleted=true query can expose them for admin/recovery views.
+
+### 22.3 Crop image
+
+Endpoint:
+
+- POST /api/images/{image_id}/crop
+
+Request body:
+
+- rect:
+	- x: integer >= 0
+	- y: integer >= 0
+	- width: integer > 0
+	- height: integer > 0
+- output_name: optional string
+- include_captions: boolean (default true)
+- caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image
+	- operation:
+		- type: "crop"
+		- params
+
+Validation:
+
+- rect must be fully inside source bounds
+- reject zero-area or out-of-bounds rectangles with 422
+
+### 22.4 Scale image
+
+Endpoint:
+
+- POST /api/images/{image_id}/scale
+
+Request body:
+
+- mode: "percent" | "dimensions"
+- percent: number > 0 (required for percent mode)
+- width: integer > 0 (required for dimensions mode)
+- height: integer > 0 (required for dimensions mode)
+- keep_aspect_ratio: boolean (default true)
+- upscale: boolean (default false)
+- include_captions: boolean (default true)
+- caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image
+	- operation:
+		- type: "scale"
+		- params
+
+Validation:
+
+- if upscale=false, target dimensions must not exceed source bounds
+
+### 22.5 Extract region as new image
+
+Endpoint:
+
+- POST /api/images/{image_id}/extract-region
+
+Request body:
+
+- rect (same contract as crop)
+- output_name: optional string
+- include_captions: boolean (default true)
+- caption_copy_mode: "active_only" | "all_candidates" | "none" (default "all_candidates")
+- add_source_reference_note: boolean (default true)
+
+Response:
+
+- 200 OK
+- payload:
+	- source_image_id
+	- new_image
+	- operation:
+		- type: "extract_region"
+		- params
+
+Notes:
+
+- Functionally similar to crop, but semantically treated as asset extraction for dataset authoring.
+
+### 22.6 Shared response object expectations
+
+For all derived-image endpoints, new_image should include:
+
+- id
+- filename
+- width
+- height
+- included
+- source_image_id
+- derived_operation
+- derived_operation_params
+- created_at
+
+## 23. API contract draft: caption batch find/replace + undo
+
+Base prefix: /api/captions/batch
+
+### 23.1 Preview batch edit
+
+Endpoint:
+
+- POST /api/captions/batch/preview-replace
+
+Request body:
+
+- query:
+	- find_text: string
+	- replace_text: string
+	- mode: "plain" | "regex" (default "plain")
+	- case_sensitive: boolean (default false)
+- scope:
+	- caption_scope: "active_only" | "all_candidates" (default "active_only")
+	- image_scope: "all" | "included_only" | "selected_ids"
+	- image_ids: array[int] (required when image_scope is selected_ids)
+
+Response:
+
+- 200 OK
+- payload:
+	- preview_id (uuid)
+	- impacted_captions_count
+	- impacted_images_count
+	- sample_changes: array of
+		- image_id
+		- caption_id
+		- before_preview
+		- after_preview
+	- warnings: array[string]
+
+### 23.2 Apply batch edit
+
+Endpoint:
+
+- POST /api/captions/batch/apply-replace
+
+Request body:
+
+- preview_id: uuid
+- confirm: boolean (must be true)
+- create_undo_snapshot: boolean (default true)
+
+Response:
+
+- 200 OK
+- payload:
+	- operation_id (uuid)
+	- updated_captions_count
+	- updated_images_count
+	- undo_available: boolean
+
+Validation:
+
+- preview_id must exist and not be expired
+- applying without confirm=true returns 400
+
+### 23.3 Undo last batch edit
+
+Endpoint:
+
+- POST /api/captions/batch/undo
+
+Request body:
+
+- operation_id: optional uuid
+- if omitted, undo most recent undoable operation for current project
+
+Response:
+
+- 200 OK
+- payload:
+	- undone_operation_id
+	- restored_captions_count
+
+Errors:
+
+- 404 no undoable operation found
+- 409 operation already undone
+
+### 23.4 Operation history
+
+Endpoint:
+
+- GET /api/captions/batch/operations?limit=50
+
+Response:
+
+- 200 OK
+- payload: list of operations
+	- operation_id
+	- type
+	- created_at
+	- impacted_captions_count
+	- undone_at
+
+### 23.5 Safety and expiry rules
+
+- preview_id expiry: 15 minutes (configurable)
+- max impacted captions guardrail: configurable threshold requiring extra confirmation
+- regex mode should validate pattern at preview time and return 422 for invalid patterns
+
+## 24. Suggested test matrix for new APIs
+
+Minimum backend tests to add once implementation starts:
+
+1. Image duplicate
+- copies expected caption set by copy_mode
+- preserves source image unchanged
+
+2. Image delete/restore
+- soft delete hides from list by default
+- restore returns image to normal listing
+
+3. Crop/scale/extract
+- validates bounds and dimensions
+- produces derived image with lineage fields
+
+4. Caption preview/apply
+- preview counts match apply results
+- apply only works with valid, unexpired preview
+
+5. Undo and history
+- supports multi-step undo across operation history
+- cannot undo same operation twice
+
+6. Regression
+- existing caption CRUD and image listing semantics remain stable when no new endpoints are used

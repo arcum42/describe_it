@@ -88,8 +88,37 @@ def _read_recent_entries() -> list[RecentProjectEntry]:
     _, registry_path = _settings_paths()
     if not registry_path.exists():
         return []
-    payload = json.loads(registry_path.read_text(encoding="utf-8"))
-    return [RecentProjectEntry(**item) for item in payload.get("projects", [])]
+
+    # Be defensive here: an interrupted write or manual edit can leave this file
+    # empty/invalid. Treat that as "no recent projects" instead of failing.
+    raw = registry_path.read_text(encoding="utf-8").strip()
+    if not raw:
+        return []
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+
+    projects_raw = payload.get("projects", []) if isinstance(payload, dict) else []
+    if not isinstance(projects_raw, list):
+        return []
+
+    entries: list[RecentProjectEntry] = []
+    for item in projects_raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            entries.append(
+                RecentProjectEntry(
+                    name=str(item["name"]),
+                    path=str(item["path"]),
+                    last_opened_at=str(item["last_opened_at"]),
+                )
+            )
+        except KeyError:
+            continue
+    return entries
 
 
 def _write_recent_entries(entries: list[RecentProjectEntry]) -> None:

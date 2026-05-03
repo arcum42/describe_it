@@ -59,60 +59,11 @@
             <h2 class="text-lg font-medium">Projects</h2>
           </div>
 
-          <!-- ── No project open: Create / Open toggle ─────────────────── -->
+          <!-- ── No project open: compact sidebar state ────────────────── -->
           <template x-if="!currentProject">
-            <div class="space-y-3">
-              <!-- Tab switcher -->
-              <div class="inline-flex w-full rounded-xl border border-stone-800 bg-stone-950/60 p-1">
-                <button
-                  @click="sidebarMode = 'create'"
-                  class="flex-1 rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
-                  :class="sidebarMode === 'create' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
-                >Create</button>
-                <button
-                  @click="sidebarMode = 'open'"
-                  class="flex-1 rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
-                  :class="sidebarMode === 'open' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
-                >Open</button>
-              </div>
-
-              <!-- Create form -->
-              <div x-show="sidebarMode === 'create'" class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                <div>
-                  <p class="text-sm font-medium text-stone-200">Create Project</p>
-                  <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to the recent list.</p>
-                </div>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Name
-                  <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
-                </label>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Path
-                  <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
-                </label>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Description
-                  <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
-                </label>
-                <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
-                  Create Project
-                </button>
-              </div>
-
-              <!-- Open form -->
-              <div x-show="sidebarMode === 'open'" class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                <div>
-                  <p class="text-sm font-medium text-stone-200">Open Project</p>
-                  <p class="text-xs text-stone-500">Open an existing project database, or browse for one below.</p>
-                </div>
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Existing DB Path
-                  <input x-model="openForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
-                </label>
-                <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
-                  Open Project
-                </button>
-              </div>
+            <div class="space-y-3 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <p class="text-sm font-medium text-stone-200">No Project Open</p>
+              <p class="text-xs text-stone-500">Use the Home workspace to create or open a project database.</p>
             </div>
           </template>
 
@@ -260,38 +211,91 @@
             <p class="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200" x-text="errorMessage"></p>
           </template>
 
-          <!-- ── No project placeholder ─────────────────────────────────── -->
-          <template x-if="!currentProject">
-            <div class="mt-4 rounded-xl border border-stone-800 bg-stone-950/40 px-4 py-3 text-sm text-stone-500">
-              Create a new project or open an existing one to start importing and editing images.
+          <template x-if="currentProject && recentProjects.length > 0">
+            <div class="mt-6 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Recent Projects</p>
+              <div class="mt-3 space-y-2">
+                <template x-for="project in recentProjects.slice(0, 3)" :key="project.path">
+                  <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-xs text-stone-300 transition hover:border-amber-400/60">
+                    <p class="truncate" x-text="project.name"></p>
+                  </button>
+                </template>
+              </div>
             </div>
           </template>
-
-          <!-- ── Recent Projects ─────────────────────────────────────────── -->
-          <div class="mt-6 flex items-center justify-between">
-            <h3 class="text-sm font-medium text-stone-200">Recent Projects</h3>
-            <span class="text-xs text-stone-500" x-text="`${recentProjects.length} tracked`"></span>
-          </div>
-          <div class="mt-3 space-y-2">
-            <template x-for="project in recentProjects" :key="project.path">
-              <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-950/60 px-4 py-3 text-left text-sm text-stone-200 transition hover:border-amber-400/60"
-                :class="currentProject && currentProject.path === project.path ? 'border-amber-500 ring-1 ring-amber-500/40' : ''">
-                <div class="flex items-center justify-between gap-2">
-                  <p class="font-medium text-stone-100 truncate" x-text="project.name"></p>
-                  <span x-show="currentProject && currentProject.path === project.path" class="shrink-0 rounded-full bg-amber-400/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-amber-300">open</span>
-                </div>
-                <p class="mt-1 break-all text-xs text-stone-500" x-text="project.path"></p>
-              </button>
-            </template>
-            <template x-if="recentProjects.length === 0">
-              <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-4 py-3 text-sm text-stone-500">No recent projects yet.</p>
-            </template>
-          </div>
         </aside>
 
         <section class="space-y-6">
           <template x-if="uiSection === 'workspace'">
             <div class="space-y-6">
+              <template x-if="!currentProject">
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-6 shadow-2xl shadow-black/20">
+                  <div class="mb-5">
+                    <p class="text-xs uppercase tracking-[0.2em] text-amber-400">Home</p>
+                    <h2 class="mt-1 text-xl font-semibold text-stone-100">Create or open a project</h2>
+                    <p class="mt-2 text-sm text-stone-400">Start by creating a new project database or opening an existing .db file.</p>
+                  </div>
+
+                  <div class="grid gap-4 lg:grid-cols-2">
+                    <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div>
+                        <p class="text-sm font-medium text-stone-200">Create Project</p>
+                        <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to recents.</p>
+                      </div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Name
+                        <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Path
+                        <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Description
+                        <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
+                      </label>
+                      <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                        Create Project
+                      </button>
+                    </div>
+
+                    <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div>
+                        <p class="text-sm font-medium text-stone-200">Open Project</p>
+                        <p class="text-xs text-stone-500">Open an existing project database, or pick one from the sidebar browser.</p>
+                      </div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Existing DB Path
+                        <input x-model="openForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+                      </label>
+                      <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Open Project
+                      </button>
+
+                      <div class="border-t border-stone-800 pt-4">
+                        <div class="mb-2 flex items-center justify-between">
+                          <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Recent Projects</p>
+                          <span class="text-[10px] text-stone-500" x-text="`${recentProjects.length} tracked`"></span>
+                        </div>
+                        <div class="space-y-2">
+                          <template x-for="project in recentProjects" :key="project.path">
+                            <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 transition hover:border-amber-400/60">
+                              <p class="truncate font-medium text-stone-100" x-text="project.name"></p>
+                              <p class="mt-1 break-all text-xs text-stone-500" x-text="project.path"></p>
+                            </button>
+                          </template>
+                          <template x-if="recentProjects.length === 0">
+                            <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No recent projects yet.</p>
+                          </template>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </template>
+
+              <template x-if="currentProject">
+                <div class="space-y-6">
               <div class="flex items-center justify-between rounded-2xl border border-stone-800 bg-stone-900 p-3 shadow-2xl shadow-black/20">
                 <div class="inline-flex gap-2 rounded-xl border border-stone-800 bg-stone-950/60 p-1">
                   <button
@@ -310,13 +314,6 @@
                     Editor
                   </button>
                   <button
-                    @click="mainView = 'llm'"
-                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
-                    :class="mainView === 'llm' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
-                  >
-                    LLM
-                  </button>
-                  <button
                     @click="mainView = 'batch'"
                     class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
                     :class="mainView === 'batch' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
@@ -331,20 +328,11 @@
                     Notes
                   </button>
                   <button
-                    @click="mainView = 'import'"
-                    :disabled="!currentProject"
+                    @click="mainView = 'io'"
                     class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-40"
-                    :class="mainView === 'import' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                    :class="mainView === 'io' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
                   >
-                    Import
-                  </button>
-                  <button
-                    @click="mainView = 'export'"
-                    :disabled="!currentProject"
-                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-40"
-                    :class="mainView === 'export' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
-                  >
-                    Export
+                    Data I/O
                   </button>
                 </div>
                 <span class="text-xs text-stone-500"
@@ -467,6 +455,9 @@
                         </select>
                       </div>
                     </label>
+                    <button @click="openPresetSettings()" class="mt-2 rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                      Manage Presets
+                    </button>
 
                     <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
                       Extra Instructions
@@ -672,9 +663,11 @@
                 </section>
               </template>
             </div>
+            </div>
+            </template>
           </template>
 
-          <template x-if="uiSection === 'workspace' && mainView === 'notes'">
+          <template x-if="uiSection === 'workspace' && currentProject && mainView === 'notes'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">Notes</h2>
@@ -910,35 +903,37 @@
             </section>
           </template>
 
-          <template x-if="uiSection === 'workspace' && mainView === 'import'">
+          <template x-if="uiSection === 'workspace' && currentProject && mainView === 'io'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-lg font-medium">Import Folder</h2>
-                <span class="text-xs text-stone-500">Import image/text pairs into the current project</span>
+                <h2 class="text-lg font-medium">Data I/O</h2>
+                <span class="text-xs text-stone-500">Import from folders and export caption datasets</span>
               </div>
-              <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                  Source Folder
-                  <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
-                </label>
-                <label class="field-checkbox">
-                  <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
-                  Replace existing images in project
-                </label>
-                <button @click="importFolder()" :disabled="isActive('importFolder') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
-                  Import Folder
-                </button>
-              </div>
-            </section>
-          </template>
 
-          <template x-if="uiSection === 'workspace' && mainView === 'export'">
-            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
-              <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-lg font-medium">Export Dataset</h2>
-                <span class="text-xs text-stone-500">Export image and caption pairs to a folder</span>
-              </div>
-              <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+              <div class="grid gap-4 xl:grid-cols-2">
+                <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <div class="mb-1 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-stone-200">Import Folder</h3>
+                    <span class="text-[11px] text-stone-500">image/text pairs</span>
+                  </div>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Source Folder
+                    <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
+                  </label>
+                  <label class="field-checkbox">
+                    <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Replace existing images in project
+                  </label>
+                  <button @click="importFolder()" :disabled="isActive('importFolder') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                    Import Folder
+                  </button>
+                </div>
+
+                <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                  <div class="mb-1 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-stone-200">Export Dataset</h3>
+                    <span class="text-[11px] text-stone-500">image + caption pairs</span>
+                  </div>
                 <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                   Output Folder
                   <div class="mt-2 flex items-center gap-2">
@@ -995,11 +990,33 @@
                     Export Dataset
                   </button>
                 </div>
+                </div>
               </div>
             </section>
           </template>
 
-          <template x-if="uiSection === 'workspace' && mainView === 'llm'">
+          <template x-if="uiSection === 'settings'">
+            <div class="rounded-2xl border border-stone-800 bg-stone-900 p-3 shadow-2xl shadow-black/20">
+              <div class="inline-flex gap-2 rounded-xl border border-stone-800 bg-stone-950/60 p-1">
+                <button
+                  @click="settingsTab = 'general'"
+                  class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                  :class="settingsTab === 'general' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                >
+                  General
+                </button>
+                <button
+                  @click="settingsTab = 'presets'; loadLLMPresets()"
+                  class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                  :class="settingsTab === 'presets' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                >
+                  Presets
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="uiSection === 'settings' && settingsTab === 'presets'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">LLM Presets</h2>
@@ -1161,7 +1178,7 @@
             </section>
           </template>
 
-          <template x-if="uiSection === 'workspace' && mainView === 'batch'">
+          <template x-if="uiSection === 'workspace' && currentProject && mainView === 'batch'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">Batch Generation</h2>
@@ -1221,6 +1238,9 @@
                         </select>
                       </div>
                     </label>
+                    <button @click="openPresetSettings()" class="mt-2 rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                      Manage Presets
+                    </button>
                   </div>
 
                   <div x-show="!batch.usePreset" class="mt-3 space-y-3">
@@ -1427,7 +1447,7 @@
             </section>
           </template>
 
-          <template x-if="uiSection === 'settings'">
+          <template x-if="uiSection === 'settings' && settingsTab === 'general'">
             <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <div class="mb-4 flex items-center justify-between">
                 <h2 class="text-lg font-medium">Settings</h2>
@@ -1470,7 +1490,7 @@
                       </div>
                     </label>
                     <template x-if="llm.presets.length === 0">
-                      <p class="text-xs text-stone-500">No presets available yet. Create one in the LLM tab to use preset defaults.</p>
+                      <p class="text-xs text-stone-500">No presets available yet. Create one in the Presets settings tab to use preset defaults.</p>
                     </template>
                   </div>
                 </div>
