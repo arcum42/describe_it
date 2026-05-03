@@ -280,6 +280,155 @@ def test_caption_edit_and_set_active(tmp_path: Path) -> None:
     assert del_resp.status_code == 200, del_resp.text
 
 
+def test_tags_mode_smoke_workflow(tmp_path: Path) -> None:
+    """Tags-mode smoke: add/edit/reorder tags, batch ops, and statistics."""
+    project_path = str(tmp_path / "smoke_tags_mode.db")
+    source_folder = tmp_path / "images_tags"
+    _create_image_folder(source_folder, count=3)
+
+    create_resp = client.post(
+        "/api/projects/create",
+        json={
+            "path": project_path,
+            "name": "Tags Smoke",
+            "description": "",
+            "trigger_word": "",
+            "caption_mode": "tags",
+        },
+    )
+    assert create_resp.status_code == 200, create_resp.text
+
+    import_resp = client.post(
+        "/api/projects/import-folder",
+        json={"project_path": project_path, "source_folder": str(source_folder), "replace_existing": False},
+    )
+    assert import_resp.status_code == 200, import_resp.text
+
+    list_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert list_resp.status_code == 200, list_resp.text
+    images = list_resp.json()["images"]
+    assert len(images) == 3
+
+    first_id = images[0]["id"]
+    second_id = images[1]["id"]
+    third_id = images[2]["id"]
+
+    first_detail = client.get(f"/api/images/{first_id}", params={"project_path": project_path})
+    assert first_detail.status_code == 200, first_detail.text
+    first_caption_id = next(c["id"] for c in first_detail.json()["image"]["captions"] if c["is_active"])
+
+    second_detail = client.get(f"/api/images/{second_id}", params={"project_path": project_path})
+    assert second_detail.status_code == 200, second_detail.text
+    second_caption_id = next(c["id"] for c in second_detail.json()["image"]["captions"] if c["is_active"])
+
+    third_detail = client.get(f"/api/images/{third_id}", params={"project_path": project_path})
+    assert third_detail.status_code == 200, third_detail.text
+    third_caption_id = next(c["id"] for c in third_detail.json()["image"]["captions"] if c["is_active"])
+
+    set_first_tags = client.post(
+        "/api/captions/tags/update",
+        json={
+            "project_path": project_path,
+            "caption_id": first_caption_id,
+            "tags": ["red", "blue", "cat"],
+        },
+    )
+    assert set_first_tags.status_code == 200, set_first_tags.text
+    assert set_first_tags.json()["text"] == "red, blue, cat"
+
+    edit_first_tags = client.post(
+        "/api/captions/tags/update",
+        json={
+            "project_path": project_path,
+            "caption_id": first_caption_id,
+            "tags": ["red", "azure", "cat"],
+        },
+    )
+    assert edit_first_tags.status_code == 200, edit_first_tags.text
+    assert edit_first_tags.json()["text"] == "red, azure, cat"
+
+    reorder_first_tags = client.post(
+        "/api/captions/tags/update",
+        json={
+            "project_path": project_path,
+            "caption_id": first_caption_id,
+            "tags": ["cat", "azure", "red"],
+        },
+    )
+    assert reorder_first_tags.status_code == 200, reorder_first_tags.text
+    assert reorder_first_tags.json()["text"] == "cat, azure, red"
+
+    set_second_tags = client.post(
+        "/api/captions/tags/update",
+        json={
+            "project_path": project_path,
+            "caption_id": second_caption_id,
+            "tags": ["dog", "yellow"],
+        },
+    )
+    assert set_second_tags.status_code == 200, set_second_tags.text
+
+    set_third_tags = client.post(
+        "/api/captions/tags/update",
+        json={
+            "project_path": project_path,
+            "caption_id": third_caption_id,
+            "tags": ["excluded_only"],
+        },
+    )
+    assert set_third_tags.status_code == 200, set_third_tags.text
+
+    exclude_third = client.post(
+        f"/api/images/{third_id}/included",
+        json={"project_path": project_path, "included": False},
+    )
+    assert exclude_third.status_code == 200, exclude_third.text
+    assert exclude_third.json()["included"] is False
+
+    batch_add = client.post(
+        "/api/captions/tags/batch-operation",
+        json={
+            "project_path": project_path,
+            "image_ids": [first_id, second_id],
+            "operation": "add",
+            "tags": ["shared", "red"],
+        },
+    )
+    assert batch_add.status_code == 200, batch_add.text
+    assert batch_add.json()["affected_captions"] == 2
+
+    batch_remove = client.post(
+        "/api/captions/tags/batch-operation",
+        json={
+            "project_path": project_path,
+            "image_ids": [first_id, second_id],
+            "operation": "remove",
+            "tags": ["yellow"],
+        },
+    )
+    assert batch_remove.status_code == 200, batch_remove.text
+    assert batch_remove.json()["affected_captions"] >= 1
+
+    first_tags_resp = client.get(
+        f"/api/captions/tags/{first_caption_id}",
+        params={"project_path": project_path},
+    )
+    assert first_tags_resp.status_code == 200, first_tags_resp.text
+    first_text = first_tags_resp.json()["text"]
+    assert first_text.startswith("cat, azure, red")
+    assert "shared" in first_text
+
+    stats_resp = client.get(
+        "/api/captions/tags/statistics",
+        params={"project_path": project_path},
+    )
+    assert stats_resp.status_code == 200, stats_resp.text
+    stats = stats_resp.json()
+    assert stats["total_occurrences"] >= 4
+    assert "shared" in stats["tag_frequency"]
+    assert "excluded_only" not in stats["tag_frequency"]
+
+
 def test_export_preview_and_export(tmp_path: Path) -> None:
     """Export preview counts match actual exported files."""
     project_path = str(tmp_path / "smoke_export.db")
