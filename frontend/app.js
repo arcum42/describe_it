@@ -49,6 +49,79 @@ function describeItApp() {
     showOpenProject: false,
     showBrowser: false,
     selectedImage: null,
+    imageTools: {
+      showAdvanced: false,
+      includeCaptions: true,
+      captionCopyMode: 'all_candidates',
+      deleteMode: 'soft',
+      crop: {
+        x: 0,
+        y: 0,
+        width: '',
+        height: '',
+        outputName: '',
+      },
+      scale: {
+        mode: 'percent',
+        percent: 100,
+        width: '',
+        height: '',
+        keepAspectRatio: true,
+        upscale: false,
+        outputName: '',
+      },
+      flipMode: 'horizontal',
+      rotateAngle: 90,
+      extract: {
+        x: 0,
+        y: 0,
+        width: '',
+        height: '',
+        outputName: '',
+        addSourceReferenceNote: true,
+      },
+    },
+    captionBatch: {
+      query: {
+        findText: '',
+        replaceText: '',
+        mode: 'plain',
+        caseSensitive: false,
+      },
+      scope: {
+        captionScope: 'active_only',
+        imageScope: 'included_only',
+        imageIdsText: '',
+      },
+      apply: {
+        confirm: false,
+        createUndoSnapshot: true,
+      },
+      preview: null,
+      operations: [],
+      historyLimit: 20,
+      lastOperationId: '',
+    },
+    tagEditor: {
+      activeCaptionId: null,
+      tags: [],
+      newTagText: '',
+      editingTagIndex: null,
+      editingTagText: '',
+      dragTagIndex: null,
+      stats: {
+        total_tags: 0,
+        total_occurrences: 0,
+        top_tags: [],
+      },
+      statsLoading: false,
+      batch: {
+        scope: 'included', // included, all, selected
+        addInput: '',
+        removeInput: '',
+        clearConfirm: false,
+      },
+    },
     editorCaptionText: '',
     newCaptionText: '',
     editingCaptionId: null,
@@ -187,7 +260,25 @@ function describeItApp() {
     gridCards: [],
     loadImagesRequestSeq: 0,
     selectImageRequestSeq: 0,
+    keyboard: {
+      showShortcutsHelp: false,
+      shortcuts: [],
+    },
+    gridFilter: {
+      searchText: '',
+      inclusionStatus: 'all', // 'all', 'included', 'excluded'
+      captionStatus: 'all', // 'all', 'with_captions', 'blank_captions'
+      sortBy: 'name', // 'name', 'status', 'caption_count'
+      sortOrder: 'asc', // 'asc', 'desc'
+      pageSize: 100, // Items per page: 25, 50, 100, all
+    },
     async init() {
+      // Initialize keyboard shortcuts
+      if (window.DescribeItFeatures && window.DescribeItFeatures.shortcuts) {
+        window.DescribeItFeatures.shortcuts.init(this);
+        this.keyboard.shortcuts = window.DescribeItFeatures.shortcuts.getDocumentation();
+      }
+
       const deferredStartupTasks = [
         this.loadRecentProjects(true),
         this.loadLLMBackends(true),
@@ -382,6 +473,24 @@ function describeItApp() {
     openWorkspace() {
       this.uiSection = 'workspace';
     },
+    showKeyboardShortcutsHelp() {
+      this.keyboard.showShortcutsHelp = true;
+    },
+    closeKeyboardShortcutsHelp() {
+      this.keyboard.showShortcutsHelp = false;
+    },
+    isTagMode() {
+      return this.currentProject?.caption_mode === 'tags';
+    },
+    tagBatchValidation() {
+      if (!this.isTagMode()) {
+        return { ok: false, message: 'Tag batch tools are only available in tags mode.' };
+      }
+      if (this.tagEditor.batch.scope === 'selected' && !this.selectedImage?.id) {
+        return { ok: false, message: 'Select an image to run batch operations in selected scope.' };
+      }
+      return { ok: true, message: '' };
+    },
     applyProject(project, options = {}) {
       const projectsFeature = window.DescribeItFeatures?.projects;
       if (projectsFeature && typeof projectsFeature.applyProject === 'function') {
@@ -413,9 +522,22 @@ function describeItApp() {
       this.selectedImage = null;
       this.editorCaptionText = '';
       this.newCaptionText = '';
+      this.tagEditor.activeCaptionId = null;
+      this.tagEditor.tags = [];
+      this.tagEditor.newTagText = '';
+      this.tagEditor.editingTagIndex = null;
+      this.tagEditor.editingTagText = '';
+      this.tagEditor.dragTagIndex = null;
+      this.tagEditor.stats = {
+        total_tags: 0,
+        total_occurrences: 0,
+        top_tags: [],
+      };
+      this.tagEditor.batch.clearConfirm = false;
       this.resetPresetForm();
       this.loadImageSummary();
       this.loadImages();
+      this.loadTagStatistics(true);
       this.loadLatestBatchJob();
       this.loadProjectNotes();
     },
@@ -439,6 +561,17 @@ function describeItApp() {
       this.gridCards = [];
       this.editorCaptionText = '';
       this.newCaptionText = '';
+      this.tagEditor.activeCaptionId = null;
+      this.tagEditor.tags = [];
+      this.tagEditor.newTagText = '';
+      this.tagEditor.editingTagIndex = null;
+      this.tagEditor.editingTagText = '';
+      this.tagEditor.dragTagIndex = null;
+      this.tagEditor.stats = {
+        total_tags: 0,
+        total_occurrences: 0,
+        top_tags: [],
+      };
       this.metadataForm = {
         path: '',
         name: '',
@@ -472,6 +605,166 @@ function describeItApp() {
       this.notes.selectedNoteId = null;
       this.newNoteDraft();
       this.loadBrowser(this.projectSession.lastProjectDirectory || null);
+    },
+    applyImageToolPreset(presetKey) {
+      if (!this.selectedImage) {
+        return;
+      }
+      const imgW = Number(this.selectedImage.width) || 0;
+      const imgH = Number(this.selectedImage.height) || 0;
+
+      if (presetKey === 'scale50') {
+        this.imageTools.scale.mode = 'percent';
+        this.imageTools.scale.percent = 50;
+        return;
+      }
+
+      if (presetKey === 'scale1024fit') {
+        this.imageTools.scale.mode = 'dimensions';
+        this.imageTools.scale.width = 1024;
+        this.imageTools.scale.height = 1024;
+        this.imageTools.scale.keepAspectRatio = true;
+        this.imageTools.scale.upscale = false;
+        return;
+      }
+
+      if (presetKey === 'centerSquareCrop' && imgW > 0 && imgH > 0) {
+        const side = Math.min(imgW, imgH);
+        this.imageTools.crop.width = side;
+        this.imageTools.crop.height = side;
+        this.imageTools.crop.x = Math.floor((imgW - side) / 2);
+        this.imageTools.crop.y = Math.floor((imgH - side) / 2);
+        return;
+      }
+
+      if (presetKey === 'extractCenterQuarter' && imgW > 0 && imgH > 0) {
+        const width = Math.max(1, Math.floor(imgW / 2));
+        const height = Math.max(1, Math.floor(imgH / 2));
+        this.imageTools.extract.width = width;
+        this.imageTools.extract.height = height;
+        this.imageTools.extract.x = Math.floor((imgW - width) / 2);
+        this.imageTools.extract.y = Math.floor((imgH - height) / 2);
+      }
+    },
+    imageToolValidation(kind) {
+      const toInteger = (value) => {
+        const n = Number(value);
+        return Number.isInteger(n) ? n : null;
+      };
+
+      if (kind === 'crop') {
+        const x = toInteger(this.imageTools.crop.x);
+        const y = toInteger(this.imageTools.crop.y);
+        const width = toInteger(this.imageTools.crop.width);
+        const height = toInteger(this.imageTools.crop.height);
+        if (x === null || y === null || width === null || height === null) {
+          return { ok: false, message: 'Crop requires integer x, y, width, and height.' };
+        }
+        if (x < 0 || y < 0 || width < 1 || height < 1) {
+          return { ok: false, message: 'Crop x/y must be >= 0 and width/height must be > 0.' };
+        }
+        return { ok: true, message: '' };
+      }
+
+      if (kind === 'scale') {
+        if (this.imageTools.scale.mode === 'percent') {
+          const percent = Number(this.imageTools.scale.percent);
+          if (!Number.isFinite(percent) || percent <= 0) {
+            return { ok: false, message: 'Scale percent must be > 0.' };
+          }
+          return { ok: true, message: '' };
+        }
+        const width = toInteger(this.imageTools.scale.width);
+        const height = toInteger(this.imageTools.scale.height);
+        if (width === null || height === null || width < 1 || height < 1) {
+          return { ok: false, message: 'Scale dimensions mode requires width/height integers > 0.' };
+        }
+        return { ok: true, message: '' };
+      }
+
+      if (kind === 'extract') {
+        const x = toInteger(this.imageTools.extract.x);
+        const y = toInteger(this.imageTools.extract.y);
+        const width = toInteger(this.imageTools.extract.width);
+        const height = toInteger(this.imageTools.extract.height);
+        if (x === null || y === null || width === null || height === null) {
+          return { ok: false, message: 'Extract requires integer x, y, width, and height.' };
+        }
+        if (x < 0 || y < 0 || width < 1 || height < 1) {
+          return { ok: false, message: 'Extract x/y must be >= 0 and width/height must be > 0.' };
+        }
+        return { ok: true, message: '' };
+      }
+
+      return { ok: true, message: '' };
+    },
+    captionBatchValidation() {
+      const findText = String(this.captionBatch.query.findText || '').trim();
+      if (!findText) {
+        return { ok: false, message: 'Find text is required.' };
+      }
+      if (this.captionBatch.scope.imageScope === 'selected_ids') {
+        const raw = String(this.captionBatch.scope.imageIdsText || '').trim();
+        if (!raw && !this.selectedImage?.id) {
+          return { ok: false, message: 'Provide selected image IDs or choose an image in the grid.' };
+        }
+      }
+      return { ok: true, message: '' };
+    },
+    filteredGridCards() {
+      let filtered = [...this.gridCards];
+
+      // Apply search filter
+      if (this.gridFilter.searchText.trim()) {
+        const search = this.gridFilter.searchText.toLowerCase();
+        filtered = filtered.filter(card => 
+          card.label.toLowerCase().includes(search) || 
+          (card.filename && card.filename.toLowerCase().includes(search))
+        );
+      }
+
+      // Apply inclusion status filter
+      if (this.gridFilter.inclusionStatus === 'included') {
+        filtered = filtered.filter(card => card.included === true);
+      } else if (this.gridFilter.inclusionStatus === 'excluded') {
+        filtered = filtered.filter(card => card.included === false);
+      }
+
+      // Apply caption status filter
+      if (this.gridFilter.captionStatus === 'with_captions') {
+        filtered = filtered.filter(card => card.active_caption_preview && card.active_caption_preview.trim() !== '');
+      } else if (this.gridFilter.captionStatus === 'blank_captions') {
+        filtered = filtered.filter(card => !card.active_caption_preview || card.active_caption_preview.trim() === '');
+      }
+
+      // Apply sorting
+      const sortBy = this.gridFilter.sortBy;
+      const sortOrder = this.gridFilter.sortOrder === 'desc' ? -1 : 1;
+
+      if (sortBy === 'name') {
+        filtered.sort((a, b) => sortOrder * a.label.localeCompare(b.label));
+      } else if (sortBy === 'status') {
+        const statusOrder = { excluded: 0, included: 1 };
+        filtered.sort((a, b) => {
+          const aStatus = statusOrder[a.status] ?? 2;
+          const bStatus = statusOrder[b.status] ?? 2;
+          return sortOrder * (aStatus - bStatus);
+        });
+      } else if (sortBy === 'caption_count') {
+        filtered.sort((a, b) => {
+          const aEmpty = !a.active_caption_preview || a.active_caption_preview.trim() === '' ? 0 : 1;
+          const bEmpty = !b.active_caption_preview || b.active_caption_preview.trim() === '' ? 0 : 1;
+          return sortOrder * (bEmpty - aEmpty);
+        });
+      }
+
+      // Apply pagination
+      if (this.gridFilter.pageSize && this.gridFilter.pageSize !== 'all') {
+        const pageSize = parseInt(this.gridFilter.pageSize, 10);
+        filtered = filtered.slice(0, pageSize);
+      }
+
+      return filtered;
     },
     notesActiveItems() {
       const notesFeature = window.DescribeItFeatures?.notes;
@@ -1145,6 +1438,122 @@ function describeItApp() {
       }
       this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
+    async refreshActiveTags(silent = false) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.refreshActiveTags === 'function') {
+        await editorFeature.refreshActiveTags(this, { silent });
+        return;
+      }
+      if (!silent) {
+        this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+      }
+    },
+    async addTagsToActiveCaption() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.addTagsToActiveCaption === 'function') {
+        await editorFeature.addTagsToActiveCaption(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async removeTagFromActiveCaption(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.removeTagFromActiveCaption === 'function') {
+        await editorFeature.removeTagFromActiveCaption(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    startEditTag(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startEditTag === 'function') {
+        editorFeature.startEditTag(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    cancelEditTag() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.cancelEditTag === 'function') {
+        editorFeature.cancelEditTag(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async saveEditedTag(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.saveEditedTag === 'function') {
+        await editorFeature.saveEditedTag(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    startTagDrag(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startTagDrag === 'function') {
+        editorFeature.startTagDrag(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async moveTagLeft(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.moveTagLeft === 'function') {
+        await editorFeature.moveTagLeft(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async moveTagRight(index) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.moveTagRight === 'function') {
+        await editorFeature.moveTagRight(this, index);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async dropTagAt(targetIndex) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.dropTagAt === 'function') {
+        await editorFeature.dropTagAt(this, targetIndex);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async loadTagStatistics(silent = false) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.loadTagStatistics === 'function') {
+        await editorFeature.loadTagStatistics(this, { silent });
+        return;
+      }
+      if (!silent) {
+        this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+      }
+    },
+    async runBatchAddTags() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.runBatchAddTags === 'function') {
+        await editorFeature.runBatchAddTags(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async runBatchRemoveTags() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.runBatchRemoveTags === 'function') {
+        await editorFeature.runBatchRemoveTags(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async runBatchClearTags() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.runBatchClearTags === 'function') {
+        await editorFeature.runBatchClearTags(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
     async addCaptionCandidate(makeActive = true) {
       const editorFeature = window.DescribeItFeatures?.editor;
       if (editorFeature && typeof editorFeature.addCaptionCandidate === 'function') {
@@ -1192,6 +1601,105 @@ function describeItApp() {
         return;
       }
       this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async duplicateImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.duplicateImage === 'function') {
+        await editorFeature.duplicateImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async deleteImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.deleteImage === 'function') {
+        await editorFeature.deleteImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async cropImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.cropImage === 'function') {
+        await editorFeature.cropImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async scaleImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.scaleImage === 'function') {
+        await editorFeature.scaleImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async flipImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.flipImage === 'function') {
+        await editorFeature.flipImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async rotateImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.rotateImage === 'function') {
+        await editorFeature.rotateImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async extractRegionImage() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.extractRegionImage === 'function') {
+        await editorFeature.extractRegionImage(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async loadCaptionBatchOperations(silent = false) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.loadCaptionBatchOperations === 'function') {
+        await editorFeature.loadCaptionBatchOperations(this, { silent });
+        return;
+      }
+      if (!silent) {
+        this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+      }
+    },
+    async previewCaptionBatchReplace() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.previewCaptionBatchReplace === 'function') {
+        await editorFeature.previewCaptionBatchReplace(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async applyCaptionBatchReplace() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.applyCaptionBatchReplace === 'function') {
+        await editorFeature.applyCaptionBatchReplace(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async undoCaptionBatchReplace(operationId = null) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.undoCaptionBatchReplace === 'function') {
+        await editorFeature.undoCaptionBatchReplace(this, operationId);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    clearCaptionBatchPreview() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.clearCaptionBatchPreview === 'function') {
+        editorFeature.clearCaptionBatchPreview(this);
+        return;
+      }
+      this.captionBatch.preview = null;
+      this.captionBatch.apply.confirm = false;
     },
     async importFolder() {
       const importFeature = window.DescribeItFeatures?.import;
