@@ -19,30 +19,35 @@ IMAGEBOARD_BOARDS = {
         "base_url": "https://e621.net",
         "requires_auth": True,
         "requires_username": True,
+        "available_sorts": ["date", "score", "popular", "rank"],
     },
     "derpibooru": {
         "display_name": "Derpibooru",
         "base_url": "https://derpibooru.org",
         "requires_auth": False,
         "requires_username": False,
+        "available_sorts": ["score", "wilson_score", "upvotes", "downvotes", "first_seen_at", "random", "faves", "tag_count", "relevance"],
     },
     "danbooru": {
         "display_name": "Danbooru",
         "base_url": "https://danbooru.donmai.us",
         "requires_auth": True,
         "requires_username": True,
+        "available_sorts": ["date", "score", "popular", "rank"],
     },
     "twibooru": {
         "display_name": "Twibooru",
         "base_url": "https://twibooru.org",
         "requires_auth": False,
         "requires_username": False,
+        "available_sorts": ["score", "wilson_score", "upvotes", "downvotes", "first_seen_at", "random", "faves", "tag_count", "relevance"],
     },
     "tantabus": {
         "display_name": "Tantabus",
         "base_url": "https://tantabus.ai",
         "requires_auth": False,
         "requires_username": False,
+        "available_sorts": ["score", "wilson_score", "upvotes", "downvotes", "first_seen_at", "random", "faves", "tag_count", "relevance"],
     },
 }
 
@@ -217,6 +222,7 @@ class ImageboardCredentialsService:
                     "base_url": board_info["base_url"],
                     "requires_auth": board_info["requires_auth"],
                     "requires_username": board_info["requires_username"],
+                    "available_sorts": board_info.get("available_sorts", []),
                 }
             )
         return result

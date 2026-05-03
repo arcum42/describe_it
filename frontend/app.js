@@ -254,6 +254,21 @@ function describeItApp() {
       credentials: [],
       forms: {},
     },
+    imageboardImport: {
+      show: false,
+      selectedBoard: '',
+      query: '',
+      sortBy: 'relevance',
+      sortDirection: 'desc',
+      importCount: 10,
+      includeTags: true,
+      previewImages: [],
+      totalAvailable: 0,
+      statusMessage: '',
+      errorMessage: '',
+      searching: false,
+      importing: false,
+    },
     projectSession: {
       lastProjectPath: '',
       lastProjectDirectory: '',
@@ -1897,6 +1912,35 @@ function describeItApp() {
         return;
       }
       this.errorMessage = 'Imageboard settings module unavailable.';
+    },
+
+    // ---------- Imageboard Import delegates ----------
+    async openImageboardImport() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      if (feature) return feature.openImportModal(this);
+      this.errorMessage = 'Imageboard import module unavailable.';
+    },
+    closeImageboardImport() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      if (feature) return feature.closeImportModal(this);
+    },
+    imageboardImportSorts() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      return feature ? feature.getSortsForBoard(this) : ['relevance'];
+    },
+    onImageboardBoardChange() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      if (feature) feature.onBoardChange(this);
+    },
+    async searchImageboard() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      if (feature) return feature.searchBoard(this);
+      this.errorMessage = 'Imageboard import module unavailable.';
+    },
+    async doImageboardImport() {
+      const feature = window.DescribeItFeatures?.imageboardImport;
+      if (feature) return feature.doImport(this);
+      this.errorMessage = 'Imageboard import module unavailable.';
     },
   };
 }
