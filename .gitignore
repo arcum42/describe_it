@@ -14,3 +14,5 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
+chroma/chroma.sqlite3
+chroma/chromadb.sqlite3
