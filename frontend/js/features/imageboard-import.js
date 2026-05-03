@@ -124,7 +124,7 @@
    * Import images from the selected board into the current project.
    */
   async function doImport(app) {
-    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags } =
+    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags, skipDuplicates } =
       app.imageboardImport;
 
     if (!app.currentProject?.path) {
@@ -152,6 +152,7 @@
           sort_direction: sortDirection,
           import_count: importCount,
           include_tags_in_caption: includeTags,
+          skip_duplicates: skipDuplicates,
         }),
       });
       const payload = await resp.json();
@@ -159,13 +160,11 @@
         throw new Error(payload.detail ?? 'Import failed');
       }
 
-      const { imported_count, failed_count } = payload;
-      if (failed_count > 0) {
-        app.imageboardImport.statusMessage =
-          `Imported ${imported_count}, failed ${failed_count}. Check console for details.`;
-      } else {
-        app.imageboardImport.statusMessage = `Successfully imported ${imported_count} image(s).`;
-      }
+      const { imported_count, failed_count, duplicate_count } = payload;
+      const parts = [`Imported ${imported_count} image(s).`];
+      if (duplicate_count > 0) parts.push(`${duplicate_count} duplicate(s) skipped.`);
+      if (failed_count > 0) parts.push(`${failed_count} failed — check console.`);
+      app.imageboardImport.statusMessage = parts.join(' ');
 
       // Refresh project images
       if (typeof app.loadImages === 'function') await app.loadImages();

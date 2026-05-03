@@ -41,6 +41,7 @@ class ImageboardImportRequest(BaseModel):
     sort_direction: str = Field(default="desc")
     import_count: int = Field(default=10, ge=1, le=100)
     include_tags_in_caption: bool = Field(default=True)
+    skip_duplicates: bool = Field(default=True)
 
 
 class BatchSearchRequest(BaseModel):
@@ -144,6 +145,7 @@ async def perform_import(req: ImageboardImportRequest) -> dict:
             sort_direction=req.sort_direction,
             import_count=req.import_count,
             include_tags_in_caption=req.include_tags_in_caption,
+            skip_duplicates=req.skip_duplicates,
         )
         
         return {
@@ -152,6 +154,7 @@ async def perform_import(req: ImageboardImportRequest) -> dict:
             "imported_count": result.imported_count,
             "failed_count": result.failed_count,
             "skipped_count": result.skipped_count,
+            "duplicate_count": result.duplicate_count,
             "errors": result.errors,
         }
     except ValueError as e:

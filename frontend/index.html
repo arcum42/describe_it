@@ -2609,6 +2609,13 @@
                            class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                     Create captions from image tags
                   </label>
+
+                  <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                    <input type="checkbox"
+                           x-model="imageboardImport.skipDuplicates"
+                           class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Skip duplicate images (matched by content hash)
+                  </label>
                 </div>
               </template>
 

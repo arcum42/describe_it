@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
-from dataclasses import dataclass
-from io import BytesIO
+from dataclasses import dataclass, field
 from typing import Optional
 
 from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
@@ -45,6 +45,7 @@ class ImportResult:
     imported_count: int
     failed_count: int
     skipped_count: int
+    duplicate_count: int
     errors: list[str]
 
 
@@ -185,6 +186,23 @@ class ImageboardImportService:
             preview_images=preview_images,
         )
 
+    def _build_existing_hashes(self, session_factory) -> set[str]:
+        """
+        Build a set of SHA-256 hex digests for all original_blob values
+        already in the project database. Rows with NULL blobs are skipped.
+        """
+        hashes: set[str] = set()
+        with session_factory() as session:
+            blobs = session.scalars(
+                select(ImageRecord.original_blob).where(
+                    ImageRecord.original_blob.is_not(None),
+                    ImageRecord.deleted_at.is_(None),
+                )
+            ).all()
+            for blob in blobs:
+                hashes.add(hashlib.sha256(blob).hexdigest())
+        return hashes
+
     async def import_images(
         self,
         project_path: str,
@@ -194,6 +212,7 @@ class ImageboardImportService:
         sort_direction: str = "desc",
         import_count: int = 10,
         include_tags_in_caption: bool = True,
+        skip_duplicates: bool = True,
     ) -> ImportResult:
         """
         Import images from imageboard into project.
@@ -206,6 +225,7 @@ class ImageboardImportService:
             sort_direction: "asc" or "desc"
             import_count: Number of images to import
             include_tags_in_caption: Whether to create captions from tags
+            skip_duplicates: Skip images whose bytes already exist in project
 
         Returns:
             ImportResult with counts and any errors
@@ -218,6 +238,7 @@ class ImageboardImportService:
             imported_count=0,
             failed_count=0,
             skipped_count=0,
+            duplicate_count=0,
             errors=[],
         )
 
@@ -238,17 +259,27 @@ class ImageboardImportService:
             # Open project database
             session_factory = create_sqlite_session_factory(project_path)
 
+            # Build hash set of existing images once before the loop
+            existing_hashes: set[str] = (
+                self._build_existing_hashes(session_factory) if skip_duplicates else set()
+            )
+
             # Import each image
             for image_data in search_result.images[:import_count]:
                 try:
-                    await self._import_single_image(
+                    imported, is_dup = await self._import_single_image(
                         session_factory=session_factory,
                         client=client,
                         image_data=image_data,
                         board_id=board_id,
                         include_tags=include_tags_in_caption,
+                        skip_duplicates=skip_duplicates,
+                        existing_hashes=existing_hashes,
                     )
-                    result.imported_count += 1
+                    if is_dup:
+                        result.duplicate_count += 1
+                    else:
+                        result.imported_count += 1
 
                 except Exception as e:
                     logger.error(f"Failed to import image {image_data.id}: {e}")
@@ -271,7 +302,9 @@ class ImageboardImportService:
         image_data,
         board_id: str,
         include_tags: bool = True,
-    ) -> None:
+        skip_duplicates: bool = True,
+        existing_hashes: set[str] | None = None,
+    ) -> tuple[bool, bool]:
         """
         Import a single image into the project database.
 
@@ -281,6 +314,12 @@ class ImageboardImportService:
             image_data: ImageboardImage from search result
             board_id: Board identifier for source tracking
             include_tags: Whether to create caption from tags
+            skip_duplicates: Skip if image hash already present
+            existing_hashes: Mutable set of SHA-256 digests already in project;
+                             updated in-place when a new image is added
+
+        Returns:
+            (imported, is_duplicate) tuple
 
         Raises:
             Exception: If download or database operations fail
@@ -290,6 +329,12 @@ class ImageboardImportService:
 
         if not image_bytes:
             raise ValueError("Failed to download image")
+
+        # Check for duplicate by content hash
+        image_hash = hashlib.sha256(image_bytes).hexdigest()
+        if skip_duplicates and existing_hashes is not None and image_hash in existing_hashes:
+            logger.debug(f"Skipping duplicate image {image_data.id} (hash {image_hash[:8]}…)")
+            return False, True
 
         # Derive file extension from URL; fall back to .jpg
         url_path = image_data.image_url.split("?")[0]
@@ -334,6 +379,12 @@ class ImageboardImportService:
                 session.add(caption_record)
 
             session.commit()
+
+        # Track this hash so later images in the same batch are also deduplicated
+        if existing_hashes is not None:
+            existing_hashes.add(image_hash)
+
+        return True, False
 
     async def batch_search(
         self,
