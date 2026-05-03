@@ -92,3 +92,16 @@ class NoteRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
     project: Mapped[ProjectRecord] = relationship(back_populates="notes")
+
+
+class ImageboardCredential(Base):
+    """Store API keys and credentials for imageboard access."""
+
+    __tablename__ = "imageboard_credentials"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    board_id: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
+    api_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(), default=lambda: datetime.now(UTC))

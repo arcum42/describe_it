@@ -249,6 +249,11 @@ function describeItApp() {
       ollamaTesting: false,
       lmstudioTesting: false,
     },
+    imageboards: {
+      boards: [],
+      credentials: [],
+      forms: {},
+    },
     projectSession: {
       lastProjectPath: '',
       lastProjectDirectory: '',
@@ -294,6 +299,7 @@ function describeItApp() {
         this.loadLLMPresets(true),
         this.loadGlobalNotes(true),
         this.checkRAGStatus(),
+        this.loadImageboardSettings(),
       ];
       await Promise.all([
         this.loadHealth(true),
@@ -1829,6 +1835,67 @@ function describeItApp() {
       this.rag.isRebuildingEmbeddings = false;
       this.rag.embeddingsStatus = 'RAG module unavailable';
       this.errorMessage = 'RAG module unavailable. Refresh and try again.';
+    },
+    async loadImageboardSettings() {
+      const feature = window.DescribeItFeatures?.imageboardSettings;
+      if (feature && typeof feature.loadImageboardBoards === 'function') {
+        await feature.loadImageboardBoards(this);
+        await feature.loadImageboardCredentials(this);
+        
+        // Initialize forms for each board
+        if (this.imageboards.boards && this.imageboards.boards.length > 0) {
+          for (const board of this.imageboards.boards) {
+            if (!this.imageboards.forms[board.board_id]) {
+              this.imageboards.forms[board.board_id] = {
+                apiKey: '',
+                username: '',
+              };
+            }
+          }
+        }
+        return;
+      }
+      this.errorMessage = 'Imageboard settings module unavailable.';
+    },
+    async saveImageboardCredential(boardId) {
+      const feature = window.DescribeItFeatures?.imageboardSettings;
+      if (feature && typeof feature.saveImageboardCredentials === 'function') {
+        const form = this.imageboards.forms[boardId];
+        const success = await feature.saveImageboardCredentials(
+          this,
+          boardId,
+          form.apiKey,
+          form.username || null
+        );
+        
+        if (success) {
+          // Clear the form after successful save
+          form.apiKey = '';
+          form.username = '';
+        }
+        return;
+      }
+      this.errorMessage = 'Imageboard settings module unavailable.';
+    },
+    async deleteImageboardCredential(boardId) {
+      const feature = window.DescribeItFeatures?.imageboardSettings;
+      if (feature && typeof feature.deleteImageboardCredentials === 'function') {
+        const confirmed = confirm(`Are you sure you want to delete credentials for ${boardId}?`);
+        if (!confirmed) {
+          return;
+        }
+        
+        const success = await feature.deleteImageboardCredentials(this, boardId);
+        if (success) {
+          // Clear the form after successful deletion
+          if (this.imageboards.forms[boardId]) {
+            this.imageboards.forms[boardId].apiKey = '';
+            this.imageboards.forms[boardId].username = '';
+          }
+        }
+        return;
+      }
+      this.errorMessage = 'Imageboard settings module unavailable.';
     },
   };
 }
