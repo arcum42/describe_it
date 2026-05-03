@@ -411,16 +411,23 @@ class ImageboardImportService:
                 if image_data.rating:
                     caption_text = f"[{image_data.rating}] {caption_text}"
 
-                # Append source URL so the origin is traceable
-                if image_data.source_url:
-                    caption_text = f"{caption_text} | source:{image_data.source_url}"
-
                 caption_record = CaptionRecord(
                     image_id=image_record.id,
                     text=caption_text,
                     source=f"imageboard:{board_id}",
                 )
                 session.add(caption_record)
+
+                # Save source URL as a separate inactive caption so it's
+                # preserved for reference but not used as the active caption.
+                if image_data.source_url:
+                    source_caption = CaptionRecord(
+                        image_id=image_record.id,
+                        text=f"source:{image_data.source_url}",
+                        source=f"imageboard:{board_id}",
+                        is_active=False,
+                    )
+                    session.add(source_caption)
 
             session.commit()
 

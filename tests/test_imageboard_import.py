@@ -235,10 +235,12 @@ async def test_import_creates_image_and_caption(tmp_path):
         assert images[0].filename.startswith("mock_1.")
 
         captions = session.scalars(select(CaptionRecord)).all()
-        assert len(captions) == 1
-        assert "fluffy" in captions[0].text
-        assert "solo" in captions[0].text
-        assert captions[0].source == "imageboard:mock"
+        # Active tag caption + inactive source caption
+        assert len(captions) == 2
+        active = next(c for c in captions if c.is_active)
+        assert "fluffy" in active.text
+        assert "solo" in active.text
+        assert active.source == "imageboard:mock"
 
 
 @pytest.mark.anyio
@@ -865,8 +867,8 @@ class TestTwibooruClient:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.anyio
-async def test_caption_includes_source_url_when_available(tmp_path):
-    """When source_url is present on the image, caption should note it."""
+async def test_source_url_saved_as_inactive_caption(tmp_path):
+    """source_url is stored as a separate inactive caption; active caption stays clean."""
     db_path = _create_project(tmp_path, "source_attr")
     image_bytes = _make_png_bytes((20, 40, 60))
     fake_img = ImageboardImage(
@@ -896,9 +898,17 @@ async def test_caption_includes_source_url_when_available(tmp_path):
     from sqlalchemy import select
     sf = create_sqlite_session_factory(db_path)
     with sf() as session:
-        caption = session.scalar(select(CaptionRecord))
-        assert caption is not None
-        assert "derpibooru.org/images/42" in caption.text
+        captions = session.scalars(select(CaptionRecord)).all()
+        assert len(captions) == 2
+
+        active = next(c for c in captions if c.is_active)
+        inactive = next(c for c in captions if not c.is_active)
+
+        # Active caption should NOT contain the source URL
+        assert "derpibooru.org/images/42" not in active.text
+        # Inactive caption holds the source reference
+        assert "derpibooru.org/images/42" in inactive.text
+        assert inactive.text.startswith("source:")
 
 
 # ---------------------------------------------------------------------------
