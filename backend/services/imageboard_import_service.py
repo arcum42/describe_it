@@ -135,11 +135,15 @@ class ImageboardImportService:
 
         normalized = query.strip().replace(",", " ")
 
-        # Convert patterns like "fluttershy (mlp)" into "fluttershy_(mlp)".
-        pattern = re.compile(r"(?P<prefix>-?[A-Za-z0-9:_]+)\s*\(\s*(?P<paren>[^()]+?)\s*\)")
+        # Convert patterns like "fluttershy (mlp)" and
+        # "apple bloom (mlp)" into "fluttershy_(mlp)" and
+        # "apple_bloom_(mlp)".
+        pattern = re.compile(
+            r"(?P<prefix>-?[A-Za-z0-9:_]+(?:\s+[A-Za-z0-9:_]+)*)\s*\(\s*(?P<paren>[^()]+?)\s*\)"
+        )
 
         def _replace(match: re.Match[str]) -> str:
-            prefix = match.group("prefix")
+            prefix = "_".join(match.group("prefix").split())
             paren_value = "_".join(match.group("paren").split())
             return f"{prefix}_({paren_value})"
 

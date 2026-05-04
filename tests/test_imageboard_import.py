@@ -1084,6 +1084,11 @@ class TestNormalizeQueryForBoard:
         result = svc._normalize_query_for_board("fluttershy (mlp)", "e621")
         assert result == "fluttershy_(mlp)"
 
+    def test_e621_multiword_parenthetical_tag_is_normalized(self):
+        svc = ImageboardImportService()
+        result = svc._normalize_query_for_board("apple bloom (mlp)", "e621")
+        assert result == "apple_bloom_(mlp)"
+
     def test_e621_parenthetical_with_spaces_is_normalized(self):
         svc = ImageboardImportService()
         result = svc._normalize_query_for_board("fluttershy (my little pony)", "e621")
