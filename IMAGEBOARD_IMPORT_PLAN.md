@@ -13,6 +13,18 @@ Add support for importing images and their tags from external imageboards (e.g.,
 - Preserve the local-first, Python-only runtime experience.
 - Keep image downloads efficient and handle pagination gracefully.
 
+## Current Status Snapshot (May 2026)
+
+- Phase 0 through Phase 5 are implemented and in active use.
+- Phase 6 test coverage is implemented with service, router, client parsing, duplicate detection, and live-diagnostic coverage.
+- Source attribution is implemented as a separate inactive caption (`source:<url>`) instead of polluting the active caption.
+- Rating filter UI/API is implemented (`any`, `safe`, `questionable`, `explicit`) with board-specific query formatting.
+- Duplicate detection is implemented via SHA-256 hash comparison with import-time skip support.
+- e621 total count reporting is fixed for single-tag queries using tag `post_count` lookup.
+- Rails query normalization is implemented for parenthetical tags, including multi-word prefixes (for example `apple bloom (mlp)` -> `apple_bloom_(mlp)`).
+- Caption rating formatting is normalized to comma-separated tokens (`safe, tag1, tag2`) without brackets.
+- Philomena-family rating extraction now falls back to tag scanning when the dedicated rating field is absent.
+
 ## Architecture Overview
 
 ### Component Layer
