@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -121,6 +122,31 @@ class ImageboardImportService:
             return f"{query} rating:{letter}".strip() if query.strip() else f"rating:{letter}"
         return query
 
+    @staticmethod
+    def _normalize_query_for_board(query: str, board_id: str) -> str:
+        """
+        Normalize user query into board-preferred syntax.
+
+        Rails-style boards (Danbooru/e621) expect tags separated by spaces and
+        character franchise tags in the form name_(franchise).
+        """
+        if board_id not in ("danbooru", "e621"):
+            return query
+
+        normalized = query.strip().replace(",", " ")
+
+        # Convert patterns like "fluttershy (mlp)" into "fluttershy_(mlp)".
+        pattern = re.compile(r"(?P<prefix>-?[A-Za-z0-9:_]+)\s*\(\s*(?P<paren>[^()]+?)\s*\)")
+
+        def _replace(match: re.Match[str]) -> str:
+            prefix = match.group("prefix")
+            paren_value = "_".join(match.group("paren").split())
+            return f"{prefix}_({paren_value})"
+
+        normalized = pattern.sub(_replace, normalized)
+        normalized = " ".join(normalized.split())
+        return normalized
+
     async def search(
         self,
         board_id: str,
@@ -153,7 +179,8 @@ class ImageboardImportService:
         if not client:
             raise ValueError(f"Board not supported: {board_id}")
 
-        effective_query = self._apply_rating_filter(query, board_id, rating_filter)
+        normalized_query = self._normalize_query_for_board(query, board_id)
+        effective_query = self._apply_rating_filter(normalized_query, board_id, rating_filter)
 
         try:
             result = await client.search(
@@ -286,7 +313,8 @@ class ImageboardImportService:
             if not client:
                 raise ValueError(f"Board not supported: {board_id}")
 
-            effective_query = self._apply_rating_filter(query, board_id, rating_filter)
+            normalized_query = self._normalize_query_for_board(query, board_id)
+            effective_query = self._apply_rating_filter(normalized_query, board_id, rating_filter)
 
             search_result = await client.search(
                 query=effective_query,
