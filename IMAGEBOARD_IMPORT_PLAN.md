@@ -25,6 +25,43 @@ Add support for importing images and their tags from external imageboards (e.g.,
 - Caption rating formatting is normalized to comma-separated tokens (`safe, tag1, tag2`) without brackets.
 - Philomena-family rating extraction now falls back to tag scanning when the dedicated rating field is absent.
 
+## Current Architecture (Condensed)
+
+- Credentials layer:
+  - Service: `backend/services/imageboard_credentials_service.py`
+  - Persistence: `ImageboardCredential` rows in app-state SQLite
+  - API endpoints support list/update/delete and board metadata
+- Client layer:
+  - Shared base + HTTP utility under `backend/llm/imageboard/`
+  - Concrete clients: Derpibooru, Tantabus, Twibooru, Danbooru, e621
+  - Board-specific query/rate-limit handling and tag/rating extraction
+- Import orchestration:
+  - Service: `backend/services/imageboard_import_service.py`
+  - Router: `backend/routers/imageboard_import.py`
+  - Features: preview, import, rating filter, duplicate skipping, source attribution
+- Frontend:
+  - Import UI and settings UI in static JS modules
+  - Search/preview/import workflow with board/sort/rating controls
+- Testing:
+  - Main regression suite: `tests/test_imageboard_import.py`
+  - Optional live diagnostics: `tests/test_imageboard_live_search.py`
+
+## Prioritized Backlog (Current)
+
+1. Credential validation endpoint
+   - Implement optional `validate_credentials` flow in credentials service and expose via API.
+2. Accurate totals for complex e621 queries
+   - Current total-count improvement is reliable for single-tag lookups.
+   - Explore robust strategy for multi-tag/intersection totals without heavy pagination.
+3. Optional import progress stream
+   - Add SSE/WebSocket progress events for long imports and visible retry/backoff status.
+4. Query helpers and UX polish
+   - Advanced query builder (date ranges, exclusions, reusable presets).
+   - Board-aware hints/examples in the import modal.
+5. Performance and resilience
+   - Optional caching for repeated preview searches.
+   - More granular retry telemetry surfaced in UI.
+
 ## Architecture Overview
 
 ### Component Layer
@@ -1697,20 +1734,14 @@ tests/
 
 ## Development Notes
 
-1. **Start with Phase 0** — Database schema + credentials management is the foundation
-   - All other phases depend on credentials being retrievable
-   - Implement settings UI for easy credential entry
-2. **Then Phase 1–3** to establish the client framework
-3. **Verify API compatibility** with at least one real board before moving to UI.
-4. **Keep API clients stateless** to allow easy testing and mocking.
-5. **Document rate limits** and best practices for each board.
-6. **Use type hints** throughout (Pydantic for request/response validation).
-7. **Test error cases** thoroughly (network errors, malformed responses, auth failures).
-8. **Consider future boards**: Design the abstraction so adding new boards requires minimal code changes.
-9. **User-Agent configuration:** Prompt user for their e621/Danbooru username during setup for proper User-Agent headers.
-10. **Rate limiting strategy:** Implement conservative delays per board (use slowest limit as baseline, then adjust as needed).
-11. **Derpibooru challenges:** Treat 501/500 responses as critical—test locally with intentionally aggressive requests to verify backoff works.
-12. **Database exports:** Document that Derpibooru/Danbooru offer nightly exports for bulk data; recommend as alternative for very large imports.
+These notes are now maintained as implementation guardrails rather than build-order steps:
+
+1. Keep clients stateless and board-specific logic localized.
+2. Preserve conservative rate-limiting defaults and explicit User-Agent handling.
+3. Keep search/import API shapes backward compatible with frontend modules.
+4. Add focused regression tests for every behavior fix in service/client layers.
+5. Prefer safe import defaults (no destructive operations, clear partial-failure accounting).
+6. Treat live API diagnostics as optional but keep them runnable for incident triage.
 
 ---
 
