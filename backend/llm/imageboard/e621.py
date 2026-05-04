@@ -112,6 +112,7 @@ class E621Client(ImageboardClient):
                     image_url=self._extract_image_url(img_data),
                     source_url=f"{self.base_url}/posts/{img_data.get('id')}",
                     tags=self._extract_tags(img_data),
+                    creator_tags=self._extract_creator_tags(img_data),
                     rating=self._extract_rating(img_data),
                 )
                 images.append(image)
@@ -200,6 +201,7 @@ class E621Client(ImageboardClient):
                 image_url=self._extract_image_url(post_data),
                 source_url=f"{self.base_url}/posts/{image_id}",
                 tags=self._extract_tags(post_data),
+                creator_tags=self._extract_creator_tags(post_data),
                 rating=self._extract_rating(post_data),
             )
 
@@ -273,14 +275,29 @@ class E621Client(ImageboardClient):
         if "tags" in post_data:
             tags_obj = post_data["tags"]
             if isinstance(tags_obj, dict):
-                # Combine all tag categories
-                for category in ["general", "species", "character", "artist", "copyright", "meta"]:
+                # Combine non-creator categories only; creator tags are preserved separately.
+                for category in ["general", "species", "character", "copyright", "meta"]:
                     if category in tags_obj:
                         tags.extend(tags_obj[category])
             elif isinstance(tags_obj, list):
                 tags.extend(tags_obj)
         
         return [t for t in tags if t]
+
+    @staticmethod
+    def _extract_creator_tags(post_data: dict) -> list[str]:
+        """Extract creator names from e621 post response."""
+        if "tags" not in post_data:
+            return []
+
+        tags_obj = post_data["tags"]
+        if not isinstance(tags_obj, dict):
+            return []
+
+        artists = tags_obj.get("artist", [])
+        if not isinstance(artists, list):
+            return []
+        return [tag for tag in artists if tag]
 
     @staticmethod
     def _extract_rating(post_data: dict) -> Optional[str]:

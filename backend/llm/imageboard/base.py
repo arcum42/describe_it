@@ -15,6 +15,7 @@ class ImageboardImage:
     image_url: str
     source_url: str | None = None
     tags: list[str] = field(default_factory=list)
+    creator_tags: list[str] = field(default_factory=list)
     rating: str | None = None
 
 

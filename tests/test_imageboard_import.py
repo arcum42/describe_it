@@ -54,6 +54,7 @@ def _create_project(tmp_path: Path, name: str = "import_test") -> str:
 def _fake_image(
     image_id: int = 1,
     tags: list[str] | None = None,
+    creator_tags: list[str] | None = None,
     rating: str = "safe",
     url: str = "https://example.com/image.png",
 ) -> ImageboardImage:
@@ -63,6 +64,7 @@ def _fake_image(
         image_url=url,
         source_url=f"https://example.com/posts/{image_id}",
         tags=tags or ["tag_a", "tag_b"],
+        creator_tags=creator_tags or [],
         rating=rating,
     )
 
@@ -277,6 +279,88 @@ async def test_import_with_rating_only_creates_caption(tmp_path):
         captions = session.scalars(select(CaptionRecord)).all()
         active = next(c for c in captions if c.is_active)
         assert active.text == "safe"
+
+
+@pytest.mark.anyio
+async def test_import_excludes_creator_tags_by_default(tmp_path):
+    db_path = _create_project(tmp_path, "import_without_creators")
+    fake_img = _fake_image(
+        10,
+        tags=["artist:jcosneverexisted", "editor:someone", "prompter:model", "solo"],
+        rating="safe",
+    )
+    mock_client = _MockClient(search_result=_fake_search_result([fake_img]))
+
+    svc = ImageboardImportService()
+    with patch.object(svc, "get_client", new=AsyncMock(return_value=mock_client)):
+        await svc.import_images(
+            project_path=db_path,
+            board_id="derpibooru",
+            query="solo",
+            import_count=1,
+            include_tags_in_caption=True,
+            skip_duplicates=False,
+        )
+
+    sf = create_sqlite_session_factory(db_path)
+    from sqlalchemy import select
+    with sf() as session:
+        active = next(c for c in session.scalars(select(CaptionRecord)).all() if c.is_active)
+        assert active.text == "safe, solo"
+
+
+@pytest.mark.anyio
+async def test_import_includes_creator_tags_when_enabled(tmp_path):
+    db_path = _create_project(tmp_path, "import_with_creators")
+    fake_img = _fake_image(
+        11,
+        tags=["artist:jcosneverexisted", "editor:someone", "prompter:model", "solo"],
+        rating="safe",
+    )
+    mock_client = _MockClient(search_result=_fake_search_result([fake_img]))
+
+    svc = ImageboardImportService()
+    with patch.object(svc, "get_client", new=AsyncMock(return_value=mock_client)):
+        await svc.import_images(
+            project_path=db_path,
+            board_id="derpibooru",
+            query="solo",
+            import_count=1,
+            include_tags_in_caption=True,
+            include_creator_tags=True,
+            skip_duplicates=False,
+        )
+
+    sf = create_sqlite_session_factory(db_path)
+    from sqlalchemy import select
+    with sf() as session:
+        active = next(c for c in session.scalars(select(CaptionRecord)).all() if c.is_active)
+        assert active.text == "safe, artist:jcosneverexisted, editor:someone, prompter:model, solo"
+
+
+@pytest.mark.anyio
+async def test_import_includes_e621_creator_tags_when_enabled(tmp_path):
+    db_path = _create_project(tmp_path, "import_e621_creators")
+    fake_img = _fake_image(12, tags=["fluffy", "solo"], creator_tags=["some_artist"], rating="safe")
+    mock_client = _MockClient(search_result=_fake_search_result([fake_img]))
+
+    svc = ImageboardImportService()
+    with patch.object(svc, "get_client", new=AsyncMock(return_value=mock_client)):
+        await svc.import_images(
+            project_path=db_path,
+            board_id="e621",
+            query="fluffy",
+            import_count=1,
+            include_tags_in_caption=True,
+            include_creator_tags=True,
+            skip_duplicates=False,
+        )
+
+    sf = create_sqlite_session_factory(db_path)
+    from sqlalchemy import select
+    with sf() as session:
+        active = next(c for c in session.scalars(select(CaptionRecord)).all() if c.is_active)
+        assert active.text == "safe, artist:some_artist, fluffy, solo"
 
 
 @pytest.mark.anyio
@@ -552,6 +636,41 @@ def test_do_import_endpoint_passes_skip_duplicates_flag(tmp_path):
     assert resp.status_code == 200
     _, kwargs = instance.import_images.call_args
     assert kwargs.get("skip_duplicates") is False
+
+
+def test_do_import_endpoint_passes_include_creator_tags_flag(tmp_path):
+    db_path = _create_project(tmp_path, "router_creator_flag")
+
+    with patch(
+        "backend.routers.imageboard_import.get_imageboard_import_service"
+    ) as mock_factory:
+        instance = MagicMock()
+        mock_factory.return_value = instance
+        instance.import_images = AsyncMock(
+            return_value=ImportResult(
+                board_id="mock",
+                imported_count=1,
+                failed_count=0,
+                skipped_count=0,
+                duplicate_count=0,
+                errors=[],
+            )
+        )
+
+        resp = client.post(
+            "/api/imageboard-import/do-import",
+            json={
+                "project_path": db_path,
+                "board_id": "mock",
+                "query": "test",
+                "import_count": 1,
+                "include_creator_tags": True,
+            },
+        )
+
+    assert resp.status_code == 200
+    _, kwargs = instance.import_images.call_args
+    assert kwargs.get("include_creator_tags") is True
 
 
 def test_do_import_endpoint_rejects_missing_project_path():
@@ -831,8 +950,18 @@ class TestE621Client:
         assert "solo" in tags
         assert "canine" in tags
         assert "fido" in tags
-        assert "some_artist" in tags
         assert "highres" in tags
+
+    def test_extract_creator_tags_from_category_dict(self):
+        from backend.llm.imageboard.e621 import E621Client
+        post_data = {
+            "tags": {
+                "general": ["fluffy"],
+                "artist": ["some_artist", "other_artist"],
+            }
+        }
+        tags = E621Client._extract_creator_tags(post_data)
+        assert tags == ["some_artist", "other_artist"]
 
     def test_extract_tags_flat_list_fallback(self):
         from backend.llm.imageboard.e621 import E621Client

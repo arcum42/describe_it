@@ -21,6 +21,7 @@
     app.imageboardImport.sortDirection = 'desc';
     app.imageboardImport.importCount = 10;
     app.imageboardImport.includeTags = true;
+    app.imageboardImport.includeCreatorTags = false;
     app.imageboardImport.ratingFilter = 'any';
     app.imageboardImport.previewImages = [];
     app.imageboardImport.totalAvailable = 0;
@@ -126,7 +127,7 @@
    * Import images from the selected board into the current project.
    */
   async function doImport(app) {
-    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags, skipDuplicates, ratingFilter } =
+    const { selectedBoard, query, sortBy, sortDirection, importCount, includeTags, includeCreatorTags, skipDuplicates, ratingFilter } =
       app.imageboardImport;
 
     if (!app.currentProject?.path) {
@@ -154,6 +155,7 @@
           sort_direction: sortDirection,
           import_count: importCount,
           include_tags_in_caption: includeTags,
+          include_creator_tags: includeCreatorTags,
           skip_duplicates: skipDuplicates,
           rating_filter: ratingFilter,
         }),

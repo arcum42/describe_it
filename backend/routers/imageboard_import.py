@@ -42,6 +42,7 @@ class ImageboardImportRequest(BaseModel):
     sort_direction: str = Field(default="desc")
     import_count: int = Field(default=10, ge=1, le=100)
     include_tags_in_caption: bool = Field(default=True)
+    include_creator_tags: bool = Field(default=False)
     skip_duplicates: bool = Field(default=True)
     rating_filter: str = Field(default="any")
 
@@ -148,6 +149,7 @@ async def perform_import(req: ImageboardImportRequest) -> dict:
             sort_direction=req.sort_direction,
             import_count=req.import_count,
             include_tags_in_caption=req.include_tags_in_caption,
+            include_creator_tags=req.include_creator_tags,
             skip_duplicates=req.skip_duplicates,
             rating_filter=req.rating_filter,
         )

@@ -262,6 +262,7 @@ function describeItApp() {
       sortDirection: 'desc',
       importCount: 10,
       includeTags: true,
+      includeCreatorTags: false,
       skipDuplicates: true,
       ratingFilter: 'any',
       previewImages: [],

@@ -22,8 +22,8 @@
     <script defer src="/static/js/features/shortcuts.js?v=20260503a"></script>
     <script defer src="/static/js/features/export.js?v=20260502a"></script>
     <script defer src="/static/js/features/import.js?v=20260502a"></script>
-    <script defer src="/static/js/features/imageboard-import.js?v=20260503b"></script>
-    <script defer src="/static/app.js?v=20260503b"></script>
+    <script defer src="/static/js/features/imageboard-import.js?v=20260503c"></script>
+    <script defer src="/static/app.js?v=20260503c"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -2618,6 +2618,14 @@
                            x-model="imageboardImport.includeTags"
                            class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                     Create captions from image tags
+                  </label>
+
+                  <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                    <input type="checkbox"
+                           x-model="imageboardImport.includeCreatorTags"
+                           :disabled="!imageboardImport.includeTags"
+                           class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50" />
+                    Include creator tags (artist/editor/prompter)
                   </label>
 
                   <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">

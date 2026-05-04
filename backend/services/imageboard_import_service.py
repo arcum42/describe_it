@@ -53,6 +53,8 @@ class ImportResult:
 class ImageboardImportService:
     """Service for importing images from imageboards into projects."""
 
+    CREATOR_TAG_PREFIXES = ("artist:", "editor:", "prompter:")
+
     def __init__(self):
         """Initialize the import service."""
         self.credentials_service = get_imageboard_credentials_service()
@@ -150,6 +152,22 @@ class ImageboardImportService:
         normalized = pattern.sub(_replace, normalized)
         normalized = " ".join(normalized.split())
         return normalized
+
+    @classmethod
+    def _filter_creator_tags(cls, tags: list[str]) -> list[str]:
+        """Remove creator-like tags from a normalized tag list."""
+        return [tag for tag in tags if not tag.startswith(cls.CREATOR_TAG_PREFIXES)]
+
+    @staticmethod
+    def _normalize_creator_tags(creator_tags: list[str]) -> list[str]:
+        """Normalize explicit creator names into artist:<name> tags."""
+        normalized = []
+        for creator_tag in creator_tags:
+            creator_tag = creator_tag.strip().lower()
+            if not creator_tag:
+                continue
+            normalized.append(f"artist:{creator_tag}")
+        return sorted(set(normalized))
 
     async def search(
         self,
@@ -280,6 +298,7 @@ class ImageboardImportService:
         sort_direction: str = "desc",
         import_count: int = 10,
         include_tags_in_caption: bool = True,
+        include_creator_tags: bool = False,
         skip_duplicates: bool = True,
         rating_filter: str = "any",
     ) -> ImportResult:
@@ -345,6 +364,7 @@ class ImageboardImportService:
                         image_data=image_data,
                         board_id=board_id,
                         include_tags=include_tags_in_caption,
+                        include_creator_tags=include_creator_tags,
                         skip_duplicates=skip_duplicates,
                         existing_hashes=existing_hashes,
                     )
@@ -374,6 +394,7 @@ class ImageboardImportService:
         image_data,
         board_id: str,
         include_tags: bool = True,
+        include_creator_tags: bool = False,
         skip_duplicates: bool = True,
         existing_hashes: set[str] | None = None,
     ) -> tuple[bool, bool]:
@@ -437,11 +458,16 @@ class ImageboardImportService:
             if include_tags and (image_data.tags or image_data.rating):
                 # Normalize tags for the board
                 normalized_tags = client.normalize_tags(image_data.tags)
+                if not include_creator_tags:
+                    normalized_tags = self._filter_creator_tags(normalized_tags)
                 caption_parts: list[str] = []
 
                 # Put rating first as a normal tag-like token.
                 if image_data.rating:
                     caption_parts.append(image_data.rating)
+
+                if include_creator_tags and image_data.creator_tags:
+                    caption_parts.extend(self._normalize_creator_tags(image_data.creator_tags))
 
                 caption_parts.extend(normalized_tags)
                 caption_text = ", ".join(caption_parts)
