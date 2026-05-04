@@ -833,7 +833,7 @@ class TestE621Client:
         assert "explicit" not in result
         assert "fluffy" in result
 
-    async def test_search_uses_counts_endpoint_for_total_count(self):
+    async def test_search_uses_tag_lookup_for_total_count(self):
         from backend.llm.imageboard.e621 import E621Client
 
         c = E621Client(api_key="k", username="u")
@@ -850,7 +850,7 @@ class TestE621Client:
                         }
                     ]
                 },
-                {"counts": {"posts": 3_100_000}},
+                [{"name": "female", "post_count": 3_100_000}],
             ]
         )
 
@@ -860,7 +860,7 @@ class TestE621Client:
         assert len(result.images) == 1
         assert result.images[0].id == 1
 
-    async def test_search_falls_back_when_counts_unavailable(self):
+    async def test_search_falls_back_when_tag_lookup_unavailable(self):
         from backend.llm.imageboard.e621 import E621Client
 
         c = E621Client(api_key="k", username="u")
@@ -883,7 +883,7 @@ class TestE621Client:
                         },
                     ]
                 },
-                {"counts": {}},
+                [],
             ]
         )
 

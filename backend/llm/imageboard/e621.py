@@ -116,7 +116,7 @@ class E621Client(ImageboardClient):
                 )
                 images.append(image)
 
-            # e621 post search often omits total count; fetch it from counts API.
+            # e621 post search omits total count; attempt a tag-based lookup.
             total_count = response.get("count") if isinstance(response, dict) else None
             if not isinstance(total_count, int):
                 total_count = await self._fetch_total_count(query)
@@ -135,21 +135,44 @@ class E621Client(ImageboardClient):
             raise
 
     async def _fetch_total_count(self, query: str) -> Optional[int]:
-        """Fetch total post count for a tags query using e621 counts endpoint."""
+        """Fetch approximate total count for simple e621 queries.
+
+        e621 does not provide a general total count in /posts.json responses.
+        For single-tag queries, we can query /tags.json and use post_count.
+        """
+        tokens = [t for t in query.split() if t]
+        positive_tokens = [t for t in tokens if not t.startswith("-")]
+        content_tokens = [t for t in positive_tokens if not t.startswith("rating:")]
+
+        # Reliable only for one direct tag token.
+        if len(content_tokens) != 1:
+            return None
+
+        tag_name = content_tokens[0]
+
         try:
             response = await self.http_client.get(
-                f"{self.base_url}/counts/posts.json",
-                params={"tags": query},
+                f"{self.base_url}/tags.json",
+                params={"search[name_matches]": tag_name, "limit": 1},
             )
 
-            if not isinstance(response, dict):
+            if not isinstance(response, list) or not response:
                 return None
 
-            counts = response.get("counts")
-            if isinstance(counts, dict):
-                posts_count = counts.get("posts")
-                if isinstance(posts_count, int):
-                    return posts_count
+            top = response[0]
+            if not isinstance(top, dict):
+                return None
+            if top.get("name") != tag_name:
+                return None
+
+            posts_count = top.get("post_count")
+            if isinstance(posts_count, int):
+                return posts_count
+            if isinstance(posts_count, str):
+                try:
+                    return int(posts_count)
+                except ValueError:
+                    return None
             return None
         except Exception as e:
             logger.warning(f"Failed to fetch e621 total count for query '{query}': {e}")
