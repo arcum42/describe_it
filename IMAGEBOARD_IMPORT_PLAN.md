@@ -1716,26 +1716,26 @@ tests/
 
 ## Phase 0 Implementation Checklist
 
-- [ ] Add `ImageboardCredential` model to `backend/db/models.py`
-- [ ] Create `backend/services/imageboard_credentials_service.py` with:
+- [x] Add `ImageboardCredential` model to `backend/db/models.py`
+- [x] Create `backend/services/imageboard_credentials_service.py` with:
   - `get_credentials(board_id)` → returns dict with api_key, username
   - `get_all_credentials_summary()` → returns masked display data
   - `save_credentials(board_id, api_key, username)`
   - `delete_credentials(board_id)`
-  - `validate_credentials(board_id, api_key, username)` (optional: test API call)
-- [ ] Add endpoints to router (or existing settings router):
+  - `validate_credentials(board_id, api_key, username)` (optional: test API call) ⬜ not implemented
+- [x] Add endpoints to router (or existing settings router):
   - `GET /api/settings/imageboard-credentials`
   - `GET /api/settings/imageboard-boards`
   - `POST /api/settings/imageboard-credentials/update`
   - `DELETE /api/settings/imageboard-credentials/:board_id`
-- [ ] Create `frontend/js/imageboard-settings.js` with:
+- [x] Create `frontend/js/imageboard-settings.js` with:
   - Board list display
   - Credential input forms (API key, username)
   - Save/Delete buttons
   - Links to API key generation per board
   - Masked key display (show last 4 chars only)
-- [ ] Add settings tab to main app UI linking to imageboard-settings module
-- [ ] Test: Add credentials via UI, verify persisted in DB, retrieve and display correctly
+- [x] Add settings tab to main app UI linking to imageboard-settings module
+- [x] Test: Add credentials via UI, verify persisted in DB, retrieve and display correctly
 
 ---
 
@@ -1755,16 +1755,16 @@ tests/
 
 ## Success Criteria
 
-- [ ] **Phase 0:** Users can add/edit/delete API keys in settings for all 5 boards; credentials persisted in DB
-- [ ] **Phase 1:** Abstract base class supports all required board operations; HTTP client handles retries/delays
-- [ ] **Phase 2:** All 5 boards have working clients; search/tag extraction verified
-- [ ] **Phase 3:** Service layer orchestrates search, preview, and import; pagination handled
-- [ ] **Phase 4:** REST API endpoints functional for search and import
-- [ ] **Phase 5:** UI is responsive and user-friendly; credentials masked in display
-- [ ] **Phase 6:** Tests cover core search, import, and error handling paths
-- [ ] All five initial boards are functional.
-- [ ] Users can select an imageboard and search by query/sort.
-- [ ] Search results show preview (thumbnails, count, pagination info).
-- [ ] Users can specify number of images to import.
-- [ ] Images and their tags are imported as captions into the project database.
-- [ ] Import completes without data loss on network errors or partial failures.
+- [x] **Phase 0:** Users can add/edit/delete API keys in settings for all 5 boards; credentials persisted in DB
+- [x] **Phase 1:** Abstract base class supports all required board operations; HTTP client handles retries/delays
+- [x] **Phase 2:** All 5 boards have working clients; search/tag extraction verified
+- [x] **Phase 3:** Service layer orchestrates search, preview, and import; pagination handled
+- [x] **Phase 4:** REST API endpoints functional for search and import
+- [x] **Phase 5:** UI is responsive and user-friendly; credentials masked in display
+- [x] **Phase 6:** Tests cover core search, import, and error handling paths
+- [x] All five initial boards are functional.
+- [x] Users can select an imageboard and search by query/sort.
+- [x] Search results show preview (thumbnails, count, pagination info).
+- [x] Users can specify number of images to import.
+- [x] Images and their tags are imported as captions into the project database.
+- [x] Import completes without data loss on network errors or partial failures.
