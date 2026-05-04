@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -22,6 +23,7 @@ from backend.llm.imageboard.derpibooru import DerpibooruClient
 from backend.llm.imageboard.e621 import E621Client
 from backend.llm.imageboard.tantabus import TantabusClient
 from backend.llm.imageboard.twibooru import TwibooruClient
+from backend.services.imageboard_import_service import ImageboardImportService
 
 
 pytestmark = pytest.mark.anyio
@@ -129,6 +131,53 @@ async def test_live_e621_search_and_counts_consistency():
         top = raw_counts[0]
         assert isinstance(top, dict)
         assert top.get("name") == query
+        site_posts = top.get("post_count")
+        if isinstance(site_posts, str):
+            site_posts = int(site_posts)
+        assert isinstance(site_posts, int)
+        assert result.total_count == site_posts
+    finally:
+        await client.close()
+
+
+@pytest.mark.skipif(not _live_enabled(), reason="Set RUN_LIVE_IMAGEBOARD_TESTS=1 to run live API diagnostics")
+async def test_live_e621_fluttershy_mlp_query_matches_tag_count_via_service():
+    """Validate the exact UI query path through service normalization for e621."""
+    username = os.environ.get("E621_USERNAME")
+    api_key = os.environ.get("E621_API_KEY")
+    if not username or not api_key:
+        username, api_key = _get_saved_credentials("e621")
+    if not username or not api_key:
+        pytest.skip("Set E621_USERNAME/E621_API_KEY or save e621 credentials in repo .describe_it/app_state.db")
+
+    client = E621Client(api_key=api_key, username=username)
+    svc = ImageboardImportService()
+    # Force known live client regardless of test-state credential DB redirection.
+    svc.get_client = AsyncMock(return_value=client)
+
+    try:
+        result = await svc.search(
+            board_id="e621",
+            query="fluttershy (mlp)",
+            sort_by="date",
+            sort_direction="desc",
+            page=1,
+            per_page=6,
+            rating_filter="any",
+        )
+        _assert_basic_search_shape("e621:fluttershy_(mlp)", result)
+
+        await client._ensure_http_client()
+        raw_tags = await client.http_client.get(
+            f"{client.base_url}/tags.json",
+            params={"search[name_matches]": "fluttershy_(mlp)", "limit": 1},
+        )
+        print(f"[e621:fluttershy_(mlp)] raw tags payload={raw_tags}")
+        assert isinstance(raw_tags, list)
+        assert raw_tags
+        top = raw_tags[0]
+        assert isinstance(top, dict)
+        assert top.get("name") == "fluttershy_(mlp)"
         site_posts = top.get("post_count")
         if isinstance(site_posts, str):
             site_posts = int(site_posts)
