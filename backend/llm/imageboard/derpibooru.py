@@ -217,4 +217,14 @@ class DerpibooruClient(ImageboardClient):
         rating = img_data.get("rating")
         if rating in ("safe", "suggestive", "explicit"):
             return rating
+
+        # Some responses expose rating only as a tag; fall back to tag scan.
+        raw_tags = DerpibooruClient._extract_tags(img_data)
+        tag_set = {t.lower().strip() for t in raw_tags}
+        if "explicit" in tag_set:
+            return "explicit"
+        if "suggestive" in tag_set:
+            return "suggestive"
+        if "safe" in tag_set:
+            return "safe"
         return None

@@ -240,4 +240,14 @@ class TwibooruClient(ImageboardClient):
         rating = post_data.get("rating")
         if rating in ("safe", "suggestive", "explicit"):
             return rating
+
+        # Some responses carry rating only in tags/tag_string.
+        raw_tags = TwibooruClient._extract_tags(post_data)
+        tag_set = {t.lower().strip() for t in raw_tags}
+        if "explicit" in tag_set:
+            return "explicit"
+        if "suggestive" in tag_set:
+            return "suggestive"
+        if "safe" in tag_set:
+            return "safe"
         return None

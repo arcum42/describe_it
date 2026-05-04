@@ -238,9 +238,45 @@ async def test_import_creates_image_and_caption(tmp_path):
         # Active tag caption + inactive source caption
         assert len(captions) == 2
         active = next(c for c in captions if c.is_active)
+        assert active.text.startswith("safe, ")
+        assert "[safe]" not in active.text
         assert "fluffy" in active.text
         assert "solo" in active.text
         assert active.source == "imageboard:mock"
+
+
+@pytest.mark.anyio
+async def test_import_with_rating_only_creates_caption(tmp_path):
+    db_path = _create_project(tmp_path, "import_rating_only")
+    fake_img = ImageboardImage(
+        id=9,
+        title="image_9.png",
+        image_url="https://example.com/image9.png",
+        source_url="https://example.com/posts/9",
+        tags=[],
+        rating="safe",
+    )
+    mock_client = _MockClient(search_result=_fake_search_result([fake_img]))
+
+    svc = ImageboardImportService()
+    with patch.object(svc, "get_client", new=AsyncMock(return_value=mock_client)):
+        result = await svc.import_images(
+            project_path=db_path,
+            board_id="mock",
+            query="test",
+            import_count=1,
+            include_tags_in_caption=True,
+            skip_duplicates=False,
+        )
+
+    assert result.imported_count == 1
+
+    sf = create_sqlite_session_factory(db_path)
+    from sqlalchemy import select
+    with sf() as session:
+        captions = session.scalars(select(CaptionRecord)).all()
+        active = next(c for c in captions if c.is_active)
+        assert active.text == "safe"
 
 
 @pytest.mark.anyio
@@ -676,6 +712,11 @@ class TestDerpibooruClient:
         from backend.llm.imageboard.derpibooru import DerpibooruClient
         assert DerpibooruClient._extract_rating({"rating": "gore"}) is None
 
+    def test_extract_rating_falls_back_to_tags(self):
+        from backend.llm.imageboard.derpibooru import DerpibooruClient
+        img_data = {"tags": ["solo", "safe", "fluttershy"]}
+        assert DerpibooruClient._extract_rating(img_data) == "safe"
+
     def test_normalize_tags_removes_rating_tags(self):
         from backend.llm.imageboard.derpibooru import DerpibooruClient
         c = DerpibooruClient()
@@ -911,6 +952,11 @@ class TestTwibooruClient:
         assert TwibooruClient._extract_rating({"rating": "explicit"}) == "explicit"
         assert TwibooruClient._extract_rating({"rating": "suggestive"}) == "suggestive"
         assert TwibooruClient._extract_rating({"rating": "unknown"}) is None
+
+    def test_extract_rating_falls_back_to_tags(self):
+        from backend.llm.imageboard.twibooru import TwibooruClient
+        post_data = {"tags": ["rainbow dash", "suggestive", "flying"]}
+        assert TwibooruClient._extract_rating(post_data) == "suggestive"
 
     def test_normalize_tags_removes_rating_tags(self):
         from backend.llm.imageboard.twibooru import TwibooruClient

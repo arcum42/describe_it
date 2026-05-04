@@ -429,15 +429,18 @@ class ImageboardImportService:
             session.add(image_record)
             session.flush()  # Get the ID
 
-            # Create caption from tags if requested
-            if include_tags and image_data.tags:
+            # Create caption from tags/rating if requested
+            if include_tags and (image_data.tags or image_data.rating):
                 # Normalize tags for the board
                 normalized_tags = client.normalize_tags(image_data.tags)
-                caption_text = ", ".join(normalized_tags)
+                caption_parts: list[str] = []
 
-                # Include rating if available
+                # Put rating first as a normal tag-like token.
                 if image_data.rating:
-                    caption_text = f"[{image_data.rating}] {caption_text}"
+                    caption_parts.append(image_data.rating)
+
+                caption_parts.extend(normalized_tags)
+                caption_text = ", ".join(caption_parts)
 
                 caption_record = CaptionRecord(
                     image_id=image_record.id,
