@@ -70,6 +70,10 @@ class BatchJobResult:
 
 
 class BatchService:
+    _CONNECT_TIMEOUT_SECONDS = 15.0
+    _BUSY_TIMEOUT_MILLISECONDS = 15000
+    _RESULTS_LOCK_RETRIES = 3
+
     def __init__(self) -> None:
         self._jobs: dict[str, BatchJob] = {}
         self._lock = threading.Lock()
@@ -82,8 +86,11 @@ class BatchService:
         return settings.state_dir / "app_state.db"
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._db_path())
+        connection = sqlite3.connect(self._db_path(), timeout=self._CONNECT_TIMEOUT_SECONDS)
         connection.row_factory = sqlite3.Row
+        connection.execute(f"PRAGMA busy_timeout = {self._BUSY_TIMEOUT_MILLISECONDS}")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         return connection
 
     def _ensure_schema(self) -> None:
@@ -575,18 +582,28 @@ class BatchService:
         with self._lock:
             if job_id not in self._jobs:
                 raise ValueError(f"Batch job not found: {job_id}")
-        with self._connect() as connection:
-            rows = connection.execute(
-                """
-                SELECT job_id, image_id, filename, status, attempts, generated_text, error, started_at, finished_at
-                FROM batch_job_results
-                WHERE job_id = ?
-                ORDER BY image_id ASC
-                LIMIT ?
-                """,
-                (job_id, max(1, min(2000, int(limit)))),
-            ).fetchall()
-        return [dict(row) for row in rows]
+
+        row_limit = max(1, min(2000, int(limit)))
+        for attempt in range(self._RESULTS_LOCK_RETRIES + 1):
+            try:
+                with self._connect() as connection:
+                    rows = connection.execute(
+                        """
+                        SELECT job_id, image_id, filename, status, attempts, generated_text, error, started_at, finished_at
+                        FROM batch_job_results
+                        WHERE job_id = ?
+                        ORDER BY image_id ASC
+                        LIMIT ?
+                        """,
+                        (job_id, row_limit),
+                    ).fetchall()
+                return [dict(row) for row in rows]
+            except sqlite3.OperationalError as error:
+                if "database is locked" not in str(error).lower() or attempt >= self._RESULTS_LOCK_RETRIES:
+                    raise
+                time.sleep(0.05 * (2**attempt))
+
+        return []
 
     def export_job_results_csv(self, *, job_id: str) -> str:
         rows = self.get_job_results(job_id=job_id, limit=5000)

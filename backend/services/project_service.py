@@ -43,6 +43,7 @@ class BrowserListing:
     parent_path: str | None
     directories: list[BrowserEntry]
     db_files: list[BrowserEntry]
+    files: list[BrowserEntry]
     roots: list[str]
 
 
@@ -235,6 +236,7 @@ def browse_project_paths(*, path: str | None = None) -> BrowserListing:
 
     directories: list[BrowserEntry] = []
     db_files: list[BrowserEntry] = []
+    files: list[BrowserEntry] = []
     for child in sorted(current_path.iterdir(), key=lambda item: (not item.is_dir(), item.name.lower())):
         if child.name.startswith('.') and child.name not in {'.github'}:
             continue
@@ -244,6 +246,8 @@ def browse_project_paths(*, path: str | None = None) -> BrowserListing:
             directories.append(entry)
         elif child.suffix == ".db":
             db_files.append(entry)
+        else:
+            files.append(entry)
 
     parent_path: str | None = None
     for root in _allowed_browser_roots():
@@ -260,5 +264,6 @@ def browse_project_paths(*, path: str | None = None) -> BrowserListing:
         parent_path=parent_path,
         directories=directories,
         db_files=db_files,
+        files=files,
         roots=[str(root) for root in _allowed_browser_roots()],
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import mimetypes
@@ -8,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from PIL import Image, ImageOps
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from backend.config import get_settings
 from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
@@ -45,6 +46,15 @@ class ImageDetail:
     derived_operation: str | None
     derived_operation_params: str | None
     captions: list[CaptionCandidate]
+
+
+@dataclass
+class DuplicateImageGroup:
+    hash_value: str
+    kept_image_id: int
+    kept_filename: str
+    kept_caption_count: int
+    duplicate_images: list[dict[str, object]]
 
 
 def _resolve_path(raw_path: str) -> Path:
@@ -103,6 +113,50 @@ def _load_image_blob(image: ImageRecord, image_id: int) -> bytes:
     if blob is None:
         raise ValueError(f"No image bytes available for image: {image_id}")
     return blob
+
+
+def _normalize_caption_text(text: str | None) -> str:
+    return (text or "").strip()
+
+
+def _build_duplicate_groups(session) -> list[tuple[str, list[ImageRecord]]]:
+    images = session.scalars(
+        select(ImageRecord)
+        .where(ImageRecord.deleted_at.is_(None), ImageRecord.original_blob.is_not(None))
+        .order_by(ImageRecord.id.asc())
+    ).all()
+
+    grouped: dict[str, list[ImageRecord]] = {}
+    for image in images:
+        if image.original_blob is None:
+            continue
+        hash_value = hashlib.sha256(image.original_blob).hexdigest()
+        grouped.setdefault(hash_value, []).append(image)
+
+    return [(hash_value, grouped_images) for hash_value, grouped_images in grouped.items() if len(grouped_images) > 1]
+
+
+def _build_duplicate_group_summary(session, hash_value: str, images: list[ImageRecord]) -> DuplicateImageGroup:
+    caption_counts = {
+        image.id: session.scalar(select(func.count(CaptionRecord.id)).where(CaptionRecord.image_id == image.id)) or 0
+        for image in images
+    }
+    kept_image = images[0]
+    duplicate_images = [
+        {
+            "id": image.id,
+            "filename": image.filename,
+            "caption_count": int(caption_counts.get(image.id, 0)),
+        }
+        for image in images[1:]
+    ]
+    return DuplicateImageGroup(
+        hash_value=hash_value,
+        kept_image_id=kept_image.id,
+        kept_filename=kept_image.filename,
+        kept_caption_count=int(caption_counts.get(kept_image.id, 0)),
+        duplicate_images=duplicate_images,
+    )
 
 
 def _build_output_filename(
@@ -310,50 +364,151 @@ def get_image_content(*, project_path: str, image_id: int) -> tuple[bytes, str]:
         return blob, media_type
 
 
-def update_image_included(*, project_path: str, image_id: int, included: bool) -> dict[str, object]:
+def _resolve_existing_project_path(project_path: str) -> Path:
     resolved_project_path = _resolve_path(project_path)
     if not resolved_project_path.exists():
         raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    return resolved_project_path
+
+
+def _normalize_image_ids(image_ids: list[int]) -> list[int]:
+    if not image_ids:
+        raise ValueError("At least one image id is required")
+
+    ordered_ids: list[int] = []
+    seen: set[int] = set()
+    for image_id in image_ids:
+        if image_id in seen:
+            continue
+        seen.add(image_id)
+        ordered_ids.append(image_id)
+    return ordered_ids
+
+
+def _set_image_included_for_project(*, session, resolved_project_path: Path, image_id: int, included: bool) -> ImageRecord:
+    image = _load_image_for_project(session, resolved_project_path, image_id)
+    image.included = included
+    return image
+
+
+def _duplicate_image_for_project(
+    *,
+    session,
+    resolved_project_path: Path,
+    image_id: int,
+    include_captions: bool,
+    copy_mode: str,
+    existing_filenames: set[str],
+) -> tuple[ImageRecord, ImageRecord, int]:
+    source_image = _load_image_for_project(session, resolved_project_path, image_id)
+    blob = _load_image_blob(source_image, image_id)
+
+    new_filename = _build_duplicate_filename(existing_filenames, source_image.filename)
+    existing_filenames.add(new_filename)
+    duplicate, copied_caption_count = _create_derived_image(
+        session=session,
+        source_image=source_image,
+        filename=new_filename,
+        image_bytes=blob,
+        width=source_image.width or 0,
+        height=source_image.height or 0,
+        operation_type="duplicate",
+        operation_params={"copy_mode": copy_mode, "include_captions": include_captions},
+        include_captions=include_captions,
+        caption_copy_mode=copy_mode,
+    )
+    return source_image, duplicate, copied_caption_count
+
+
+def _delete_image_for_project(
+    *,
+    session,
+    resolved_project_path: Path,
+    image_id: int,
+    mode: str,
+    confirm_hard_delete: bool,
+) -> dict[str, object]:
+    if mode not in {"soft", "hard"}:
+        raise ValueError(f"Unsupported delete mode: {mode}")
+    if mode == "hard" and not confirm_hard_delete:
+        raise ValueError("Hard delete requires confirm_hard_delete=true")
+
+    image = _load_image_for_project(session, resolved_project_path, image_id, include_deleted=True)
+
+    if mode == "soft":
+        image.deleted_at = datetime.now(UTC)
+        return {
+            "image_id": image.id,
+            "deleted_at": image.deleted_at.isoformat(),
+            "mode": mode,
+        }
+
+    captions = session.scalars(select(CaptionRecord).where(CaptionRecord.image_id == image.id)).all()
+    for caption in captions:
+        session.delete(caption)
+    session.delete(image)
+    return {
+        "image_id": image_id,
+        "deleted_at": None,
+        "mode": mode,
+    }
+
+
+def update_image_included(*, project_path: str, image_id: int, included: bool) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
-
-        image = _load_image_for_project(session, resolved_project_path, image_id)
-
-        image.included = included
+        image = _set_image_included_for_project(
+            session=session,
+            resolved_project_path=resolved_project_path,
+            image_id=image_id,
+            included=included,
+        )
         session.commit()
 
         return {"image_id": image.id, "included": image.included}
 
 
+def batch_update_image_included(*, project_path: str, image_ids: list[int], included: bool) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
+    normalized_image_ids = _normalize_image_ids(image_ids)
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        updated_ids: list[int] = []
+        for image_id in normalized_image_ids:
+            image = _set_image_included_for_project(
+                session=session,
+                resolved_project_path=resolved_project_path,
+                image_id=image_id,
+                included=included,
+            )
+            updated_ids.append(image.id)
+        session.commit()
+
+    return {
+        "image_ids": updated_ids,
+        "updated_count": len(updated_ids),
+        "included": included,
+    }
+
+
 def duplicate_image(*, project_path: str, image_id: int, include_captions: bool = True, copy_mode: str = "all_candidates") -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = _resolve_existing_project_path(project_path)
     if copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported copy mode: {copy_mode}")
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        source_image = _load_image_for_project(session, resolved_project_path, image_id)
-        blob = _load_image_blob(source_image, image_id)
-
         existing_filenames = set(session.scalars(select(ImageRecord.filename)).all())
-        new_filename = _build_duplicate_filename(existing_filenames, source_image.filename)
-        duplicate, copied_caption_count = _create_derived_image(
+        source_image, duplicate, copied_caption_count = _duplicate_image_for_project(
             session=session,
-            source_image=source_image,
-            filename=new_filename,
-            image_bytes=blob,
-            width=source_image.width or 0,
-            height=source_image.height or 0,
-            operation_type="duplicate",
-            operation_params={"copy_mode": copy_mode, "include_captions": include_captions},
+            resolved_project_path=resolved_project_path,
+            image_id=image_id,
             include_captions=include_captions,
-            caption_copy_mode=copy_mode,
+            copy_mode=copy_mode,
+            existing_filenames=existing_filenames,
         )
 
         session.commit()
@@ -371,6 +526,59 @@ def duplicate_image(*, project_path: str, image_id: int, include_captions: bool 
             },
             "copied_caption_count": copied_caption_count,
         }
+
+
+def batch_duplicate_images(
+    *,
+    project_path: str,
+    image_ids: list[int],
+    include_captions: bool = True,
+    copy_mode: str = "all_candidates",
+) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
+    normalized_image_ids = _normalize_image_ids(image_ids)
+    if copy_mode not in {"active_only", "all_candidates", "none"}:
+        raise ValueError(f"Unsupported copy mode: {copy_mode}")
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        existing_filenames = set(session.scalars(select(ImageRecord.filename)).all())
+        new_images: list[dict[str, object]] = []
+        source_image_ids: list[int] = []
+        copied_caption_count = 0
+
+        for image_id in normalized_image_ids:
+            source_image, duplicate, copied_count = _duplicate_image_for_project(
+                session=session,
+                resolved_project_path=resolved_project_path,
+                image_id=image_id,
+                include_captions=include_captions,
+                copy_mode=copy_mode,
+                existing_filenames=existing_filenames,
+            )
+            source_image_ids.append(source_image.id)
+            copied_caption_count += copied_count
+            new_images.append(
+                {
+                    "id": duplicate.id,
+                    "filename": duplicate.filename,
+                    "width": duplicate.width,
+                    "height": duplicate.height,
+                    "included": duplicate.included,
+                    "source_image_id": duplicate.source_image_id,
+                    "derived_operation": duplicate.derived_operation,
+                    "derived_operation_params": duplicate.derived_operation_params,
+                }
+            )
+
+        session.commit()
+
+    return {
+        "source_image_ids": source_image_ids,
+        "created_count": len(new_images),
+        "new_images": new_images,
+        "copied_caption_count": copied_caption_count,
+    }
 
 
 def crop_image(
@@ -793,37 +1001,158 @@ def extract_region_image(
 
 
 def delete_image(*, project_path: str, image_id: int, mode: str = "soft", confirm_hard_delete: bool = False) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
-    if mode not in {"soft", "hard"}:
-        raise ValueError(f"Unsupported delete mode: {mode}")
-    if mode == "hard" and not confirm_hard_delete:
-        raise ValueError("Hard delete requires confirm_hard_delete=true")
+    resolved_project_path = _resolve_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        image = _load_image_for_project(session, resolved_project_path, image_id, include_deleted=True)
-
-        if mode == "soft":
-            image.deleted_at = datetime.now(UTC)
-            session.commit()
-            return {
-                "image_id": image.id,
-                "deleted_at": image.deleted_at.isoformat(),
-                "mode": mode,
-            }
-
-        captions = session.scalars(select(CaptionRecord).where(CaptionRecord.image_id == image.id)).all()
-        for caption in captions:
-            session.delete(caption)
-        session.delete(image)
+        result = _delete_image_for_project(
+            session=session,
+            resolved_project_path=resolved_project_path,
+            image_id=image_id,
+            mode=mode,
+            confirm_hard_delete=confirm_hard_delete,
+        )
         session.commit()
-        return {
-            "image_id": image_id,
-            "deleted_at": None,
-            "mode": mode,
-        }
+        return result
+
+
+def batch_delete_images(
+    *,
+    project_path: str,
+    image_ids: list[int],
+    mode: str = "soft",
+    confirm_hard_delete: bool = False,
+) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
+    normalized_image_ids = _normalize_image_ids(image_ids)
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        deleted_ids: list[int] = []
+        for image_id in normalized_image_ids:
+            _delete_image_for_project(
+                session=session,
+                resolved_project_path=resolved_project_path,
+                image_id=image_id,
+                mode=mode,
+                confirm_hard_delete=confirm_hard_delete,
+            )
+            deleted_ids.append(image_id)
+        session.commit()
+
+    return {
+        "image_ids": deleted_ids,
+        "deleted_count": len(deleted_ids),
+        "mode": mode,
+    }
+
+
+def find_duplicate_images_by_hash(*, project_path: str) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        duplicate_groups = [
+            _build_duplicate_group_summary(session, hash_value, images)
+            for hash_value, images in _build_duplicate_groups(session)
+        ]
+
+    removable_image_count = sum(len(group.duplicate_images) for group in duplicate_groups)
+    return {
+        "duplicate_group_count": len(duplicate_groups),
+        "removable_image_count": removable_image_count,
+        "groups": [
+            {
+                "hash": group.hash_value,
+                "hash_prefix": group.hash_value[:12],
+                "kept_image": {
+                    "id": group.kept_image_id,
+                    "filename": group.kept_filename,
+                    "caption_count": group.kept_caption_count,
+                },
+                "duplicate_images": group.duplicate_images,
+            }
+            for group in duplicate_groups
+        ],
+    }
+
+
+def apply_duplicate_cleanup(
+    *,
+    project_path: str,
+    mode: str = "soft",
+    confirm_hard_delete: bool = False,
+) -> dict[str, object]:
+    resolved_project_path = _resolve_existing_project_path(project_path)
+
+    session_factory = create_sqlite_session_factory(resolved_project_path)
+    with session_factory() as session:
+        groups = _build_duplicate_groups(session)
+        captions_merged = 0
+        captions_skipped = 0
+        removed_image_ids: list[int] = []
+
+        for _, images in groups:
+            kept_image = images[0]
+            kept_captions = session.scalars(
+                select(CaptionRecord)
+                .where(CaptionRecord.image_id == kept_image.id)
+                .order_by(CaptionRecord.created_at.asc(), CaptionRecord.id.asc())
+            ).all()
+            seen_caption_texts = {
+                normalized_text
+                for normalized_text in (_normalize_caption_text(caption.text) for caption in kept_captions)
+                if normalized_text
+            }
+            has_active_caption = any(caption.is_active for caption in kept_captions)
+
+            for duplicate_image in images[1:]:
+                duplicate_captions = session.scalars(
+                    select(CaptionRecord)
+                    .where(CaptionRecord.image_id == duplicate_image.id)
+                    .order_by(CaptionRecord.created_at.asc(), CaptionRecord.id.asc())
+                ).all()
+
+                for caption in duplicate_captions:
+                    normalized_text = _normalize_caption_text(caption.text)
+                    if not normalized_text:
+                        continue
+                    if normalized_text in seen_caption_texts:
+                        captions_skipped += 1
+                        continue
+
+                    session.add(
+                        CaptionRecord(
+                            image_id=kept_image.id,
+                            text=caption.text,
+                            is_active=not has_active_caption,
+                            source=caption.source,
+                        )
+                    )
+                    seen_caption_texts.add(normalized_text)
+                    captions_merged += 1
+                    if not has_active_caption:
+                        has_active_caption = True
+
+                _delete_image_for_project(
+                    session=session,
+                    resolved_project_path=resolved_project_path,
+                    image_id=duplicate_image.id,
+                    mode=mode,
+                    confirm_hard_delete=confirm_hard_delete,
+                )
+                removed_image_ids.append(duplicate_image.id)
+
+        session.commit()
+
+    return {
+        "duplicate_group_count": len(groups),
+        "removed_image_count": len(removed_image_ids),
+        "removed_image_ids": removed_image_ids,
+        "captions_merged": captions_merged,
+        "captions_skipped": captions_skipped,
+        "mode": mode,
+    }
 
 
 def restore_image(*, project_path: str, image_id: int) -> dict[str, object]:

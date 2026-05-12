@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from backend.services.app_state_service import get_project_session_state, update_project_session_state
 from backend.services.export_service import export_project_dataset, preview_project_export
 from backend.services.import_service import import_folder_into_project, import_single_image_into_project
+from backend.services.native_picker_service import open_native_path_picker
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -70,6 +71,12 @@ class ExportPreviewRequest(BaseModel):
     new_folder_name: str = ""
 
 
+class NativePickerRequest(BaseModel):
+    kind: str = Field(pattern="^(directory|file|db_file)$")
+    title: str = "Select a path"
+    start_path: str = ""
+
+
 @router.get("/recent")
 def recent_projects() -> dict[str, list[dict[str, str]]]:
     return {"projects": [entry.__dict__ for entry in list_recent_projects()]}
@@ -100,6 +107,7 @@ def browse_projects(path: str | None = Query(default=None)) -> dict[str, object]
         "parent_path": listing.parent_path,
         "directories": [entry.__dict__ for entry in listing.directories],
         "db_files": [entry.__dict__ for entry in listing.db_files],
+        "files": [entry.__dict__ for entry in listing.files],
         "roots": listing.roots,
     }
 
@@ -198,3 +206,18 @@ def export_project_preview_route(request: ExportPreviewRequest) -> dict[str, obj
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {"result": result.__dict__}
+
+
+@router.post("/native-picker")
+def native_picker_route(request: NativePickerRequest) -> dict[str, object]:
+    result = open_native_path_picker(
+        kind=request.kind,
+        title=request.title,
+        start_path=request.start_path.strip() or None,
+    )
+    return {
+        "available": result.available,
+        "selected_path": result.selected_path,
+        "reason": result.reason,
+        "backend": result.backend,
+    }

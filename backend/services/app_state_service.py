@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -17,6 +18,7 @@ DEFAULT_LMSTUDIO_NUM_CTX: int | None = None
 DEFAULT_REOPEN_LAST_PROJECT = True
 DEFAULT_USE_PRESET_BY_DEFAULT = False
 DEFAULT_SHOW_DEBUG_SECTION = False
+DEFAULT_USE_NATIVE_PATH_PICKER = True
 DEFAULT_EDITOR_IMAGE_ZOOM_MODE = "fit"
 DEFAULT_EDITOR_IMAGE_ZOOM_PERCENT = 100
 
@@ -323,6 +325,7 @@ def get_global_settings() -> dict[str, object]:
         raw_use_preset = _get_setting(connection, "llm_use_preset_by_default")
         raw_default_preset_id = _get_setting(connection, "llm_default_preset_id")
         raw_show_debug_section = _get_setting(connection, "ui_show_debug_section")
+        raw_use_native_path_picker = _get_setting(connection, "ui_use_native_path_picker")
         raw_ollama_base_url = _get_setting(connection, "ollama_base_url")
         raw_lmstudio_base_url = _get_setting(connection, "lmstudio_base_url")
         raw_ollama_timeout = _get_setting(connection, "ollama_timeout_seconds")
@@ -331,6 +334,7 @@ def get_global_settings() -> dict[str, object]:
         raw_lmstudio_num_ctx = _get_setting(connection, "lmstudio_num_ctx")
         raw_editor_zoom_mode = _get_setting(connection, "editor_default_image_zoom_mode")
         raw_editor_zoom_percent = _get_setting(connection, "editor_default_image_zoom_percent")
+        raw_panel_state = _get_setting(connection, "ui_panel_state")
 
     if raw_timeout is None:
         timeout_value = DEFAULT_LLM_TIMEOUT_SECONDS
@@ -358,6 +362,12 @@ def get_global_settings() -> dict[str, object]:
         else raw_show_debug_section.lower() in {"1", "true", "yes", "on"}
     )
 
+    use_native_path_picker = (
+        DEFAULT_USE_NATIVE_PATH_PICKER
+        if raw_use_native_path_picker is None
+        else raw_use_native_path_picker.lower() in {"1", "true", "yes", "on"}
+    )
+
     ollama_base_url = (raw_ollama_base_url or "").strip() or DEFAULT_OLLAMA_BASE_URL
     lmstudio_base_url = (raw_lmstudio_base_url or "").strip() or DEFAULT_LMSTUDIO_BASE_URL
 
@@ -377,12 +387,23 @@ def get_global_settings() -> dict[str, object]:
 
     editor_default_image_zoom_mode = _parse_zoom_mode(raw_editor_zoom_mode)
     editor_default_image_zoom_percent = _parse_zoom_percent(raw_editor_zoom_percent)
+    panel_state: dict[str, bool] = {}
+    if raw_panel_state:
+        try:
+            parsed_panel_state = json.loads(raw_panel_state)
+            if isinstance(parsed_panel_state, dict):
+                for key, value in parsed_panel_state.items():
+                    if isinstance(key, str):
+                        panel_state[key] = bool(value)
+        except json.JSONDecodeError:
+            panel_state = {}
 
     return {
         "llm_timeout_seconds": timeout_value,
         "llm_use_preset_by_default": use_preset_by_default,
         "llm_default_preset_id": default_preset_id,
         "ui_show_debug_section": show_debug_section,
+        "ui_use_native_path_picker": use_native_path_picker,
         "ollama_base_url": ollama_base_url,
         "lmstudio_base_url": lmstudio_base_url,
         "ollama_timeout_seconds": ollama_timeout_seconds,
@@ -391,6 +412,7 @@ def get_global_settings() -> dict[str, object]:
         "lmstudio_num_ctx": lmstudio_num_ctx,
         "editor_default_image_zoom_mode": editor_default_image_zoom_mode,
         "editor_default_image_zoom_percent": editor_default_image_zoom_percent,
+        "ui_panel_state": panel_state,
     }
 
 
@@ -400,6 +422,7 @@ def update_global_settings(
     llm_use_preset_by_default: bool,
     llm_default_preset_id: int | None,
     ui_show_debug_section: bool,
+    ui_use_native_path_picker: bool,
     ollama_base_url: str,
     lmstudio_base_url: str,
     ollama_timeout_seconds: int | None,
@@ -408,6 +431,7 @@ def update_global_settings(
     lmstudio_num_ctx: int | None,
     editor_default_image_zoom_mode: str,
     editor_default_image_zoom_percent: int,
+    ui_panel_state: dict[str, bool] | None = None,
 ) -> dict[str, object]:
     timeout_value = min(900, max(10, int(llm_timeout_seconds)))
     clean_ollama_base_url = ollama_base_url.strip() or DEFAULT_OLLAMA_BASE_URL
@@ -418,12 +442,18 @@ def update_global_settings(
     clean_lmstudio_num_ctx = None if lmstudio_num_ctx is None else min(262_144, max(256, int(lmstudio_num_ctx)))
     clean_editor_zoom_mode = _parse_zoom_mode(editor_default_image_zoom_mode)
     clean_editor_zoom_percent = min(400, max(25, int(editor_default_image_zoom_percent)))
+    clean_panel_state = {
+        str(key): bool(value)
+        for key, value in (ui_panel_state or {}).items()
+        if isinstance(key, str)
+    }
     with _connect() as connection:
         _ensure_schema(connection)
         _set_setting(connection, "llm_timeout_seconds", str(timeout_value))
         _set_setting(connection, "llm_use_preset_by_default", "true" if llm_use_preset_by_default else "false")
         _set_setting(connection, "llm_default_preset_id", "" if llm_default_preset_id is None else str(llm_default_preset_id))
         _set_setting(connection, "ui_show_debug_section", "true" if ui_show_debug_section else "false")
+        _set_setting(connection, "ui_use_native_path_picker", "true" if ui_use_native_path_picker else "false")
         _set_setting(connection, "ollama_base_url", clean_ollama_base_url)
         _set_setting(connection, "lmstudio_base_url", clean_lmstudio_base_url)
         _set_setting(connection, "ollama_timeout_seconds", "" if clean_ollama_timeout is None else str(clean_ollama_timeout))
@@ -432,6 +462,7 @@ def update_global_settings(
         _set_setting(connection, "lmstudio_num_ctx", "" if clean_lmstudio_num_ctx is None else str(clean_lmstudio_num_ctx))
         _set_setting(connection, "editor_default_image_zoom_mode", clean_editor_zoom_mode)
         _set_setting(connection, "editor_default_image_zoom_percent", str(clean_editor_zoom_percent))
+        _set_setting(connection, "ui_panel_state", json.dumps(clean_panel_state, separators=(",", ":")))
         connection.commit()
     return get_global_settings()
 

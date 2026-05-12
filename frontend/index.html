@@ -18,12 +18,13 @@
     <script defer src="/static/js/features/llm.js?v=20260502a"></script>
     <script defer src="/static/js/features/notes.js?v=20260502a"></script>
     <script defer src="/static/js/features/batch.js?v=20260502a"></script>
-    <script defer src="/static/js/features/editor.js?v=20260502b"></script>
+    <script defer src="/static/js/features/grid.js?v=20260503a"></script>
+    <script defer src="/static/js/features/editor.js?v=20260503a"></script>
     <script defer src="/static/js/features/shortcuts.js?v=20260503a"></script>
     <script defer src="/static/js/features/export.js?v=20260502a"></script>
     <script defer src="/static/js/features/import.js?v=20260502a"></script>
     <script defer src="/static/js/features/imageboard-import.js?v=20260503c"></script>
-    <script defer src="/static/app.js?v=20260503c"></script>
+    <script defer src="/static/app.js?v=20260503d"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </head>
   <body class="bg-stone-950 text-stone-100">
@@ -115,7 +116,13 @@
                 </label>
                 <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                   Project Context File Path
-                  <input x-model="metadataForm.context_file_path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/context.md" />
+                  <div class="mt-2 flex items-center gap-2">
+                    <input x-model="metadataForm.context_file_path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/context.md" />
+                    <button @click="openPathPicker('metadata_context_file')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                      <span>Browse</span>
+                      <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                    </button>
+                  </div>
                 </label>
                 <button @click="saveMetadata()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                   Save Metadata
@@ -134,7 +141,13 @@
                 <div x-show="showOpenProject" class="mt-3 space-y-3">
                   <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                     DB Path
-                    <input x-model="openForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="openForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+                      <button @click="openPathPicker('open_project_db')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        <span>Browse</span>
+                        <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                      </button>
+                    </div>
                   </label>
                   <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                     Open Project
@@ -146,14 +159,30 @@
 
           <!-- ── Path browser (collapsible) ────────────────────────────── -->
           <div class="mt-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-            <button
-              @click="showBrowser = !showBrowser; showBrowser && loadBrowser(browser.currentPath)"
-              class="flex w-full items-center justify-between text-sm font-medium text-stone-200 hover:text-amber-300"
-            >
-              <span>Browse Filesystem</span>
-              <svg class="h-3 w-3 transition-transform" :class="showBrowser ? 'rotate-180' : ''" viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg>
-            </button>
+            <div class="flex items-center justify-between gap-3">
+              <button
+                @click="showBrowser = !showBrowser; showBrowser && loadBrowser(browser.currentPath)"
+                class="flex min-w-0 flex-1 items-center justify-between text-sm font-medium text-stone-200 hover:text-amber-300"
+              >
+                <span>Browse Filesystem</span>
+                <svg class="h-3 w-3 transition-transform" :class="showBrowser ? 'rotate-180' : ''" viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg>
+              </button>
+              <label class="field-checkbox whitespace-nowrap text-[10px] uppercase tracking-[0.15em] text-stone-500">
+                <input type="checkbox" x-model="settings.useNativePathPicker" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                Native Picker
+              </label>
+            </div>
             <div x-show="showBrowser" class="mt-4 space-y-3">
+              <template x-if="pathPicker.target">
+                <div class="rounded-xl border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+                  <div class="flex items-center justify-between gap-3">
+                    <span x-text="`Picker active: ${pathPicker.label}`"></span>
+                    <button @click="clearPathPicker()" class="rounded-lg border border-amber-700/70 px-2 py-1 text-[10px] uppercase tracking-[0.15em] text-amber-200 hover:border-amber-400">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </template>
               <div class="flex items-center justify-between gap-2">
                 <div class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-400 truncate" x-text="browser.currentPath"></div>
                 <button @click="loadBrowser(browser.currentPath)" class="shrink-0 rounded-xl border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
@@ -176,6 +205,11 @@
                     Use For Create
                   </button>
                 </template>
+                <template x-if="pathPicker.target && pickerExpectsDirectory()">
+                  <button @click="useCurrentBrowserDirectory()" class="rounded-xl border border-amber-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-amber-200 hover:border-amber-400">
+                    Use Current Folder
+                  </button>
+                </template>
               </div>
 
               <div class="grid gap-3 md:grid-cols-2">
@@ -196,13 +230,29 @@
                       <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No .db files here.</p>
                     </template>
                     <template x-for="file in browser.dbFiles" :key="file.path">
-                      <button @click="chooseOpenFile(file.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60">
+                      <button @click="useBrowserFile(file.path, 'db')" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="pathPicker.target && !pickerAcceptsFile('db') ? 'opacity-50' : ''">
                         <span x-text="file.name"></span>
                       </button>
                     </template>
                   </div>
                 </div>
               </div>
+
+              <template x-if="pathPicker.target && pickerExpectsFile()">
+                <div>
+                  <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Files</p>
+                  <div class="max-h-48 space-y-2 overflow-auto pr-1">
+                    <template x-if="browser.files.length === 0">
+                      <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No files here.</p>
+                    </template>
+                    <template x-for="file in browser.files" :key="file.path">
+                      <button @click="useBrowserFile(file.path, 'file')" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="pathPicker.target && !pickerAcceptsFile('file') ? 'opacity-50' : ''">
+                        <span x-text="file.name"></span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -251,7 +301,13 @@
                       </label>
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                         Path
-                        <input x-model="createForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+                        <div class="mt-2 flex items-center gap-2">
+                          <input x-model="createForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+                          <button @click="openPathPicker('create_project_path')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                            <span>Browse</span>
+                            <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                          </button>
+                        </div>
                       </label>
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                         Description
@@ -269,7 +325,13 @@
                       </div>
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                         Existing DB Path
-                        <input x-model="openForm.path" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+                        <div class="mt-2 flex items-center gap-2">
+                          <input x-model="openForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+                          <button @click="openPathPicker('open_project_db')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                            <span>Browse</span>
+                            <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                          </button>
+                        </div>
                       </label>
                       <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                         Open Project
@@ -347,23 +409,31 @@
               <template x-if="mainView === 'grid'">
                 <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
               <template x-if="currentProject">
-                <div class="mb-4 grid gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300 md:grid-cols-3">
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Images</p>
-                    <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.count"></p>
+                <div class="space-y-4">
+                  <div class="grid gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300 md:grid-cols-3">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Images</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.count"></p>
+                    </div>
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">With Captions</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.non_empty_caption_count"></p>
+                    </div>
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Blank Captions</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.blank_caption_count"></p>
+                    </div>
                   </div>
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-stone-500">With Captions</p>
-                    <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.non_empty_caption_count"></p>
-                  </div>
-                  <div>
-                    <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Blank Captions</p>
-                    <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.blank_caption_count"></p>
-                  </div>
-                </div>
 
-                <!-- Grid Filter Controls -->
-                <div class="mb-4 space-y-3 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <!-- Grid Filter Controls -->
+                  <div class="space-y-3 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <button @click="togglePanel('gridSearch', true)" class="flex w-full items-center justify-between text-left">
+                    <span class="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-amber-200">
+                      <span x-text="panelTriangle('gridSearch', true)"></span>
+                      <span>Search and Filters</span>
+                    </span>
+                  </button>
+                  <div x-show="isPanelOpen('gridSearch', true)" class="space-y-0">
                   <!-- Search -->
                   <div>
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Search</label>
@@ -486,30 +556,114 @@
                       </button>
                     </template>
                   </div>
+                  </div>
+                </div>
+
+                  <div class="flex flex-wrap items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">
+                  <button
+                    @click="toggleGridSelectionMode()"
+                    class="rounded-lg border px-3 py-2 text-xs uppercase tracking-[0.18em] transition"
+                    :class="gridSelectionMode ? 'border-sky-500 text-sky-200' : 'border-stone-700 text-stone-200 hover:border-amber-400 hover:text-amber-200'"
+                  >
+                    <span x-text="gridSelectionMode ? 'Cancel Multi-Select' : 'Select Multiple'"></span>
+                  </button>
+                  <template x-if="gridSelectionMode">
+                    <span class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300" x-text="`${selectedGridCount()} selected`"></span>
+                  </template>
+                  <template x-if="gridSelectionMode">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button @click="selectFilteredGridImages()" :disabled="isSubmitting || filteredGridCards().length === 0" class="rounded-lg border border-sky-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Select Filtered
+                      </button>
+                      <button @click="bulkIncludeSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-emerald-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Include Selected
+                      </button>
+                      <button @click="bulkExcludeSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-red-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Exclude Selected
+                      </button>
+                      <button @click="bulkDuplicateSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Duplicate Selected
+                      </button>
+                      <button @click="bulkDeleteSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-orange-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-orange-200 transition hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Delete Selected
+                      </button>
+                      <button @click="clearGridSelection()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Unselect All
+                      </button>
+                    </div>
+                  </template>
+                  <div class="ml-auto flex items-center gap-2">
+                    <button @click="findDuplicateImages()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Find Duplicates
+                    </button>
+                  </div>
+                </div>
+                  <template x-if="duplicateCleanup.preview">
+                    <div class="space-y-3 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Duplicate Cleanup</p>
+                        <p class="mt-1 text-sm text-stone-300" x-text="`${duplicateCleanup.preview.duplicate_group_count} duplicate group(s), ${duplicateCleanup.preview.removable_image_count} removable image(s)`"></p>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button @click="applyDuplicateCleanup('soft')" :disabled="isSubmitting || duplicateCleanup.preview.removable_image_count === 0" class="rounded-lg border border-orange-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-orange-200 transition hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-60">
+                          Apply Soft Cleanup
+                        </button>
+                        <button @click="applyDuplicateCleanup('hard')" :disabled="isSubmitting || duplicateCleanup.preview.removable_image_count === 0" class="rounded-lg border border-red-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60">
+                          Apply Hard Cleanup
+                        </button>
+                        <button @click="clearDuplicateCleanupPreview()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                    <p class="text-xs text-stone-500">Keeps the oldest image in each exact SHA-256 match group and merges unique captions from removed images onto the kept image.</p>
+                    <div class="space-y-2">
+                      <template x-for="group in duplicateCleanup.preview.groups" :key="group.hash">
+                        <div class="rounded-lg border border-stone-800 bg-stone-900/80 px-3 py-3 text-sm text-stone-300">
+                          <p class="text-xs uppercase tracking-[0.18em] text-stone-500" x-text="`Hash ${group.hash_prefix}`"></p>
+                          <p class="mt-1">
+                            Keep <span class="font-medium text-stone-100" x-text="group.kept_image.filename"></span>
+                            <span class="text-stone-500" x-text="`(${group.kept_image.caption_count} caption(s))`"></span>
+                          </p>
+                          <p class="mt-1 text-xs text-stone-400" x-text="`Remove ${group.duplicate_images.length} duplicate(s): ${group.duplicate_images.map((item) => item.filename).join(', ')}`"></p>
+                        </div>
+                      </template>
+                    </div>
+                    </div>
+                  </template>
                 </div>
               </template>
               <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                 <template x-for="card in filteredGridCards()" :key="card.id">
-                  <button @click="selectImage(card.id, true)" class="group overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 text-left transition hover:-translate-y-0.5 hover:border-amber-400/50" :class="selectedImage && selectedImage.id === card.id ? 'border-amber-400 ring-1 ring-amber-400/50' : ''">
-                    <div class="aspect-square overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950">
-                      <img :src="imageSrc(card.id)" :alt="card.label" class="h-full w-full object-cover" loading="lazy" />
-                    </div>
-                    <div class="space-y-2 px-3 py-3">
-                      <div class="flex items-center justify-between text-xs text-stone-400">
-                        <span x-text="card.label"></span>
-                        <span x-text="card.status"></span>
+                  <div class="group relative overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 transition hover:-translate-y-0.5 hover:border-amber-400/50" :class="[selectedImage && selectedImage.id === card.id ? 'border-amber-400 ring-1 ring-amber-400/50' : '', gridSelectionMode && isGridImageSelected(card.id) ? 'ring-2 ring-sky-500/70' : '']">
+                    <template x-if="gridSelectionMode">
+                      <label class="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-stone-700 bg-stone-950/90 px-2 py-1 text-xs text-stone-200 shadow-lg shadow-black/30" @click.stop>
+                        <input type="checkbox" class="rounded border-stone-600 bg-stone-900 text-sky-400 focus:ring-sky-400" :checked="isGridImageSelected(card.id)" @change="toggleGridImageSelection(card.id)" />
+                        <span>Select</span>
+                      </label>
+                    </template>
+                    <button type="button" @click="selectImage(card.id, true)" class="block w-full text-left">
+                      <div class="aspect-square overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950">
+                        <img :src="imageSrc(card.id)" :alt="card.label" class="h-full w-full object-cover" loading="lazy" />
                       </div>
-                      <p class="text-sm text-stone-300" x-text="card.active_caption_preview || 'No active caption yet.'"></p>
-                    </div>
-                  </button>
+                      <div class="space-y-2 px-3 py-3">
+                        <div class="flex items-center justify-between gap-3 text-xs text-stone-400">
+                          <span class="min-w-0 flex-1 truncate" x-text="card.label"></span>
+                          <span class="shrink-0" x-text="card.status"></span>
+                        </div>
+                        <p class="text-sm text-stone-300" x-text="card.active_caption_preview || 'No active caption yet.'"></p>
+                      </div>
+                    </button>
+                  </div>
                 </template>
                 <template x-if="filteredGridCards().length === 0">
                   <p class="col-span-full rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-400">
                     <template x-if="gridCards.length === 0">
-                      No images loaded yet. Import a folder to populate this grid.
+                      <span>No images loaded yet. Import a folder to populate this grid.</span>
                     </template>
                     <template x-if="gridCards.length > 0">
-                      No images match your filters. Try adjusting the search or filter criteria.
+                      <span>No images match your filters. Try adjusting the search or filter criteria.</span>
                     </template>
                   </p>
                 </template>
@@ -524,18 +678,8 @@
                 <span class="text-xs text-stone-500">Manual caption + candidate workflow</span>
               </div>
               <template x-if="selectedImage">
-                <div class="space-y-4">
+                <div class="flex flex-col gap-4">
                   <div x-effect="ensureEditorSubTab()"></div>
-                  <div class="inline-flex rounded-xl border border-stone-800 bg-stone-950/80 p-1">
-                    <template x-for="tab in editorSubTabs()" :key="tab.id">
-                      <button
-                        @click="setEditorSubTab(tab.id)"
-                        class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
-                        :class="editorView.subTab === tab.id ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
-                        x-text="tab.label"
-                      ></button>
-                    </template>
-                  </div>
 
                   <div x-show="editorView.subTab === 'caption' || editorView.subTab === 'image'" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-3">
                     <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -567,20 +711,58 @@
                       <p class="font-medium text-stone-100" x-text="selectedImage.filename"></p>
                       <p class="text-xs text-stone-500" x-text="`${selectedImage.width || '?'} x ${selectedImage.height || '?'} px`"></p>
                     </div>
-                    <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
-                      <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
-                    </button>
+                    <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                      <label class="field-checkbox mr-1 text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                        <input type="checkbox" x-model="editorNavigationUseFilteredGrid" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        filtered order
+                      </label>
+                      <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900/60 p-1">
+                        <button @click="goToFirstImage()" :disabled="isSubmitting || !hasPreviousImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="First" aria-label="First">
+                          |&lt;
+                        </button>
+                        <button @click="goToPreviousImage()" :disabled="isSubmitting || !hasPreviousImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="Back" aria-label="Back">
+                          &lt;
+                        </button>
+                        <button @click="goToNextImage()" :disabled="isSubmitting || !hasNextImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="Next" aria-label="Next">
+                          &gt;
+                        </button>
+                        <button @click="goToLastImage()" :disabled="isSubmitting || !hasNextImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="End" aria-label="End">
+                          &gt;|
+                        </button>
+                      </div>
+                      <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
+                        <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sticky top-2 z-20 inline-flex self-start rounded-xl border border-stone-800 bg-stone-950/95 p-1 backdrop-blur">
+                    <template x-for="tab in editorSubTabs()" :key="tab.id">
+                      <button
+                        @click="setEditorSubTab(tab.id)"
+                        class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                        :class="editorView.subTab === tab.id ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                        x-text="tab.label"
+                      ></button>
+                    </template>
                   </div>
 
                   <div x-show="editorView.subTab === 'image' && !isTagMode()" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <div class="mb-3 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-stone-200">Image Tools</p>
+                      <button
+                        @click="togglePanel('editorImageTools', true)"
+                        class="flex items-center gap-2 text-left text-sm font-medium text-stone-200 hover:text-amber-200"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorImageTools', true)"></span>
+                        <span>Image Tools</span>
+                      </button>
                       <button
                         @click="imageTools.showAdvanced = !imageTools.showAdvanced"
                         class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200"
                         x-text="imageTools.showAdvanced ? 'Mode: Advanced' : 'Mode: Simple'"
                       ></button>
                     </div>
+
+                    <div x-show="isPanelOpen('editorImageTools', true)" class="space-y-0">
 
                     <div class="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                       <button @click="applyImageToolPreset('scale50')" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1.5 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">Scale 50%</button>
@@ -724,15 +906,24 @@
                       </div>
                       <p x-show="!imageToolValidation('extract').ok" class="mt-2 text-xs text-red-300" x-text="imageToolValidation('extract').message"></p>
                     </div>
+                    </div>
                   </div>
 
-                  <div x-show="editorView.subTab === 'caption'" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                  <div x-show="editorView.subTab === 'caption'" class="order-2 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <div class="mb-3 flex items-center justify-between gap-3">
-                      <p class="text-sm font-medium text-stone-200">LLM Caption Generator</p>
+                      <button
+                        @click="togglePanel('editorLLM', false)"
+                        class="flex items-center gap-2 text-left text-sm font-medium text-stone-200 hover:text-amber-200"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorLLM', false)"></span>
+                        <span>LLM Caption Generator</span>
+                      </button>
                       <button @click="loadLLMBackends()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
                         Refresh Models
                       </button>
                     </div>
+
+                    <div x-show="isPanelOpen('editorLLM', false)" class="space-y-0">
 
                     <div class="grid gap-3 md:grid-cols-2">
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
@@ -814,7 +1005,13 @@
                         </label>
                         <label class="block text-xs text-stone-400">
                           Reference file path (pre-read before generation)
-                          <input type="text" x-model="llm.tools.contextFile" placeholder="/path/to/notes.txt" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                          <div class="mt-1 flex items-center gap-2">
+                            <input type="text" x-model="llm.tools.contextFile" placeholder="/path/to/notes.txt" class="min-w-0 flex-1 rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                            <button @click="openPathPicker('llm_context_file')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                              <span>Browse</span>
+                              <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                            </button>
+                          </div>
                         </label>
                         <div class="space-y-2">
                           <p class="text-xs text-stone-500">Notes context (injected from the Notes tab)</p>
@@ -902,6 +1099,7 @@
                         No LLM backend is reachable yet. Start Ollama or LM Studio, then refresh models.
                       </p>
                     </template>
+                    </div>
                   </div>
 
                   <template x-if="!isTagMode() && editorView.subTab === 'caption'">
@@ -1079,8 +1277,17 @@
                     </div>
                   </template>
 
-                  <div x-show="editorView.subTab === 'caption' && !isTagMode()" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
-                    <p class="text-sm font-medium text-stone-200">Caption Candidates</p>
+                  <div x-show="editorView.subTab === 'caption' && !isTagMode()" class="order-1 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <button
+                      @click="togglePanel('editorCaptionCandidates', true)"
+                      class="flex w-full items-center justify-between text-left"
+                    >
+                      <span class="flex items-center gap-2 text-sm font-medium text-stone-200">
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorCaptionCandidates', true)"></span>
+                        <span>Caption Candidates</span>
+                      </span>
+                    </button>
+                    <div x-show="isPanelOpen('editorCaptionCandidates', true)" class="space-y-0">
                     <p class="mt-1 text-xs text-stone-500">Use the controls on each caption to set active, edit, or delete.</p>
                     <div class="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
                       <template x-for="caption in selectedImage.captions" :key="caption.id">
@@ -1135,18 +1342,27 @@
                         </button>
                       </div>
                     </div>
+                    </div>
                   </div>
 
-                  <div x-show="editorView.subTab === 'caption'" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                  <div x-show="editorView.subTab === 'caption'" class="order-3 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <div class="mb-3 flex items-center justify-between gap-3">
-                      <div>
-                        <p class="text-sm font-medium text-stone-200">Batch Caption Replace</p>
-                        <p class="text-xs text-stone-500">Preview and apply find/replace with undo support.</p>
-                      </div>
+                      <button
+                        @click="togglePanel('editorBatchReplace', false)"
+                        class="flex items-center gap-2 text-left"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorBatchReplace', false)"></span>
+                        <div>
+                          <p class="text-sm font-medium text-stone-200">Batch Caption Replace</p>
+                          <p class="text-xs text-stone-500">Preview and apply find/replace with undo support.</p>
+                        </div>
+                      </button>
                       <button @click="loadCaptionBatchOperations()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                         Refresh History
                       </button>
                     </div>
+
+                    <div x-show="isPanelOpen('editorBatchReplace', false)" class="space-y-0">
 
                     <div class="grid gap-3 md:grid-cols-2">
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
@@ -1272,6 +1488,7 @@
                         </template>
                       </div>
                     </div>
+                    </div>
                   </div>
                 </div>
               </template>
@@ -1328,11 +1545,15 @@
                 <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
                   <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
                     <div class="mb-3 flex items-center justify-between">
-                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Notes List</p>
+                      <button @click="togglePanel('notesList', true)" class="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-amber-200">
+                        <span x-text="panelTriangle('notesList', true)"></span>
+                        <span>Notes List</span>
+                      </button>
                       <button @click="newNoteDraft()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
                         New
                       </button>
                     </div>
+                    <div x-show="isPanelOpen('notesList', true)" class="space-y-0">
                     <div class="max-h-80 space-y-2 overflow-auto pr-1">
                       <template x-for="note in notesActiveItems()" :key="`${notes.scope}-${note.id}`">
                         <button @click="selectNote(note)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="notes.selectedNoteId === note.id ? 'border-amber-500 ring-1 ring-amber-500/50' : ''">
@@ -1347,10 +1568,15 @@
                         <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No notes in this scope yet.</p>
                       </template>
                     </div>
+                    </div>
                   </div>
 
                   <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
-                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500" x-text="notes.editor.id ? 'Edit Note' : 'Create Note'"></p>
+                    <button @click="togglePanel('notesEditor', true)" class="mb-3 flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-amber-200">
+                      <span x-text="panelTriangle('notesEditor', true)"></span>
+                      <span x-text="notes.editor.id ? 'Edit Note' : 'Create Note'"></span>
+                    </button>
+                    <div x-show="isPanelOpen('notesEditor', true)" class="space-y-0">
                     <div class="grid gap-3 md:grid-cols-2">
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
                         Title
@@ -1389,17 +1615,22 @@
                         New Draft
                       </button>
                     </div>
+                    </div>
                   </div>
                 </div>
 
                 <div class="rounded-2xl border border-stone-800 bg-stone-950/40 p-4">
                   <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Optional Assistant</p>
-                      <p class="text-sm font-medium text-stone-200">LLM Note Assistant</p>
-                    </div>
+                    <button @click="togglePanel('notesAssistant', false)" class="flex items-center gap-2 text-left">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('notesAssistant', false)"></span>
+                      <div>
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Optional Assistant</p>
+                        <p class="text-sm font-medium text-stone-200">LLM Note Assistant</p>
+                      </div>
+                    </button>
                     <p class="text-xs text-stone-500">Generate draft text from a prompt, then save as a note.</p>
                   </div>
+                  <div x-show="isPanelOpen('notesAssistant', false)" class="space-y-0">
 
                   <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
@@ -1456,7 +1687,13 @@
                     </label>
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                       Context File (optional)
-                      <input x-model="notes.llm.contextFile" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/path/to/context.txt" />
+                      <div class="mt-2 flex items-center gap-2">
+                        <input x-model="notes.llm.contextFile" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/path/to/context.txt" />
+                        <button @click="openPathPicker('notes_context_file')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                          <span>Browse</span>
+                          <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                        </button>
+                      </div>
                     </label>
                   </div>
 
@@ -1518,6 +1755,7 @@
                       Generate + Save New Note
                     </button>
                   </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1532,13 +1770,23 @@
 
               <div class="grid gap-4 xl:grid-cols-2">
                 <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                  <div class="mb-1 flex items-center justify-between">
-                    <h3 class="text-sm font-medium text-stone-200">Import Folder</h3>
+                  <button @click="togglePanel('ioImport', true)" class="mb-1 flex w-full items-center justify-between text-left">
+                    <span class="flex items-center gap-2">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('ioImport', true)"></span>
+                      <h3 class="text-sm font-medium text-stone-200">Import Folder</h3>
+                    </span>
                     <span class="text-[11px] text-stone-500">image/text pairs</span>
-                  </div>
+                  </button>
+                  <div x-show="isPanelOpen('ioImport', true)" class="space-y-0">
                   <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                     Source Folder
-                    <input x-model="importForm.source_folder" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="importForm.source_folder" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
+                      <button @click="openPathPicker('import_source_folder')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        <span>Browse</span>
+                        <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                      </button>
+                    </div>
                   </label>
                   <label class="field-checkbox">
                     <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
@@ -1567,24 +1815,38 @@
                     </div>
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                       Image Path
-                      <input x-model="importForm.source_image" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set/img00.png" />
+                      <div class="mt-2 flex items-center gap-2">
+                        <input x-model="importForm.source_image" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set/img00.png" />
+                        <button @click="openPathPicker('import_source_image')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                          <span>Browse</span>
+                          <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                        </button>
+                      </div>
                     </label>
                     <button @click="importSingleImage()" :disabled="isActive('importSingleImage') || !currentProject" class="mt-3 rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
                       Import Single Image
                     </button>
                   </div>
+                  </div>
                 </div>
 
                 <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                  <div class="mb-1 flex items-center justify-between">
-                    <h3 class="text-sm font-medium text-stone-200">Export Dataset</h3>
+                  <button @click="togglePanel('ioExport', true)" class="mb-1 flex w-full items-center justify-between text-left">
+                    <span class="flex items-center gap-2">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('ioExport', true)"></span>
+                      <h3 class="text-sm font-medium text-stone-200">Export Dataset</h3>
+                    </span>
                     <span class="text-[11px] text-stone-500">image + caption pairs</span>
-                  </div>
+                  </button>
+                <div x-show="isPanelOpen('ioExport', true)" class="space-y-0">
                 <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                   Output Folder
                   <div class="mt-2 flex items-center gap-2">
                     <input x-model="exportForm.output_folder" @input="clearExportPreview()" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="exports" />
-                    <button @click="showBrowser = true" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200" title="Browse for a folder in the sidebar">Browse</button>
+                    <button @click="openPathPicker('export_output_folder')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200" title="Browse for a folder">
+                      <span>Browse</span>
+                      <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                    </button>
                   </div>
                 </label>
                 <label class="field-checkbox">
@@ -1635,6 +1897,7 @@
                   <button @click="exportProjectDataset()" :disabled="isActive('exportDataset') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
                     Export Dataset
                   </button>
+                </div>
                 </div>
                 </div>
               </div>
@@ -1840,6 +2103,11 @@
 
               <div class="space-y-4">
                 <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <button @click="togglePanel('batchConfig', true)" class="mb-3 flex w-full items-center gap-2 text-left text-sm font-medium text-stone-200 hover:text-amber-200">
+                    <span class="text-xs text-stone-500" x-text="panelTriangle('batchConfig', true)"></span>
+                    <span>Batch Configuration</span>
+                  </button>
+                  <div x-show="isPanelOpen('batchConfig', true)" class="space-y-0">
                   <div class="grid gap-3 md:grid-cols-2">
                     <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
                       Target
@@ -1969,11 +2237,16 @@
                       Cancel
                     </button>
                   </div>
+                  </div>
                 </div>
 
                 <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
-                  <div class="mb-2 flex items-center justify-between text-sm text-stone-300">
+                  <button @click="togglePanel('batchProgress', true)" class="mb-2 flex w-full items-center gap-2 text-left text-sm text-stone-300 hover:text-amber-200">
+                    <span class="text-xs text-stone-500" x-text="panelTriangle('batchProgress', true)"></span>
                     <span>Progress</span>
+                  </button>
+                  <div x-show="isPanelOpen('batchProgress', true)" class="space-y-0">
+                  <div class="mb-2 flex items-center justify-between text-sm text-stone-300">
                     <span x-text="`${batch.completed} / ${batch.total} (${batchProgressPercent()}%)`"></span>
                   </div>
                   <div class="h-3 overflow-hidden rounded-full bg-stone-800">
@@ -1987,9 +2260,18 @@
                     <span x-show="batch.status === 'paused'" class="text-amber-300">Paused</span>
                     <span x-show="batch.status === 'failed'" class="text-red-300">Failed (resume available)</span>
                   </div>
+                  </div>
                 </div>
 
                 <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="lg:col-span-2">
+                    <button @click="togglePanel('batchCurrent', true)" class="mb-2 flex items-center gap-2 text-left text-sm text-stone-300 hover:text-amber-200">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('batchCurrent', true)"></span>
+                      <span>Current Image and Latest Output</span>
+                    </button>
+                  </div>
+                  <template x-if="isPanelOpen('batchCurrent', true)">
+                    <div class="contents">
                   <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
                     <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Current Image</p>
                     <template x-if="batch.currentImageId">
@@ -2014,9 +2296,19 @@
                       <p class="mt-2 text-xs text-red-300" x-text="`Last error: ${batch.lastError}`"></p>
                     </template>
                   </div>
+                    </div>
+                  </template>
                 </div>
 
                 <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="lg:col-span-2">
+                    <button @click="togglePanel('batchHistory', true)" class="mb-2 flex items-center gap-2 text-left text-sm text-stone-300 hover:text-amber-200">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('batchHistory', true)"></span>
+                      <span>Job History and Per-Image Results</span>
+                    </button>
+                  </div>
+                  <template x-if="isPanelOpen('batchHistory', true)">
+                    <div class="contents">
                   <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
                     <div class="mb-2 flex items-center justify-between">
                       <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Job History</p>
@@ -2095,6 +2387,8 @@
                       </table>
                     </div>
                   </div>
+                    </div>
+                  </template>
                 </div>
               </div>
             </section>
@@ -2223,6 +2517,11 @@
                     <input type="checkbox" x-model="settings.reopenLastProjectOnStartup" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
                     Reopen last project on startup
                   </label>
+                  <label class="mt-3 field-checkbox">
+                    <input type="checkbox" x-model="settings.useNativePathPicker" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Use native file/folder picker when available
+                  </label>
+                  <p class="mt-2 text-xs text-stone-500">Turn this off to force the in-app browser picker for all Browse buttons.</p>
                 </div>
 
                 <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">

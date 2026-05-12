@@ -5,9 +5,14 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from backend.services.image_service import (
+    batch_delete_images,
+    batch_duplicate_images,
+    batch_update_image_included,
+    apply_duplicate_cleanup,
     crop_image,
     delete_image,
     duplicate_image,
+    find_duplicate_images_by_hash,
     extract_region_image,
     flip_image,
     get_image_content,
@@ -28,13 +33,39 @@ class UpdateIncludedRequest(BaseModel):
     included: bool
 
 
+class BatchIncludedRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_ids: list[int] = Field(min_length=1)
+    included: bool
+
+
 class DuplicateImageRequest(BaseModel):
     project_path: str = Field(min_length=1)
     include_captions: bool = True
     copy_mode: str = Field(default="all_candidates", pattern="^(active_only|all_candidates|none)$")
 
 
+class BatchDuplicateImageRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_ids: list[int] = Field(min_length=1)
+    include_captions: bool = True
+    copy_mode: str = Field(default="all_candidates", pattern="^(active_only|all_candidates|none)$")
+
+
 class DeleteImageRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    mode: str = Field(default="soft", pattern="^(soft|hard)$")
+    confirm_hard_delete: bool = False
+
+
+class BatchDeleteImageRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    image_ids: list[int] = Field(min_length=1)
+    mode: str = Field(default="soft", pattern="^(soft|hard)$")
+    confirm_hard_delete: bool = False
+
+
+class DuplicateCleanupRequest(BaseModel):
     project_path: str = Field(min_length=1)
     mode: str = Field(default="soft", pattern="^(soft|hard)$")
     confirm_hard_delete: bool = False
@@ -112,6 +143,67 @@ def list_images(project_path: str = Query(..., min_length=1)) -> dict[str, list[
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {"images": [item.__dict__ for item in items]}
+
+
+@router.post("/batch/included")
+def batch_set_included(request: BatchIncludedRequest) -> dict[str, object]:
+    try:
+        result = batch_update_image_included(
+            project_path=request.project_path.strip(),
+            image_ids=request.image_ids,
+            included=request.included,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return result
+
+
+@router.post("/batch/duplicate")
+def batch_duplicate_image_route(request: BatchDuplicateImageRequest) -> dict[str, object]:
+    try:
+        result = batch_duplicate_images(
+            project_path=request.project_path.strip(),
+            image_ids=request.image_ids,
+            include_captions=request.include_captions,
+            copy_mode=request.copy_mode,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return result
+
+
+@router.post("/batch/delete")
+def batch_delete_image_route(request: BatchDeleteImageRequest) -> dict[str, object]:
+    try:
+        result = batch_delete_images(
+            project_path=request.project_path.strip(),
+            image_ids=request.image_ids,
+            mode=request.mode,
+            confirm_hard_delete=request.confirm_hard_delete,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return result
+
+
+@router.get("/duplicates")
+def duplicate_images_preview(project_path: str = Query(..., min_length=1)) -> dict[str, object]:
+    try:
+        return find_duplicate_images_by_hash(project_path=project_path)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/duplicates/cleanup")
+def duplicate_images_cleanup(request: DuplicateCleanupRequest) -> dict[str, object]:
+    try:
+        return apply_duplicate_cleanup(
+            project_path=request.project_path.strip(),
+            mode=request.mode,
+            confirm_hard_delete=request.confirm_hard_delete,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @router.get("/{image_id}")

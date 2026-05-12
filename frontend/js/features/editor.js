@@ -21,10 +21,14 @@
   }
 
   async function loadImages(app) {
+    const gridFeature = window.DescribeItFeatures?.grid;
     if (!app.currentProject?.path) {
       app.images = [];
       app.gridCards = [];
       app.selectedImage = null;
+      if (gridFeature && typeof gridFeature.onImagesLoaded === 'function') {
+        gridFeature.onImagesLoaded(app);
+      }
       return;
     }
     try {
@@ -44,9 +48,14 @@
       app.gridCards = app.images.map((item) => ({
         id: item.id,
         label: item.filename,
+        filename: item.filename,
+        included: item.included === true,
         status: item.included ? 'included' : 'excluded',
         active_caption_preview: item.active_caption_preview,
       }));
+      if (gridFeature && typeof gridFeature.onImagesLoaded === 'function') {
+        gridFeature.onImagesLoaded(app);
+      }
       if (app.images.length > 0 && !app.selectedImage) {
         await selectImage(app, app.images[0].id, false);
       }

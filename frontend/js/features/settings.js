@@ -58,6 +58,7 @@
       app.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
       app.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
       app.settings.showDebugSection = payload.ui_show_debug_section === true;
+      app.settings.useNativePathPicker = payload.ui_use_native_path_picker !== false;
       app.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
       app.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
       app.settings.ollamaTimeoutSeconds = normalizeOptionalTimeout(payload.ollama_timeout_seconds);
@@ -66,6 +67,7 @@
       app.settings.lmstudioNumCtx = normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
       app.settings.editorDefaultImageZoomMode = normalizeZoomMode(payload.editor_default_image_zoom_mode);
       app.settings.editorDefaultImageZoomPercent = normalizeZoomPercent(payload.editor_default_image_zoom_percent);
+      app.applyPanelStateFromSettings(payload.ui_panel_state || {});
       app.resetEditorZoomToDefault();
       app.applyPresetPreference();
     } catch (error) {
@@ -73,6 +75,7 @@
       app.settings.usePresetByDefault = false;
       app.settings.defaultPresetId = '';
       app.settings.showDebugSection = false;
+      app.settings.useNativePathPicker = true;
       app.settings.ollamaBaseUrl = 'http://127.0.0.1:11434';
       app.settings.lmstudioBaseUrl = 'http://127.0.0.1:1234';
       app.settings.ollamaTimeoutSeconds = '';
@@ -108,6 +111,7 @@
           llm_use_preset_by_default: app.settings.usePresetByDefault,
           llm_default_preset_id: defaultPresetId,
           ui_show_debug_section: app.settings.showDebugSection,
+          ui_use_native_path_picker: app.settings.useNativePathPicker,
           ollama_base_url: app.settings.ollamaBaseUrl,
           lmstudio_base_url: app.settings.lmstudioBaseUrl,
           ollama_timeout_seconds: ollamaTimeoutSeconds,
@@ -116,6 +120,7 @@
           lmstudio_num_ctx: lmstudioNumCtx,
           editor_default_image_zoom_mode: app.settings.editorDefaultImageZoomMode,
           editor_default_image_zoom_percent: app.settings.editorDefaultImageZoomPercent,
+          ui_panel_state: app.panelStatePayload(),
         }),
       });
       const payload = await response.json();
@@ -127,6 +132,7 @@
       app.settings.usePresetByDefault = payload.llm_use_preset_by_default === true;
       app.settings.defaultPresetId = payload.llm_default_preset_id ? String(payload.llm_default_preset_id) : '';
       app.settings.showDebugSection = payload.ui_show_debug_section === true;
+      app.settings.useNativePathPicker = payload.ui_use_native_path_picker !== false;
       app.settings.ollamaBaseUrl = payload.ollama_base_url || 'http://127.0.0.1:11434';
       app.settings.lmstudioBaseUrl = payload.lmstudio_base_url || 'http://127.0.0.1:1234';
       app.settings.ollamaTimeoutSeconds = normalizeOptionalTimeout(payload.ollama_timeout_seconds);
@@ -135,6 +141,7 @@
       app.settings.lmstudioNumCtx = normalizeOptionalNumCtx(payload.lmstudio_num_ctx);
       app.settings.editorDefaultImageZoomMode = normalizeZoomMode(payload.editor_default_image_zoom_mode);
       app.settings.editorDefaultImageZoomPercent = normalizeZoomPercent(payload.editor_default_image_zoom_percent);
+      app.applyPanelStateFromSettings(payload.ui_panel_state || {});
       app.resetEditorZoomToDefault();
       app.projectSession.reopenLastProject = app.settings.reopenLastProjectOnStartup;
       await app.saveProjectSessionState();

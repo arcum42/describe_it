@@ -26,9 +26,14 @@ def _create_image_folder(folder: Path, count: int = 1) -> None:
 
 
 def _create_project_with_one_image(tmp_path: Path) -> tuple[str, int]:
+    project_path, image_ids = _create_project_with_images(tmp_path, count=1)
+    return project_path, image_ids[0]
+
+
+def _create_project_with_images(tmp_path: Path, count: int = 1) -> tuple[str, list[int]]:
     project_path = str(tmp_path / "phaseb.db")
     source_folder = tmp_path / "images"
-    _create_image_folder(source_folder, count=1)
+    _create_image_folder(source_folder, count=count)
 
     create_resp = client.post(
         "/api/projects/create",
@@ -44,8 +49,8 @@ def _create_project_with_one_image(tmp_path: Path) -> tuple[str, int]:
 
     images_resp = client.get("/api/images/list", params={"project_path": project_path})
     assert images_resp.status_code == 200, images_resp.text
-    image_id = images_resp.json()["images"][0]["id"]
-    return project_path, image_id
+    image_ids = [image["id"] for image in images_resp.json()["images"]]
+    return project_path, image_ids
 
 
 def test_duplicate_image_copies_all_captions_by_default(tmp_path: Path) -> None:
@@ -85,6 +90,71 @@ def test_duplicate_image_copies_all_captions_by_default(tmp_path: Path) -> None:
     assert detail["source_image_id"] == image_id
     assert detail["derived_operation"] == "duplicate"
     assert len(detail["captions"]) == 2
+
+
+def test_batch_include_updates_multiple_images(tmp_path: Path) -> None:
+    project_path, image_ids = _create_project_with_images(tmp_path, count=3)
+
+    update_resp = client.post(
+        "/api/images/batch/included",
+        json={"project_path": project_path, "image_ids": image_ids[:2], "included": False},
+    )
+    assert update_resp.status_code == 200, update_resp.text
+    payload = update_resp.json()
+    assert payload["updated_count"] == 2
+    assert payload["included"] is False
+    assert payload["image_ids"] == image_ids[:2]
+
+    images_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert images_resp.status_code == 200, images_resp.text
+    images = images_resp.json()["images"]
+    included_by_id = {image["id"]: image["included"] for image in images}
+    assert included_by_id[image_ids[0]] is False
+    assert included_by_id[image_ids[1]] is False
+    assert included_by_id[image_ids[2]] is True
+
+
+def test_batch_duplicate_creates_duplicate_for_each_source(tmp_path: Path) -> None:
+    project_path, image_ids = _create_project_with_images(tmp_path, count=2)
+
+    duplicate_resp = client.post(
+        "/api/images/batch/duplicate",
+        json={"project_path": project_path, "image_ids": image_ids},
+    )
+    assert duplicate_resp.status_code == 200, duplicate_resp.text
+    payload = duplicate_resp.json()
+    assert payload["created_count"] == 2
+    assert payload["source_image_ids"] == image_ids
+    assert payload["copied_caption_count"] == 2
+    assert all(image["derived_operation"] == "duplicate" for image in payload["new_images"])
+    assert [image["source_image_id"] for image in payload["new_images"]] == image_ids
+
+    images_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert images_resp.status_code == 200, images_resp.text
+    assert len(images_resp.json()["images"]) == 4
+
+
+def test_batch_soft_delete_hides_multiple_images(tmp_path: Path) -> None:
+    project_path, image_ids = _create_project_with_images(tmp_path, count=3)
+
+    delete_resp = client.post(
+        "/api/images/batch/delete",
+        json={"project_path": project_path, "image_ids": image_ids[:2], "mode": "soft"},
+    )
+    assert delete_resp.status_code == 200, delete_resp.text
+    payload = delete_resp.json()
+    assert payload["deleted_count"] == 2
+    assert payload["mode"] == "soft"
+    assert payload["image_ids"] == image_ids[:2]
+
+    list_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert list_resp.status_code == 200, list_resp.text
+    remaining_ids = [image["id"] for image in list_resp.json()["images"]]
+    assert remaining_ids == [image_ids[2]]
+
+    summary_resp = client.get("/api/images/summary", params={"project_path": project_path})
+    assert summary_resp.status_code == 200, summary_resp.text
+    assert summary_resp.json()["count"] == 1
 
 
 def test_soft_delete_hides_image_and_restore_returns_it(tmp_path: Path) -> None:

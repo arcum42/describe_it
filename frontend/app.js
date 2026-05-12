@@ -55,6 +55,7 @@ function describeItApp() {
     showOpenProject: false,
     showBrowser: false,
     selectedImage: null,
+    editorNavigationUseFilteredGrid: false,
     imageTools: {
       showAdvanced: false,
       includeCaptions: true,
@@ -227,6 +228,7 @@ function describeItApp() {
       usePresetByDefault: false,
       defaultPresetId: '',
       reopenLastProjectOnStartup: true,
+      useNativePathPicker: true,
       showDebugSection: false,
       ollamaBaseUrl: 'http://127.0.0.1:11434',
       lmstudioBaseUrl: 'http://127.0.0.1:1234',
@@ -286,9 +288,36 @@ function describeItApp() {
       parentPath: null,
       directories: [],
       dbFiles: [],
+      files: [],
       roots: [],
     },
+    pathPicker: {
+      target: '',
+      label: '',
+      expects: 'directory',
+    },
+    panelState: {
+      gridSearch: true,
+      editorLLM: false,
+      editorImageTools: true,
+      editorCaptionCandidates: true,
+      editorBatchReplace: false,
+      notesList: true,
+      notesEditor: true,
+      notesAssistant: false,
+      ioImport: true,
+      ioExport: true,
+      batchConfig: true,
+      batchProgress: true,
+      batchCurrent: true,
+      batchHistory: true,
+    },
     gridCards: [],
+    gridSelectionMode: false,
+    selectedGridImageIds: [],
+    duplicateCleanup: {
+      preview: null,
+    },
     loadImagesRequestSeq: 0,
     selectImageRequestSeq: 0,
     keyboard: {
@@ -868,6 +897,184 @@ function describeItApp() {
 
       return filtered;
     },
+    editorNavigationImages() {
+      if (!this.editorNavigationUseFilteredGrid) {
+        return Array.isArray(this.images) ? this.images : [];
+      }
+      if (!Array.isArray(this.images) || this.images.length === 0) {
+        return [];
+      }
+      const imagesById = new Map(this.images.map((image) => [image.id, image]));
+      const filteredCards = this.filteredGridCards();
+      if (!Array.isArray(filteredCards) || filteredCards.length === 0) {
+        return this.images;
+      }
+      const ordered = filteredCards
+        .map((card) => imagesById.get(card.id))
+        .filter(Boolean);
+      return ordered.length > 0 ? ordered : this.images;
+    },
+    currentImageIndex() {
+      if (!this.selectedImage?.id) {
+        return -1;
+      }
+      const navigationImages = this.editorNavigationImages();
+      return navigationImages.findIndex((image) => image.id === this.selectedImage.id);
+    },
+    hasPreviousImage() {
+      return this.currentImageIndex() > 0;
+    },
+    hasNextImage() {
+      const index = this.currentImageIndex();
+      return index >= 0 && index < (this.images.length - 1);
+    },
+    async goToFirstImage() {
+      const navigationImages = this.editorNavigationImages();
+      if (navigationImages.length === 0 || !this.selectedImage?.id) {
+        return;
+      }
+      const first = navigationImages[0];
+      if (first?.id && first.id !== this.selectedImage.id) {
+        await this.selectImage(first.id, true);
+      }
+    },
+    async goToPreviousImage() {
+      const navigationImages = this.editorNavigationImages();
+      const index = this.currentImageIndex();
+      if (index <= 0) {
+        return;
+      }
+      const previous = navigationImages[index - 1];
+      if (previous?.id) {
+        await this.selectImage(previous.id, true);
+      }
+    },
+    async goToNextImage() {
+      const navigationImages = this.editorNavigationImages();
+      const index = this.currentImageIndex();
+      if (index < 0 || index >= navigationImages.length - 1) {
+        return;
+      }
+      const next = navigationImages[index + 1];
+      if (next?.id) {
+        await this.selectImage(next.id, true);
+      }
+    },
+    async goToLastImage() {
+      const navigationImages = this.editorNavigationImages();
+      if (navigationImages.length === 0 || !this.selectedImage?.id) {
+        return;
+      }
+      const last = navigationImages[navigationImages.length - 1];
+      if (last?.id && last.id !== this.selectedImage.id) {
+        await this.selectImage(last.id, true);
+      }
+    },
+    isGridImageSelected(imageId) {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.isGridImageSelected === 'function') {
+        return gridFeature.isGridImageSelected(this, imageId);
+      }
+      return Array.isArray(this.selectedGridImageIds) && this.selectedGridImageIds.includes(imageId);
+    },
+    selectedGridCount() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.selectedGridCount === 'function') {
+        return gridFeature.selectedGridCount(this);
+      }
+      return Array.isArray(this.selectedGridImageIds) ? this.selectedGridImageIds.length : 0;
+    },
+    toggleGridSelectionMode() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.toggleGridSelectionMode === 'function') {
+        gridFeature.toggleGridSelectionMode(this);
+        return;
+      }
+      this.gridSelectionMode = !this.gridSelectionMode;
+      if (!this.gridSelectionMode) {
+        this.selectedGridImageIds = [];
+      }
+    },
+    toggleGridImageSelection(imageId) {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.toggleGridImageSelection === 'function') {
+        gridFeature.toggleGridImageSelection(this, imageId);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    selectFilteredGridImages() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.selectFilteredGridImages === 'function') {
+        gridFeature.selectFilteredGridImages(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    clearGridSelection() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.clearGridSelection === 'function') {
+        gridFeature.clearGridSelection(this);
+        return;
+      }
+      this.selectedGridImageIds = [];
+    },
+    async bulkIncludeSelected() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.bulkIncludeSelected === 'function') {
+        await gridFeature.bulkIncludeSelected(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    async bulkExcludeSelected() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.bulkExcludeSelected === 'function') {
+        await gridFeature.bulkExcludeSelected(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    async bulkDuplicateSelected() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.bulkDuplicateSelected === 'function') {
+        await gridFeature.bulkDuplicateSelected(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    async bulkDeleteSelected() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.bulkDeleteSelected === 'function') {
+        await gridFeature.bulkDeleteSelected(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    async findDuplicateImages() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.findDuplicateImages === 'function') {
+        await gridFeature.findDuplicateImages(this);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    async applyDuplicateCleanup(mode = 'soft') {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.applyDuplicateCleanup === 'function') {
+        await gridFeature.applyDuplicateCleanup(this, mode);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
+    },
+    clearDuplicateCleanupPreview() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.clearDuplicateCleanupPreview === 'function') {
+        gridFeature.clearDuplicateCleanupPreview(this);
+        return;
+      }
+      this.duplicateCleanup.preview = null;
+    },
     notesActiveItems() {
       const notesFeature = window.DescribeItFeatures?.notes;
       if (notesFeature && typeof notesFeature.notesActiveItems === 'function') {
@@ -1024,6 +1231,239 @@ function describeItApp() {
         return;
       }
       this.errorMessage = 'Browser module unavailable. Refresh and try again.';
+    },
+    async openPathPicker(target) {
+      const pickerConfig = {
+        create_project_path: { label: 'project folder for create path', expects: 'directory' },
+        open_project_db: { label: 'project database file', expects: 'db_file' },
+        import_source_folder: { label: 'import source folder', expects: 'directory' },
+        import_source_image: { label: 'import source image file', expects: 'file' },
+        export_output_folder: { label: 'export output folder', expects: 'directory' },
+        metadata_context_file: { label: 'project context file', expects: 'file' },
+        llm_context_file: { label: 'LLM context file', expects: 'file' },
+        notes_context_file: { label: 'notes context file', expects: 'file' },
+      };
+      const config = pickerConfig[target];
+      if (!config) {
+        this.errorMessage = 'Unsupported browse target.';
+        return;
+      }
+
+      this.pathPicker.target = target;
+      this.pathPicker.label = config.label;
+      this.pathPicker.expects = config.expects;
+      const startPath = this.pathPickerStartPath(target);
+
+      if (!this.settings.useNativePathPicker) {
+        this.showBrowser = true;
+        await this.loadBrowser(startPath || this.browser.currentPath || this.projectSession.lastProjectDirectory || null);
+        this.statusMessage = `Select ${config.label} from browser.`;
+        this.errorMessage = '';
+        return;
+      }
+
+      this.statusMessage = 'Opening native picker...';
+      this.errorMessage = '';
+      const nativeResult = await this.requestNativePathPicker(config, startPath);
+      if (nativeResult.available) {
+        if (nativeResult.selected_path) {
+          const selectionKind = config.expects === 'directory' ? 'directory' : 'file';
+          this.applyPathPickerSelection(nativeResult.selected_path, selectionKind);
+          return;
+        }
+        this.clearPathPicker();
+        this.statusMessage = 'Native picker canceled.';
+        this.errorMessage = '';
+        return;
+      }
+
+      this.showBrowser = true;
+      await this.loadBrowser(startPath || this.browser.currentPath || this.projectSession.lastProjectDirectory || null);
+      this.statusMessage = nativeResult.reason
+        ? `Native picker unavailable (${nativeResult.reason}). Select ${config.label} from browser.`
+        : `Select ${config.label} from browser.`;
+      this.errorMessage = '';
+    },
+    pathPickerStartPath(target) {
+      const pickerSourceMap = {
+        create_project_path: this.createForm.path,
+        open_project_db: this.openForm.path,
+        import_source_folder: this.importForm.source_folder,
+        import_source_image: this.importForm.source_image,
+        export_output_folder: this.exportForm.output_folder,
+        metadata_context_file: this.metadataForm.context_file_path,
+        llm_context_file: this.llm.tools.contextFile,
+        notes_context_file: this.notes.llm.contextFile,
+      };
+      const rawValue = pickerSourceMap[target];
+      if (typeof rawValue !== 'string') {
+        return '';
+      }
+      return rawValue.trim();
+    },
+    async requestNativePathPicker(config, startPath = '') {
+      const fallbackStartPath = this.browser.currentPath || this.projectSession.lastProjectDirectory || '';
+      try {
+        const response = await fetch('/api/projects/native-picker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: config.expects,
+            title: `Select ${config.label}`,
+            start_path: startPath || fallbackStartPath,
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to open native picker'));
+        }
+        return {
+          available: payload.available === true,
+          selected_path: payload.selected_path || '',
+          reason: payload.reason || '',
+        };
+      } catch (error) {
+        return {
+          available: false,
+          selected_path: '',
+          reason: error?.message || 'Failed to invoke native picker.',
+        };
+      }
+    },
+    browsePickerModeLabel() {
+      return this.settings.useNativePathPicker ? 'Native' : 'Browser';
+    },
+    isPanelOpen(panelKey, fallback = true) {
+      if (Object.prototype.hasOwnProperty.call(this.panelState, panelKey)) {
+        return this.panelState[panelKey] === true;
+      }
+      return fallback;
+    },
+    togglePanel(panelKey, fallback = true) {
+      const current = this.isPanelOpen(panelKey, fallback);
+      this.panelState[panelKey] = !current;
+    },
+    panelTriangle(panelKey, fallback = true) {
+      return this.isPanelOpen(panelKey, fallback) ? '▼' : '▶';
+    },
+    applyPanelStateFromSettings(panelStatePayload) {
+      if (!panelStatePayload || typeof panelStatePayload !== 'object') {
+        return;
+      }
+      const nextPanelState = { ...this.panelState };
+      Object.keys(this.panelState).forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(panelStatePayload, key)) {
+          nextPanelState[key] = panelStatePayload[key] === true;
+        }
+      });
+      this.panelState = nextPanelState;
+    },
+    panelStatePayload() {
+      const payload = {};
+      Object.keys(this.panelState).forEach((key) => {
+        payload[key] = this.panelState[key] === true;
+      });
+      return payload;
+    },
+    clearPathPicker() {
+      this.pathPicker.target = '';
+      this.pathPicker.label = '';
+      this.pathPicker.expects = 'directory';
+    },
+    pickerExpectsDirectory() {
+      return this.pathPicker.expects === 'directory';
+    },
+    pickerExpectsFile() {
+      return this.pathPicker.expects === 'file' || this.pathPicker.expects === 'db_file';
+    },
+    pickerAcceptsFile(fileKind = 'file') {
+      if (!this.pathPicker.target) {
+        return false;
+      }
+      if (this.pathPicker.expects === 'db_file') {
+        return fileKind === 'db';
+      }
+      if (this.pathPicker.expects === 'file') {
+        return fileKind === 'file' || fileKind === 'db';
+      }
+      return false;
+    },
+    updateLastDirectoryFromPath(path, isFile = false) {
+      if (!path) {
+        return;
+      }
+      if (!isFile) {
+        this.projectSession.lastProjectDirectory = path;
+        this.saveProjectSessionState();
+        return;
+      }
+      const lastSeparator = path.lastIndexOf('/');
+      if (lastSeparator > 0) {
+        this.projectSession.lastProjectDirectory = path.slice(0, lastSeparator);
+        this.saveProjectSessionState();
+      }
+    },
+    useCurrentBrowserDirectory() {
+      if (!this.pathPicker.target || !this.pickerExpectsDirectory() || !this.browser.currentPath) {
+        return;
+      }
+      this.applyPathPickerSelection(this.browser.currentPath, 'directory');
+    },
+    useBrowserFile(path, fileKind = 'file') {
+      if (this.pathPicker.target) {
+        if (!this.pickerAcceptsFile(fileKind)) {
+          this.errorMessage = 'Selected file type is not valid for this field.';
+          return;
+        }
+        this.applyPathPickerSelection(path, 'file');
+        return;
+      }
+      if (fileKind === 'db') {
+        this.chooseOpenFile(path);
+      }
+    },
+    applyPathPickerSelection(path, kind) {
+      if (!this.pathPicker.target) {
+        return;
+      }
+      if (kind === 'directory') {
+        if (this.pathPicker.target === 'create_project_path') {
+          this.chooseCreateDirectory(path);
+        } else if (this.pathPicker.target === 'import_source_folder') {
+          this.importForm.source_folder = path;
+          this.updateLastDirectoryFromPath(path, false);
+          this.statusMessage = `Import folder set to ${path}`;
+          this.errorMessage = '';
+        } else if (this.pathPicker.target === 'export_output_folder') {
+          this.chooseExportDirectory(path);
+        }
+        this.clearPathPicker();
+        return;
+      }
+
+      if (this.pathPicker.target === 'open_project_db') {
+        this.openForm.path = path;
+        this.updateLastDirectoryFromPath(path, true);
+        this.statusMessage = `Open path set to ${path}`;
+      } else if (this.pathPicker.target === 'import_source_image') {
+        this.importForm.source_image = path;
+        this.updateLastDirectoryFromPath(path, true);
+        this.statusMessage = `Import image path set to ${path}`;
+      } else if (this.pathPicker.target === 'metadata_context_file') {
+        this.metadataForm.context_file_path = path;
+        this.updateLastDirectoryFromPath(path, true);
+        this.statusMessage = `Project context file set to ${path}`;
+      } else if (this.pathPicker.target === 'llm_context_file') {
+        this.llm.tools.contextFile = path;
+        this.updateLastDirectoryFromPath(path, true);
+        this.statusMessage = `LLM context file set to ${path}`;
+      } else if (this.pathPicker.target === 'notes_context_file') {
+        this.notes.llm.contextFile = path;
+        this.updateLastDirectoryFromPath(path, true);
+        this.statusMessage = `Notes context file set to ${path}`;
+      }
+      this.errorMessage = '';
+      this.clearPathPicker();
     },
     chooseCreateDirectory(path) {
       const browserFeature = window.DescribeItFeatures?.browser;

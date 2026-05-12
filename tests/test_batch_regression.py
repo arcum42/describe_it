@@ -314,6 +314,43 @@ def test_get_job_results_returns_all_rows(tmp_path: Path, monkeypatch) -> None:
         assert expected_columns.issubset(row.keys()), f"Row missing columns: {expected_columns - row.keys()}"
 
 
+def test_get_job_results_retries_on_transient_db_lock(tmp_path: Path, monkeypatch) -> None:
+    """get_job_results should retry when SQLite briefly reports a locked database."""
+    db_path = tmp_path / "app_state.db"
+    monkeypatch.setattr(
+        "backend.services.batch_service.get_settings",
+        lambda: type("S", (), {"state_dir": tmp_path})(),
+    )
+
+    job_id = str(uuid.uuid4())
+    job = _make_job(job_id, str(tmp_path / "project.db"), status="running")
+    _write_job_to_db(db_path, job)
+    _write_result_to_db(db_path, job_id=job_id, image_id=10, filename="img1.png", status="succeeded", generated_text="caption A")
+
+    from backend.services.batch_service import BatchService as _BS  # noqa: PLC0415
+    service = BatchService.__new__(BatchService)
+    service._jobs = {job_id: job}
+    service._lock = __import__("threading").Lock()
+    service._db_path = lambda: db_path
+
+    real_connect = _make_connect(db_path)
+    call_count = {"value": 0}
+
+    def flaky_connect():
+        call_count["value"] += 1
+        if call_count["value"] == 1:
+            raise sqlite3.OperationalError("database is locked")
+        return real_connect()
+
+    service._connect = flaky_connect
+
+    results = _BS.get_job_results(service, job_id=job_id)
+
+    assert len(results) == 1
+    assert results[0]["image_id"] == 10
+    assert call_count["value"] >= 2
+
+
 def test_export_csv_columns_and_row_count(tmp_path: Path, monkeypatch) -> None:
     """export_job_results_csv must produce a valid CSV with correct headers and one data row per result."""
     db_path = tmp_path / "app_state.db"

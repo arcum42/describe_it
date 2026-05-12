@@ -17,6 +17,7 @@
         parentPath: payload.parent_path,
         directories: payload.directories ?? [],
         dbFiles: payload.db_files ?? [],
+        files: payload.files ?? [],
         roots: payload.roots ?? [],
       };
       app.projectSession.lastProjectDirectory = app.browser.currentPath || app.projectSession.lastProjectDirectory;

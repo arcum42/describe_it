@@ -70,6 +70,7 @@ class UpdateSettingsRequest(BaseModel):
     llm_use_preset_by_default: bool = False
     llm_default_preset_id: int | None = Field(default=None, ge=1)
     ui_show_debug_section: bool = False
+    ui_use_native_path_picker: bool = True
     ollama_base_url: str = "http://127.0.0.1:11434"
     lmstudio_base_url: str = "http://127.0.0.1:1234"
     ollama_timeout_seconds: int | None = Field(default=None, ge=10, le=900)
@@ -78,6 +79,7 @@ class UpdateSettingsRequest(BaseModel):
     lmstudio_num_ctx: int | None = Field(default=None, ge=256, le=262144)
     editor_default_image_zoom_mode: str = Field(default="fit", pattern="^(fit|full|percent)$")
     editor_default_image_zoom_percent: int = Field(default=100, ge=25, le=400)
+    ui_panel_state: dict[str, bool] = Field(default_factory=dict)
 
 
 class GenerateWithPresetRequest(BaseModel):
@@ -304,6 +306,7 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         llm_use_preset_by_default=request.llm_use_preset_by_default,
         llm_default_preset_id=request.llm_default_preset_id,
         ui_show_debug_section=request.ui_show_debug_section,
+        ui_use_native_path_picker=request.ui_use_native_path_picker,
         ollama_base_url=request.ollama_base_url,
         lmstudio_base_url=request.lmstudio_base_url,
         ollama_timeout_seconds=request.ollama_timeout_seconds,
@@ -312,6 +315,7 @@ def update_settings(request: UpdateSettingsRequest) -> dict[str, object]:
         lmstudio_num_ctx=request.lmstudio_num_ctx,
         editor_default_image_zoom_mode=request.editor_default_image_zoom_mode,
         editor_default_image_zoom_percent=request.editor_default_image_zoom_percent,
+        ui_panel_state=request.ui_panel_state,
     )
 
 
