@@ -1,0 +1,167 @@
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+             @keydown.escape.window="closeImageboardImport()">
+          <div class="relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border border-stone-700 bg-stone-900 shadow-2xl">
+
+            <!-- Header -->
+            <div class="flex items-center justify-between border-b border-stone-800 px-6 py-4">
+              <h2 class="text-lg font-semibold">Import from Imageboard</h2>
+              <button @click="closeImageboardImport()"
+                      class="rounded-lg p-1 text-stone-400 hover:text-stone-100">✕</button>
+            </div>
+
+            <!-- Scrollable body -->
+            <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+
+              <!-- Board / Sort / Rating row -->
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Board</label>
+                  <select x-model="imageboardImport.selectedBoard"
+                          @change="onImageboardBoardChange()"
+                          class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 focus:border-amber-500 focus:outline-none">
+                    <template x-for="board in (imageboards.boards || [])" :key="board.board_id">
+                      <option :value="board.board_id" x-text="board.display_name"></option>
+                    </template>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Sort by</label>
+                  <div class="flex gap-2">
+                    <select x-model="imageboardImport.sortBy"
+                            class="flex-1 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 focus:border-amber-500 focus:outline-none">
+                      <template x-for="s in imageboardImportSorts()" :key="s">
+                        <option :value="s" x-text="s"></option>
+                      </template>
+                    </select>
+                    <select x-model="imageboardImport.sortDirection"
+                            class="rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 focus:border-amber-500 focus:outline-none">
+                      <option value="desc">↓ desc</option>
+                      <option value="asc">↑ asc</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Rating</label>
+                  <select x-model="imageboardImport.ratingFilter"
+                          class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 focus:border-amber-500 focus:outline-none">
+                    <option value="any">Any rating</option>
+                    <option value="safe">Safe only</option>
+                    <option value="questionable">Questionable</option>
+                    <option value="explicit">Explicit</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Query row -->
+              <div>
+                <label class="block text-xs font-medium uppercase tracking-[0.15em] text-stone-400 mb-1">Search query</label>
+                <div class="flex gap-2">
+                  <input type="text"
+                         x-model="imageboardImport.query"
+                         @keydown.enter.prevent="searchImageboard()"
+                         placeholder="e.g. fluttershy, -animated"
+                         class="flex-1 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500 focus:outline-none" />
+                  <button @click="searchImageboard()"
+                          :disabled="imageboardImport.searching || !imageboardImport.query.trim()"
+                          class="shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">
+                    <span x-show="!imageboardImport.searching">Search</span>
+                    <span x-show="imageboardImport.searching">…</span>
+                  </button>
+                </div>
+                <p class="mt-1 text-[11px] text-stone-500">Separate tags with commas. Prefix with <span class="font-mono text-stone-400">-</span> to exclude.</p>
+              </div>
+
+              <!-- Status / error -->
+              <template x-if="imageboardImport.statusMessage && !imageboardImport.errorMessage">
+                <div class="rounded-lg border border-stone-700 bg-stone-950/60 px-3 py-2 text-sm text-stone-300"
+                     x-text="imageboardImport.statusMessage"></div>
+              </template>
+              <template x-if="imageboardImport.errorMessage">
+                <div class="rounded-lg border border-red-700 bg-red-900/20 px-3 py-2 text-sm text-red-300"
+                     x-text="imageboardImport.errorMessage"></div>
+              </template>
+
+              <!-- Preview grid -->
+              <template x-if="imageboardImport.previewImages.length > 0">
+                <div>
+                  <p class="mb-2 text-xs text-stone-400">
+                    Preview — showing <span x-text="imageboardImport.previewImages.length"></span> of
+                    <span x-text="imageboardImport.totalAvailable.toLocaleString()"></span> results
+                  </p>
+                  <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    <template x-for="img in imageboardImport.previewImages" :key="img.id">
+                      <a :href="img.source_url || img.url" target="_blank" rel="noopener"
+                         class="group relative block aspect-square overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
+                        <img :src="img.url" :alt="img.title"
+                             loading="lazy"
+                             class="h-full w-full object-cover transition group-hover:opacity-80"
+                             onerror="this.style.display='none'; this.parentElement.querySelector('.fallback').style.display='flex'" />
+                        <div class="fallback absolute inset-0 hidden items-center justify-center text-[10px] text-stone-500">No preview</div>
+                        <template x-if="img.rating">
+                          <span class="absolute bottom-1 right-1 rounded px-1 text-[9px] font-bold uppercase leading-none"
+                                :class="img.rating === 's' || img.rating === 'safe' ? 'bg-green-800/80 text-green-200' : 'bg-yellow-800/80 text-yellow-200'"
+                                x-text="img.rating"></span>
+                        </template>
+                      </a>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- Import options (shown after a successful search) -->
+              <template x-if="imageboardImport.totalAvailable > 0">
+                <div class="rounded-xl border border-stone-800 bg-stone-950/60 p-4 space-y-3">
+                  <h3 class="text-sm font-medium text-stone-200">Import options</h3>
+
+                  <div class="flex items-center gap-3">
+                    <label class="text-xs text-stone-400 whitespace-nowrap">Images to import</label>
+                    <input type="number"
+                           x-model.number="imageboardImport.importCount"
+                           min="1" max="100"
+                           class="w-20 rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-100 focus:border-amber-500 focus:outline-none" />
+                    <span class="text-xs text-stone-500"
+                          x-text="imageboardImport.totalAvailable > 0 ? `(${imageboardImport.totalAvailable.toLocaleString()} available)` : ''"></span>
+                  </div>
+
+                  <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                    <input type="checkbox"
+                           x-model="imageboardImport.includeTags"
+                           class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Create captions from image tags
+                  </label>
+
+                  <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                    <input type="checkbox"
+                           x-model="imageboardImport.includeCreatorTags"
+                           :disabled="!imageboardImport.includeTags"
+                           class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50" />
+                    Include creator tags (artist/editor/prompter)
+                  </label>
+
+                  <label class="flex items-center gap-2 text-xs text-stone-300 cursor-pointer">
+                    <input type="checkbox"
+                           x-model="imageboardImport.skipDuplicates"
+                           class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Skip duplicate images (matched by content hash)
+                  </label>
+                </div>
+              </template>
+
+            </div>
+
+            <!-- Footer actions -->
+            <div class="flex items-center justify-end gap-3 border-t border-stone-800 px-6 py-4">
+              <button @click="closeImageboardImport()"
+                      class="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                Cancel
+              </button>
+              <button @click="doImageboardImport()"
+                      :disabled="imageboardImport.importing || !imageboardImport.totalAvailable || !imageboardImport.query.trim()"
+                      class="rounded-lg bg-amber-400 px-5 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50">
+                <span x-show="!imageboardImport.importing">Import <span x-text="imageboardImport.importCount"></span> images</span>
+                <span x-show="imageboardImport.importing">Importing…</span>
+              </button>
+            </div>
+
+          </div>
+        </div>

@@ -1,0 +1,27 @@
+      <header class="border-b border-stone-800 bg-stone-900/95 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div>
+            <p class="text-xs uppercase tracking-[0.35em] text-amber-400">describe_it</p>
+            <h1 class="text-2xl font-semibold text-stone-50">Dataset Captioning Workbench</h1>
+          </div>
+          <div class="flex items-center gap-3 text-sm text-stone-400">
+            <div>
+              <span>Backend:</span>
+              <span class="ml-2 rounded-full border border-stone-700 px-3 py-1" x-text="healthLabel"></span>
+            </div>
+            <button
+              @click="uiSection === 'settings' ? openWorkspace() : openSettings()"
+              class="flex items-center gap-2 rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200"
+              :class="uiSection === 'settings' ? 'border-amber-500 text-amber-200' : ''"
+              aria-label="Toggle settings view"
+              title="Toggle settings view"
+            >
+              <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15.5A3.5 3.5 0 1 0 12 8.5A3.5 3.5 0 1 0 12 15.5z" />
+                <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.2a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.2a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3h0a1.6 1.6 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.2a1.6 1.6 0 0 0 1 1.5h0a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8v0a1.6 1.6 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z" />
+              </svg>
+              <span x-text="uiSection === 'settings' ? 'Back' : 'Settings'"></span>
+            </button>
+          </div>
+        </div>
+      </header>

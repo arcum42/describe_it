@@ -1,0 +1,51 @@
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+                  <div class="space-y-4 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-amber-400">Project Settings</p>
+                      <h3 class="mt-1 text-lg font-semibold text-stone-100">Metadata</h3>
+                      <p class="mt-1 text-sm text-stone-400">Configure settings specific to the current project.</p>
+                    </div>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                        Name
+                        <input x-model="metadataForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                        Description
+                        <textarea x-model="metadataForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"></textarea>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Trigger Word
+                        <input x-model="metadataForm.trigger_word" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional_trigger" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Caption Mode
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="metadataForm.caption_mode" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="description">Description</option>
+                            <option value="tags">Tags</option>
+                          </select>
+                        </div>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                        Project Context URL
+                        <input x-model="metadataForm.context_url" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="https://example.com/reference" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                        Project Context File Path
+                        <div class="mt-2 flex items-center gap-2">
+                          <input x-model="metadataForm.context_file_path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/context.md" />
+                          <button @click="openPathPicker('metadata_context_file')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                            <span>Browse</span>
+                            <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                          </button>
+                        </div>
+                      </label>
+                    </div>
+                    <div class="flex justify-end border-t border-stone-800 pt-4">
+                      <button @click="saveMetadata()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Save Metadata
+                      </button>
+                    </div>
+                  </div>
+                </section>

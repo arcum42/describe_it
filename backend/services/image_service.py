@@ -11,9 +11,9 @@ from pathlib import Path
 from PIL import Image, ImageOps
 from sqlalchemy import func, select
 
-from backend.config import get_settings
 from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path
 
 
 @dataclass
@@ -24,6 +24,7 @@ class ImageListItem:
     height: int | None
     included: bool
     active_caption_preview: str
+    all_captions_search_text: str
 
 
 @dataclass
@@ -57,25 +58,8 @@ class DuplicateImageGroup:
     duplicate_images: list[dict[str, object]]
 
 
-def _resolve_path(raw_path: str) -> Path:
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        candidate = get_settings().base_dir / candidate
-    return candidate.resolve()
-
-
-def _load_project(session_factory, resolved_project_path: Path) -> ProjectRecord:
-    with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
-        return project
-
-
 def _load_image_for_project(session, resolved_project_path: Path, image_id: int, *, include_deleted: bool = False) -> ImageRecord:
-    project = session.scalar(select(ProjectRecord).limit(1))
-    if project is None:
-        raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
+    project = load_project_record(session, resolved_project_path)
 
     image = session.scalar(select(ImageRecord).where(ImageRecord.id == image_id, ImageRecord.project_id == project.id))
     if image is None or (image.deleted_at is not None and not include_deleted):
@@ -266,15 +250,11 @@ def _create_derived_image(
 
 
 def list_project_images(*, project_path: str) -> list[ImageListItem]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
+        project = load_project_record(session, resolved_project_path)
 
         images = session.scalars(
             select(ImageRecord)
@@ -282,8 +262,19 @@ def list_project_images(*, project_path: str) -> list[ImageListItem]:
             .order_by(ImageRecord.id.asc())
         ).all()
         image_ids = [image.id for image in images]
-        captions = session.scalars(select(CaptionRecord).where(CaptionRecord.image_id.in_(image_ids), CaptionRecord.is_active.is_(True))).all() if image_ids else []
-        active_by_image = {caption.image_id: caption for caption in captions}
+        active_captions = session.scalars(
+            select(CaptionRecord).where(CaptionRecord.image_id.in_(image_ids), CaptionRecord.is_active.is_(True))
+        ).all() if image_ids else []
+        all_captions = session.scalars(
+            select(CaptionRecord).where(CaptionRecord.image_id.in_(image_ids))
+        ).all() if image_ids else []
+        active_by_image = {caption.image_id: caption for caption in active_captions}
+        all_text_by_image: dict[int, list[str]] = {}
+        for caption in all_captions:
+            text_value = (caption.text or '').strip()
+            if not text_value:
+                continue
+            all_text_by_image.setdefault(caption.image_id, []).append(text_value)
 
     items: list[ImageListItem] = []
     for image in images:
@@ -299,21 +290,18 @@ def list_project_images(*, project_path: str) -> list[ImageListItem]:
                 height=image.height,
                 included=image.included,
                 active_caption_preview=preview,
+                all_captions_search_text='\n'.join(all_text_by_image.get(image.id, [])),
             )
         )
     return items
 
 
 def get_image_detail(*, project_path: str, image_id: int) -> ImageDetail:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
+        load_project_record(session, resolved_project_path)
 
         image = _load_image_for_project(session, resolved_project_path, image_id)
 
@@ -346,15 +334,11 @@ def get_image_detail(*, project_path: str, image_id: int) -> ImageDetail:
 
 
 def get_image_content(*, project_path: str, image_id: int) -> tuple[bytes, str]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {resolved_project_path}")
+        load_project_record(session, resolved_project_path)
 
         image = _load_image_for_project(session, resolved_project_path, image_id)
 
@@ -362,13 +346,6 @@ def get_image_content(*, project_path: str, image_id: int) -> tuple[bytes, str]:
 
         media_type = mimetypes.guess_type(image.filename)[0] or "application/octet-stream"
         return blob, media_type
-
-
-def _resolve_existing_project_path(project_path: str) -> Path:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
-    return resolved_project_path
 
 
 def _normalize_image_ids(image_ids: list[int]) -> list[int]:
@@ -455,7 +432,7 @@ def _delete_image_for_project(
 
 
 def update_image_included(*, project_path: str, image_id: int, included: bool) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -471,7 +448,7 @@ def update_image_included(*, project_path: str, image_id: int, included: bool) -
 
 
 def batch_update_image_included(*, project_path: str, image_ids: list[int], included: bool) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
     normalized_image_ids = _normalize_image_ids(image_ids)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
@@ -495,7 +472,7 @@ def batch_update_image_included(*, project_path: str, image_ids: list[int], incl
 
 
 def duplicate_image(*, project_path: str, image_id: int, include_captions: bool = True, copy_mode: str = "all_candidates") -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
     if copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported copy mode: {copy_mode}")
 
@@ -535,7 +512,7 @@ def batch_duplicate_images(
     include_captions: bool = True,
     copy_mode: str = "all_candidates",
 ) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
     normalized_image_ids = _normalize_image_ids(image_ids)
     if copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported copy mode: {copy_mode}")
@@ -600,9 +577,7 @@ def crop_image(
     if caption_copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported caption copy mode: {caption_copy_mode}")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -679,9 +654,7 @@ def scale_image(
     if caption_copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported caption copy mode: {caption_copy_mode}")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -780,9 +753,7 @@ def flip_image(
     if caption_copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported caption copy mode: {caption_copy_mode}")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -856,9 +827,7 @@ def rotate_image(
     if caption_copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported caption copy mode: {caption_copy_mode}")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -933,9 +902,7 @@ def extract_region_image(
     if caption_copy_mode not in {"active_only", "all_candidates", "none"}:
         raise ValueError(f"Unsupported caption copy mode: {caption_copy_mode}")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -1001,7 +968,7 @@ def extract_region_image(
 
 
 def delete_image(*, project_path: str, image_id: int, mode: str = "soft", confirm_hard_delete: bool = False) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -1023,7 +990,7 @@ def batch_delete_images(
     mode: str = "soft",
     confirm_hard_delete: bool = False,
 ) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
     normalized_image_ids = _normalize_image_ids(image_ids)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
@@ -1048,7 +1015,7 @@ def batch_delete_images(
 
 
 def find_duplicate_images_by_hash(*, project_path: str) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -1083,7 +1050,7 @@ def apply_duplicate_cleanup(
     mode: str = "soft",
     confirm_hard_delete: bool = False,
 ) -> dict[str, object]:
-    resolved_project_path = _resolve_existing_project_path(project_path)
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -1156,9 +1123,7 @@ def apply_duplicate_cleanup(
 
 
 def restore_image(*, project_path: str, image_id: int) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:

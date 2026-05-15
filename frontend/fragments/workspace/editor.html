@@ -1,0 +1,828 @@
+              <template x-if="mainView === 'editor'">
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Single Image Editor</h2>
+                <span class="text-xs text-stone-500">Manual caption + candidate workflow</span>
+              </div>
+              <template x-if="selectedImage">
+                <div class="flex flex-col gap-4">
+                  <div x-effect="ensureEditorSubTab()"></div>
+
+                  <div x-show="editorView.subTab === 'caption' || editorView.subTab === 'image'" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-3">
+                    <div class="mb-3 flex flex-wrap items-center gap-2">
+                      <p class="mr-2 text-[11px] uppercase tracking-[0.2em] text-stone-500">Zoom</p>
+                      <button @click="setEditorZoomMode('fit')" class="rounded-lg border px-2 py-1 text-[10px] uppercase tracking-[0.2em]" :class="editorView.zoomMode === 'fit' ? 'border-amber-400 bg-amber-400/15 text-amber-200' : 'border-stone-700 text-stone-300 hover:border-amber-400 hover:text-amber-200'">Fit</button>
+                      <button @click="setEditorZoomMode('full')" class="rounded-lg border px-2 py-1 text-[10px] uppercase tracking-[0.2em]" :class="editorView.zoomMode === 'full' ? 'border-amber-400 bg-amber-400/15 text-amber-200' : 'border-stone-700 text-stone-300 hover:border-amber-400 hover:text-amber-200'">Full</button>
+                      <template x-for="preset in editorZoomPresets()" :key="preset">
+                        <button @click="setEditorZoomPercent(preset)" class="rounded-lg border px-2 py-1 text-[10px] uppercase tracking-[0.2em]" :class="editorView.zoomMode === 'percent' && Number(editorView.zoomPercent) === Number(preset) ? 'border-amber-400 bg-amber-400/15 text-amber-200' : 'border-stone-700 text-stone-300 hover:border-amber-400 hover:text-amber-200'" x-text="`${preset}%`"></button>
+                      </template>
+                      <label class="ml-auto flex items-center gap-2 text-xs text-stone-400">
+                        Custom
+                        <input
+                          type="number"
+                          min="25"
+                          max="400"
+                          step="1"
+                          :value="editorView.zoomPercent"
+                          @change="setEditorZoomPercent($event.target.value)"
+                          class="w-20 rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none"
+                        />
+                      </label>
+                    </div>
+                    <div class="max-h-[72vh] overflow-auto rounded-xl border border-stone-800 bg-black/20 p-2">
+                      <img :src="imageSrc(selectedImage.id)" :alt="selectedImage.filename" :class="editorImageClasses()" :style="editorImageStyle()" />
+                    </div>
+                  </div>
+                  <div x-show="editorView.subTab === 'caption' || editorView.subTab === 'image'" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300">
+                    <div>
+                      <p class="font-medium text-stone-100" x-text="selectedImage.filename"></p>
+                      <p class="text-xs text-stone-500" x-text="`${selectedImage.width || '?'} x ${selectedImage.height || '?'} px`"></p>
+                    </div>
+                    <div class="ml-auto flex flex-wrap items-center justify-end gap-2">
+                      <label class="field-checkbox mr-1 text-[10px] uppercase tracking-[0.16em] text-stone-400">
+                        <input type="checkbox" x-model="editorNavigationUseFilteredGrid" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        filtered order
+                      </label>
+                      <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900/60 p-1">
+                        <button @click="goToFirstImage()" :disabled="isSubmitting || !hasPreviousImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="First" aria-label="First">
+                          |&lt;
+                        </button>
+                        <button @click="goToPreviousImage()" :disabled="isSubmitting || !hasPreviousImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="Back" aria-label="Back">
+                          &lt;
+                        </button>
+                        <button @click="goToNextImage()" :disabled="isSubmitting || !hasNextImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="Next" aria-label="Next">
+                          &gt;
+                        </button>
+                        <button @click="goToLastImage()" :disabled="isSubmitting || !hasNextImage()" class="rounded-md px-2 py-1 text-xs text-stone-200 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-40" title="End" aria-label="End">
+                          &gt;|
+                        </button>
+                      </div>
+                      <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
+                        <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="sticky top-2 z-20 inline-flex self-start rounded-xl border border-stone-800 bg-stone-950/95 p-1 backdrop-blur">
+                    <template x-for="tab in editorSubTabs()" :key="tab.id">
+                      <button
+                        @click="setEditorSubTab(tab.id)"
+                        class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                        :class="editorView.subTab === tab.id ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                        x-text="tab.label"
+                      ></button>
+                    </template>
+                  </div>
+
+                  <div x-show="editorView.subTab === 'image' && !isTagMode()" class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <button
+                        @click="togglePanel('editorImageTools', true)"
+                        class="flex items-center gap-2 text-left text-sm font-medium text-stone-200 hover:text-amber-200"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorImageTools', true)"></span>
+                        <span>Image Tools</span>
+                      </button>
+                      <button
+                        @click="imageTools.showAdvanced = !imageTools.showAdvanced"
+                        class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200"
+                        x-text="imageTools.showAdvanced ? 'Mode: Advanced' : 'Mode: Simple'"
+                      ></button>
+                    </div>
+
+                    <div x-show="isPanelOpen('editorImageTools', true)" class="space-y-0">
+
+                    <div class="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <button @click="applyImageToolPreset('scale50')" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1.5 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">Scale 50%</button>
+                      <button @click="applyImageToolPreset('scale1024fit')" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1.5 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">Fit 1024</button>
+                      <button @click="applyImageToolPreset('centerSquareCrop')" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1.5 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">Center Square Crop</button>
+                      <button @click="applyImageToolPreset('extractCenterQuarter')" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1.5 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">Extract Center</button>
+                    </div>
+
+                    <div x-show="imageTools.showAdvanced" class="mb-3 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="imageTools.includeCaptions" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Copy captions
+                      </label>
+                      <div class="select-wrapper">
+                        <select x-model="imageTools.captionCopyMode" class="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <option value="all_candidates">all candidates</option>
+                          <option value="active_only">active only</option>
+                          <option value="none">none</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                      <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Duplicate / Delete</p>
+                        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                          <button @click="duplicateImage()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Duplicate
+                          </button>
+                          <button @click="deleteImage()" :disabled="isSubmitting" class="rounded-lg border border-red-700 px-3 py-2 text-xs text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Delete
+                          </button>
+                        </div>
+                        <div x-show="imageTools.showAdvanced" class="mt-2 select-wrapper">
+                            <select x-model="imageTools.deleteMode" class="rounded-lg border border-stone-700 bg-stone-900 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <option value="soft">soft delete</option>
+                              <option value="hard">hard delete</option>
+                            </select>
+                          </div>
+                      </div>
+
+                      <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Flip / Rotate</p>
+                        <div class="mt-3 grid gap-2 md:grid-cols-2">
+                          <div class="select-wrapper">
+                            <select x-model="imageTools.flipMode" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <option value="horizontal">flip horizontal</option>
+                              <option value="vertical">flip vertical</option>
+                              <option value="both">flip both</option>
+                            </select>
+                          </div>
+                          <button @click="flipImage()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Apply Flip
+                          </button>
+                          <div class="select-wrapper">
+                            <select x-model="imageTools.rotateAngle" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <option value="90">rotate 90°</option>
+                              <option value="180">rotate 180°</option>
+                              <option value="270">rotate 270°</option>
+                            </select>
+                          </div>
+                          <button @click="rotateImage()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Apply Rotate
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Crop</p>
+                        <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <input type="number" min="0" x-model="imageTools.crop.x" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="x" />
+                          <input type="number" min="0" x-model="imageTools.crop.y" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="y" />
+                          <input type="number" min="1" x-model="imageTools.crop.width" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="width" />
+                          <input type="number" min="1" x-model="imageTools.crop.height" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="height" />
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                          <input x-show="imageTools.showAdvanced" type="text" x-model="imageTools.crop.outputName" class="flex-1 rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional output name" />
+                          <button @click="cropImage()" :disabled="isSubmitting || !imageToolValidation('crop').ok" class="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Apply Crop
+                          </button>
+                        </div>
+                        <p x-show="!imageToolValidation('crop').ok" class="mt-2 text-xs text-red-300" x-text="imageToolValidation('crop').message"></p>
+                      </div>
+
+                      <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Scale</p>
+                        <div class="mt-3 grid gap-2 md:grid-cols-2">
+                          <div class="select-wrapper">
+                            <select x-model="imageTools.scale.mode" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <option value="percent">percent</option>
+                              <option value="dimensions">dimensions</option>
+                            </select>
+                          </div>
+                          <template x-if="imageTools.scale.mode === 'percent'">
+                            <input type="number" min="1" step="1" x-model="imageTools.scale.percent" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="percent" />
+                          </template>
+                          <template x-if="imageTools.scale.mode === 'dimensions'">
+                            <div class="grid gap-2 sm:grid-cols-2">
+                              <input type="number" min="1" x-model="imageTools.scale.width" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="width" />
+                              <input type="number" min="1" x-model="imageTools.scale.height" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="height" />
+                            </div>
+                          </template>
+                        </div>
+                        <div x-show="imageTools.showAdvanced" class="mt-2 flex flex-wrap gap-3 text-xs text-stone-400">
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="imageTools.scale.keepAspectRatio" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            keep aspect ratio
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="imageTools.scale.upscale" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            allow upscale
+                          </label>
+                        </div>
+                        <div class="mt-2 flex flex-wrap gap-2">
+                          <input x-show="imageTools.showAdvanced" type="text" x-model="imageTools.scale.outputName" class="flex-1 rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional output name" />
+                          <button @click="scaleImage()" :disabled="isSubmitting || !imageToolValidation('scale').ok" class="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Apply Scale
+                          </button>
+                        </div>
+                        <p x-show="!imageToolValidation('scale').ok" class="mt-2 text-xs text-red-300" x-text="imageToolValidation('scale').message"></p>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Extract Region</p>
+                      <div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <input type="number" min="0" x-model="imageTools.extract.x" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="x" />
+                        <input type="number" min="0" x-model="imageTools.extract.y" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="y" />
+                        <input type="number" min="1" x-model="imageTools.extract.width" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="width" />
+                        <input type="number" min="1" x-model="imageTools.extract.height" class="rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="height" />
+                      </div>
+                      <div class="mt-2 flex flex-wrap items-center gap-2">
+                        <input x-show="imageTools.showAdvanced" type="text" x-model="imageTools.extract.outputName" class="flex-1 rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="optional output name" />
+                        <label x-show="imageTools.showAdvanced" class="field-checkbox">
+                          <input type="checkbox" x-model="imageTools.extract.addSourceReferenceNote" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                          source note
+                        </label>
+                        <button @click="extractRegionImage()" :disabled="isSubmitting || !imageToolValidation('extract').ok" class="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Extract Region
+                        </button>
+                      </div>
+                      <p x-show="!imageToolValidation('extract').ok" class="mt-2 text-xs text-red-300" x-text="imageToolValidation('extract').message"></p>
+                    </div>
+                    </div>
+                  </div>
+
+                  <div x-show="editorView.subTab === 'caption'" class="order-2 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <button
+                        @click="togglePanel('editorLLM', false)"
+                        class="flex items-center gap-2 text-left text-sm font-medium text-stone-200 hover:text-amber-200"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorLLM', false)"></span>
+                        <span>LLM Caption Generator</span>
+                      </button>
+                      <button @click="loadLLMBackends()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        Refresh Models
+                      </button>
+                    </div>
+
+                    <div x-show="isPanelOpen('editorLLM', false)" class="space-y-0">
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Backend
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="llm.backend" @change="onLLMBackendChanged()" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <template x-for="backend in llm.backends" :key="backend.name">
+                              <option :value="backend.name" :disabled="!backend.available" x-text="backend.available ? backend.name : `${backend.name} (offline)`"></option>
+                            </template>
+                          </select>
+                        </div>
+                      </label>
+
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Model
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="llm.model" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <template x-for="modelInfo in availableModelsForBackend(llm.backend)" :key="modelInfo.name">
+                              <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
+                            </template>
+                          </select>
+                        </div>
+                      </label>
+                    </div>
+
+                    <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2">
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="llm.showAllModels" @change="onModelVisibilityFilterChanged()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Show all models (including text-only)
+                      </label>
+                      <p class="mt-2 text-xs text-stone-500" x-show="!llm.showAllModels">Showing only models marked as vision-capable by backend metadata.</p>
+                    </div>
+
+                    <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Preset
+                      <div class="mt-2 select-wrapper">
+                        <select x-model="llm.selectedPresetId" @change="onSelectedPresetChanged()" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <option value="">Manual prompt mode</option>
+                          <template x-for="preset in llm.presets" :key="preset.id">
+                            <option :value="String(preset.id)" x-text="`${preset.name} (${preset.backend}/${preset.model_name}, ${preset.caption_mode_strategy || 'auto'})`"></option>
+                          </template>
+                        </select>
+                      </div>
+                    </label>
+                    <button @click="openPresetSettings()" class="mt-2 rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                      Manage Presets
+                    </button>
+
+                    <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Extra Instructions
+                      <textarea x-model="llm.extraInstructions" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional style guidance for generation"></textarea>
+                    </label>
+
+                    <!-- Context & Tools accordion -->
+                    <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900">
+                      <button
+                        type="button"
+                        @click="llm.tools.showPanel = !llm.tools.showPanel"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-400 hover:text-amber-300"
+                      >
+                        <span>Context &amp; Tools</span>
+                        <span x-text="llm.tools.showPanel ? '▲' : '▼'" class="text-stone-500"></span>
+                      </button>
+                      <div x-show="llm.tools.showPanel" class="border-t border-stone-800 px-3 pb-3 pt-2 space-y-3">
+                        <p class="text-xs text-stone-500">Context URLs and files are injected into every generation. Tool checkboxes require a tool-capable model (🔨). Reasoning defaults to off.</p>
+                        <div class="space-y-2">
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.webSearch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Web search (model decides what to search)
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.webFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Web fetch (model can read URLs from search results)
+                          </label>
+                        </div>
+                        <label class="block text-xs text-stone-400">
+                          Reference URL (pre-fetched before generation)
+                          <input type="url" x-model="llm.tools.contextUrl" placeholder="https://…" class="mt-1 w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                        </label>
+                        <label class="block text-xs text-stone-400">
+                          Reference file path (pre-read before generation)
+                          <div class="mt-1 flex items-center gap-2">
+                            <input type="text" x-model="llm.tools.contextFile" placeholder="/path/to/notes.txt" class="min-w-0 flex-1 rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" />
+                            <button @click="openPathPicker('llm_context_file')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                              <span>Browse</span>
+                              <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                            </button>
+                          </div>
+                        </label>
+                        <div class="space-y-2">
+                          <p class="text-xs text-stone-500">Notes context (injected from the Notes tab)</p>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.includeProjectNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include all active project notes
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.tools.includeGlobalNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include all active global notes
+                          </label>
+                        </div>
+                        <div class="grid gap-3 md:grid-cols-2">
+                          <label class="block text-xs text-stone-400">
+                            Reasoning
+                            <div class="mt-1 select-wrapper">
+                              <select x-model="llm.tools.reasoningMode" class="w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                                <option value="off">Off</option>
+                                <option value="on">On (auto)</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                              </select>
+                            </div>
+                          </label>
+                          <label class="block text-xs text-stone-400">
+                            Reasoning Output
+                            <div class="mt-1 select-wrapper">
+                              <select x-model="llm.tools.reasoningVisibility" class="w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                                <option value="hidden">Hide reasoning text</option>
+                                <option value="blockquote">Show as blockquote</option>
+                                <option value="code">Show as code block</option>
+                              </select>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 flex flex-wrap items-center gap-3">
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="llm.makeActive" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Set generated caption as active
+                      </label>
+                      <span class="text-xs text-stone-500" x-text="`Timeout: ${settings.llmTimeoutSeconds}s`"></span>
+                    </div>
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                      <button
+                        @click="generateCaptionWithLLM()"
+                        :disabled="isSubmitting || !!llm.selectedPresetId || !llm.backend || !llm.model"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : 'Generate Manual Caption'"></span>
+                      </button>
+                      <button
+                        @click="generateCaptionWithPreset()"
+                        :disabled="isSubmitting || !llm.selectedPresetId"
+                        class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : 'Generate With Preset'"></span>
+                      </button>
+                    </div>
+                    <div class="mt-3">
+                      <button
+                        @click="generateCaptionWithTools()"
+                        :disabled="isSubmitting || !llm.backend || !llm.model"
+                        class="inline-flex items-center gap-2 rounded-xl border border-amber-700 px-4 py-2 text-sm font-medium text-amber-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        title="Generate using context injection and/or tool calling"
+                      >
+                        <svg x-show="isSubmitting" class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span x-text="isSubmitting ? 'Generating…' : '🔨 Generate with Tools'"></span>
+                      </button>
+                    </div>
+                    <!-- Inline status/error — visible without scrolling to the sidebar -->
+                    <template x-if="statusMessage && mainView === 'editor'">
+                      <p class="mt-3 rounded-xl border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-sm text-emerald-200" x-text="statusMessage"></p>
+                    </template>
+                    <template x-if="errorMessage && mainView === 'editor'">
+                      <p class="mt-3 rounded-xl border border-red-900 bg-red-950/40 px-3 py-2 text-sm text-red-200" x-text="errorMessage"></p>
+                    </template>
+                    <template x-if="llm.backends.length === 0">
+                      <p class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
+                        No LLM backend is reachable yet. Start Ollama or LM Studio, then refresh models.
+                      </p>
+                    </template>
+                    </div>
+                  </div>
+
+                  <template x-if="editorView.subTab === 'caption'">
+                    <div>
+                      <label class="block text-sm font-medium text-stone-300">Active Caption</label>
+                      <textarea
+                        x-model="editorCaptionText"
+                        class="mt-2 min-h-40 w-full rounded-2xl border border-stone-800 bg-stone-950 px-4 py-3 text-sm text-stone-200 outline-none ring-0 placeholder:text-stone-500 focus:border-amber-400"
+                        placeholder="Edit the active caption here."
+                      ></textarea>
+                      <div class="mt-3 flex gap-3">
+                        <button @click="saveActiveCaption()" :disabled="isActive('saveCaption')" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                          Save Active Caption
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template x-if="isTagMode() && editorView.subTab === 'caption'">
+                    <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div class="mb-2 flex items-center justify-between gap-3">
+                        <label class="block text-sm font-medium text-stone-300">Active Tags</label>
+                        <button @click="refreshActiveTags()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Refresh
+                        </button>
+                      </div>
+                      <p class="text-xs text-stone-500">Drag tags to reorder. Click Edit for inline rename. Colors indicate category.</p>
+                      <div class="mt-2 flex flex-wrap gap-2 text-[11px] text-stone-400">
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#FF6B9D;"></span>character</span>
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#4ECDC4;"></span>general</span>
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#95E1D3;"></span>species</span>
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#F38181;"></span>artist</span>
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#AA96DA;"></span>meta</span>
+                        <span class="inline-flex items-center gap-1 rounded border border-stone-700 px-2 py-1"><span class="h-2 w-2 rounded-full" style="background:#FCBAD3;"></span>rating</span>
+                      </div>
+
+                      <div class="mt-3 flex flex-wrap gap-2 rounded-xl border border-stone-800 bg-stone-900/70 p-3 min-h-16">
+                        <template x-for="(tagInfo, index) in tagEditor.tags" :key="`${tagInfo.tag}-${index}`">
+                          <div
+                            class="rounded-lg border px-2 py-1 text-xs max-w-full"
+                            :style="`border-color: ${tagInfo.color}; background-color: ${tagInfo.color}22; color: ${tagInfo.color};`"
+                            draggable="true"
+                            @dragstart="startTagDrag(index)"
+                            @dragover.prevent
+                            @drop="dropTagAt(index)"
+                          >
+                            <template x-if="tagEditor.editingTagIndex !== index">
+                              <div class="flex flex-wrap items-center gap-1.5">
+                                <span class="font-medium break-all" x-text="tagInfo.tag"></span>
+                                <span class="opacity-80" x-text="`(${tagInfo.category})`"></span>
+                                <button @click="moveTagLeft(index)" :disabled="isSubmitting || index === 0" class="rounded border border-current px-1 py-0.5 text-[10px] opacity-80 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30" title="Move left">
+                                  ←
+                                </button>
+                                <button @click="moveTagRight(index)" :disabled="isSubmitting || index === tagEditor.tags.length - 1" class="rounded border border-current px-1 py-0.5 text-[10px] opacity-80 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-30" title="Move right">
+                                  →
+                                </button>
+                                <button @click="startEditTag(index)" :disabled="isSubmitting" class="rounded border border-current px-1 py-0.5 text-[10px] opacity-80 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40">
+                                  Edit
+                                </button>
+                                <button @click="removeTagFromActiveCaption(index)" :disabled="isSubmitting" class="rounded border border-current px-1 py-0.5 text-[10px] opacity-80 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-40">
+                                  Remove
+                                </button>
+                              </div>
+                            </template>
+                            <template x-if="tagEditor.editingTagIndex === index">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <input
+                                  x-model="tagEditor.editingTagText"
+                                  @keydown.enter.prevent="saveEditedTag(index)"
+                                  class="w-full sm:w-44 rounded border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-100 focus:border-amber-400 focus:outline-none"
+                                />
+                                <button @click="saveEditedTag(index)" :disabled="isSubmitting" class="rounded border border-emerald-500 px-1 py-0.5 text-[10px] text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40">
+                                  Save
+                                </button>
+                                <button @click="cancelEditTag()" :disabled="isSubmitting" class="rounded border border-stone-500 px-1 py-0.5 text-[10px] text-stone-300 disabled:cursor-not-allowed disabled:opacity-40">
+                                  Cancel
+                                </button>
+                              </div>
+                            </template>
+                          </div>
+                        </template>
+                        <template x-if="tagEditor.tags.length === 0">
+                          <p class="text-xs text-stone-500">No active tags yet for this image.</p>
+                        </template>
+                      </div>
+
+                      <div class="mt-3 flex flex-wrap gap-2">
+                        <input
+                          x-model="tagEditor.newTagText"
+                          @keydown.enter.prevent="addTagsToActiveCaption()"
+                          class="flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none"
+                          placeholder="Add tags (comma separated)"
+                        />
+                        <button @click="addTagsToActiveCaption()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-sm text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Add Tags
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template x-if="isTagMode() && editorView.subTab === 'batch_tags'">
+                    <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-medium text-stone-200">Batch Tag Operations</p>
+                          <p class="text-xs text-stone-500">Add, remove, or clear tags across many images.</p>
+                        </div>
+                        <div class="select-wrapper">
+                          <select x-model="tagEditor.batch.scope" class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="included">included images</option>
+                            <option value="all">all images</option>
+                            <option value="selected">selected image only</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <p x-show="!tagBatchValidation().ok" class="mb-3 text-xs text-red-300" x-text="tagBatchValidation().message"></p>
+
+                      <div class="grid gap-3 lg:grid-cols-2">
+                        <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                          <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Batch Add</p>
+                          <input x-model="tagEditor.batch.addInput" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="tag_one, tag_two" />
+                          <button @click="runBatchAddTags()" :disabled="isSubmitting || !tagBatchValidation().ok" class="mt-2 rounded-xl border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Run Batch Add
+                          </button>
+                        </div>
+                        <div class="rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                          <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Batch Remove</p>
+                          <input x-model="tagEditor.batch.removeInput" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="tag_to_remove" />
+                          <button @click="runBatchRemoveTags()" :disabled="isSubmitting || !tagBatchValidation().ok" class="mt-2 rounded-xl border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                            Run Batch Remove
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Batch Clear</p>
+                        <label class="mt-2 field-checkbox text-xs text-stone-400">
+                          <input type="checkbox" x-model="tagEditor.batch.clearConfirm" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                          Confirm clear-all tags for scope
+                        </label>
+                        <button @click="runBatchClearTags()" :disabled="isSubmitting || !tagBatchValidation().ok || !tagEditor.batch.clearConfirm" class="mt-2 rounded-xl border border-red-700 px-3 py-2 text-xs text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Run Batch Clear
+                        </button>
+                      </div>
+                    </div>
+                  </template>
+
+                  <template x-if="isTagMode() && editorView.subTab === 'batch_tags'">
+                    <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div class="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p class="text-sm font-medium text-stone-200">Tag Statistics</p>
+                          <p class="text-xs text-stone-500">Top tags across included images.</p>
+                        </div>
+                        <button @click="loadTagStatistics()" :disabled="isSubmitting || tagEditor.statsLoading" class="rounded-lg border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Refresh
+                        </button>
+                      </div>
+                      <div class="mb-3 grid gap-2 sm:grid-cols-2">
+                        <p class="rounded-lg border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-300" x-text="`Unique tags: ${tagEditor.stats.total_tags || 0}`"></p>
+                        <p class="rounded-lg border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-300" x-text="`Occurrences: ${tagEditor.stats.total_occurrences || 0}`"></p>
+                      </div>
+                      <div class="max-h-44 space-y-1 overflow-auto pr-1">
+                        <template x-for="item in (tagEditor.stats.top_tags || []).slice(0, 12)" :key="item.tag">
+                          <div class="flex items-center justify-between rounded-lg border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-200">
+                            <span x-text="`${item.tag} (${item.category})`"></span>
+                            <span class="text-stone-500" x-text="item.count"></span>
+                          </div>
+                        </template>
+                        <template x-if="(tagEditor.stats.top_tags || []).length === 0">
+                          <p class="rounded-lg border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">No tag statistics available yet.</p>
+                        </template>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div x-show="editorView.subTab === 'caption'" class="order-1 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <button
+                      @click="togglePanel('editorCaptionCandidates', true)"
+                      class="flex w-full items-center justify-between text-left"
+                    >
+                      <span class="flex items-center gap-2 text-sm font-medium text-stone-200">
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorCaptionCandidates', true)"></span>
+                        <span>Caption Candidates</span>
+                      </span>
+                    </button>
+                    <div x-show="isPanelOpen('editorCaptionCandidates', true)" class="space-y-0">
+                    <p class="mt-1 text-xs text-stone-500">Use the controls on each caption to set active, edit, or delete.</p>
+                    <div class="mt-3 max-h-64 space-y-2 overflow-auto pr-1">
+                      <template x-for="caption in selectedImage.captions" :key="caption.id">
+                        <div class="w-full rounded-xl border px-3 py-2 text-left text-sm transition" :class="caption.is_active ? 'border-amber-500 bg-amber-500/10 text-amber-100' : 'border-stone-800 bg-stone-900 text-stone-300'">
+                          <div class="mb-1 flex items-center justify-between text-[10px] uppercase tracking-[0.2em]">
+                            <span x-text="caption.source"></span>
+                            <span x-text="caption.is_active ? 'active' : 'candidate'"></span>
+                          </div>
+                          <template x-if="editingCaptionId !== caption.id">
+                            <p class="line-clamp-3" x-text="caption.text || '(empty caption)'"></p>
+                          </template>
+                          <template x-if="editingCaptionId === caption.id">
+                            <textarea x-model="editingCaptionText" class="min-h-20 w-full rounded-lg border border-stone-700 bg-stone-950 px-2 py-1 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Edit caption text"></textarea>
+                          </template>
+                          <div class="mt-2 flex flex-wrap gap-2">
+                            <button @click="setActiveCaption(caption.id)" :disabled="isSubmitting || caption.is_active" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Set Active
+                            </button>
+                            <button @click="startEditCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Edit
+                            </button>
+                            <button @click="deleteCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-red-700 px-2 py-1 text-xs text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                              Delete
+                            </button>
+                          </div>
+                          <template x-if="editingCaptionId === caption.id">
+                            <div class="mt-2 flex flex-wrap gap-2">
+                              <button @click="saveEditedCaption(caption)" :disabled="isSubmitting" class="rounded-lg border border-emerald-700 px-2 py-1 text-xs text-emerald-300 hover:border-emerald-500 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-60">
+                                Save Edit
+                              </button>
+                              <button @click="cancelEditCaption()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                                Cancel Edit
+                              </button>
+                            </div>
+                          </template>
+                        </div>
+                      </template>
+                      <template x-if="selectedImage && selectedImage.captions.length === 0">
+                        <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No captions yet for this image.</p>
+                      </template>
+                    </div>
+
+                    <div class="mt-4 border-t border-stone-800 pt-4">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">Add Caption Candidate</label>
+                      <textarea x-model="newCaptionText" class="mt-2 min-h-24 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Write a new caption candidate..."></textarea>
+                      <div class="mt-3 flex flex-wrap gap-3">
+                        <button @click="addCaptionCandidate(true)" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-sm text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Add And Activate
+                        </button>
+                        <button @click="addCaptionCandidate(false)" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-sm text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Add As Candidate
+                        </button>
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+
+                  <div x-show="editorView.subTab === 'caption'" class="order-3 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="mb-3 flex items-center justify-between gap-3">
+                      <button
+                        @click="togglePanel('editorBatchReplace', false)"
+                        class="flex items-center gap-2 text-left"
+                      >
+                        <span class="text-xs text-stone-500" x-text="panelTriangle('editorBatchReplace', false)"></span>
+                        <div>
+                          <p class="text-sm font-medium text-stone-200">Batch Caption Replace</p>
+                          <p class="text-xs text-stone-500">Preview and apply find/replace with undo support.</p>
+                        </div>
+                      </button>
+                      <button @click="loadCaptionBatchOperations()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-2 py-1 text-[11px] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Refresh History
+                      </button>
+                    </div>
+
+                    <div x-show="isPanelOpen('editorBatchReplace', false)" class="space-y-0">
+
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Find Text
+                        <input x-model="captionBatch.query.findText" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Text or regex pattern" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Replace With
+                        <input x-model="captionBatch.query.replaceText" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Replacement text" />
+                      </label>
+                    </div>
+
+                    <div class="mt-3 grid gap-3 md:grid-cols-3">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Query Mode
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="captionBatch.query.mode" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="plain">plain</option>
+                            <option value="regex">regex</option>
+                          </select>
+                        </div>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Caption Scope
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="captionBatch.scope.captionScope" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="active_only">active only</option>
+                            <option value="all_candidates">all candidates</option>
+                          </select>
+                        </div>
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Image Scope
+                        <div class="mt-2 select-wrapper">
+                          <select x-model="captionBatch.scope.imageScope" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="included_only">included only</option>
+                            <option value="all">all images</option>
+                            <option value="selected_ids">selected IDs</option>
+                          </select>
+                        </div>
+                      </label>
+                    </div>
+
+                    <label x-show="captionBatch.scope.imageScope === 'selected_ids'" class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                      Selected Image IDs (comma or space separated)
+                      <input x-model="captionBatch.scope.imageIdsText" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Example: 12, 18, 42" />
+                    </label>
+
+                    <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-stone-400">
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="captionBatch.query.caseSensitive" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Case sensitive
+                      </label>
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="captionBatch.apply.createUndoSnapshot" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Create undo snapshot
+                      </label>
+                      <label class="field-checkbox">
+                        <input type="checkbox" x-model="captionBatch.apply.confirm" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                        Confirm apply
+                      </label>
+                    </div>
+
+                    <p x-show="!captionBatchValidation().ok" class="mt-2 text-xs text-red-300" x-text="captionBatchValidation().message"></p>
+
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button @click="previewCaptionBatchReplace()" :disabled="isSubmitting || !captionBatchValidation().ok" class="rounded-xl border border-stone-700 px-3 py-2 text-xs text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Preview Replace
+                      </button>
+                      <button @click="applyCaptionBatchReplace()" :disabled="isSubmitting || !captionBatch.preview || !captionBatch.apply.confirm" class="rounded-xl bg-amber-400 px-3 py-2 text-xs font-medium text-stone-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                        Apply Replace
+                      </button>
+                      <button @click="undoCaptionBatchReplace()" :disabled="isSubmitting" class="rounded-xl border border-red-700 px-3 py-2 text-xs text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Undo Latest
+                      </button>
+                      <button @click="clearCaptionBatchPreview()" :disabled="isSubmitting || !captionBatch.preview" class="rounded-xl border border-stone-700 px-3 py-2 text-xs text-stone-300 hover:border-stone-500 hover:text-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                        Clear Preview
+                      </button>
+                    </div>
+
+                    <div x-show="captionBatch.preview" class="mt-4 rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Preview Summary</p>
+                      <p class="mt-1 text-sm text-stone-200" x-text="`${captionBatch.preview?.impacted_captions_count || 0} captions across ${captionBatch.preview?.impacted_images_count || 0} images`"></p>
+                      <p class="mt-1 text-xs text-stone-500" x-text="captionBatch.preview?.expires_at ? `Expires: ${captionBatch.preview.expires_at}` : ''"></p>
+
+                      <template x-if="(captionBatch.preview?.warnings || []).length > 0">
+                        <div class="mt-2 rounded-lg border border-amber-900 bg-amber-950/40 px-2 py-1 text-xs text-amber-200">
+                          <template x-for="warning in captionBatch.preview.warnings" :key="warning">
+                            <p x-text="warning"></p>
+                          </template>
+                        </div>
+                      </template>
+
+                      <div class="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
+                        <template x-for="sample in (captionBatch.preview?.sample_changes || [])" :key="`${sample.caption_id}-${sample.image_id}`">
+                          <div class="rounded-lg border border-stone-800 bg-stone-950 px-2 py-2 text-xs text-stone-300">
+                            <p class="text-[10px] uppercase tracking-[0.15em] text-stone-500" x-text="`image ${sample.image_id} • caption ${sample.caption_id}`"></p>
+                            <p class="mt-1 text-stone-400" x-text="`Before: ${sample.before_preview}`"></p>
+                            <p class="mt-1 text-stone-200" x-text="`After: ${sample.after_preview}`"></p>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+
+                    <div class="mt-4 rounded-xl border border-stone-800 bg-stone-900/80 p-3">
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Operation History</p>
+                      <div class="mt-2 max-h-44 space-y-2 overflow-auto pr-1">
+                        <template x-for="op in captionBatch.operations" :key="op.operation_id">
+                          <div class="rounded-lg border border-stone-800 bg-stone-950 px-2 py-2 text-xs text-stone-300">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                              <p class="text-stone-200" x-text="`${op.type} • ${op.impacted_captions_count} captions / ${op.impacted_images_count} images`"></p>
+                              <button @click="undoCaptionBatchReplace(op.operation_id)" :disabled="isSubmitting || !!op.undone_at" class="rounded-lg border border-red-700 px-2 py-1 text-[10px] text-red-300 hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                                Undo
+                              </button>
+                            </div>
+                            <p class="mt-1 text-[10px] uppercase tracking-[0.15em] text-stone-500" x-text="`operation ${op.operation_id}`"></p>
+                            <p class="mt-1 text-stone-500" x-text="`Created: ${op.created_at}`"></p>
+                            <p class="mt-1 text-stone-500" x-text="op.undone_at ? `Undone: ${op.undone_at}` : 'Undone: no'"></p>
+                          </div>
+                        </template>
+                        <template x-if="captionBatch.operations.length === 0">
+                          <p class="rounded-lg border border-stone-800 bg-stone-950 px-2 py-2 text-xs text-stone-500">No batch operations yet.</p>
+                        </template>
+                      </div>
+                    </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              <template x-if="!selectedImage">
+                <div class="rounded-2xl border border-dashed border-stone-700 bg-stone-950/70 px-4 py-8 text-center text-sm text-stone-500">
+                  Select an image from the grid tab to start editing captions.
+                </div>
+              </template>
+                </section>
+              </template>

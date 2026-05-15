@@ -1,5 +1,6 @@
 (function initDescribeItFeatureEditor(global) {
   const features = global.DescribeItFeatures || (global.DescribeItFeatures = {});
+  const captionTextEditPollTimers = new WeakMap();
 
   async function loadImageSummary(app) {
     if (!app.currentProject?.path) {
@@ -52,6 +53,7 @@
         included: item.included === true,
         status: item.included ? 'included' : 'excluded',
         active_caption_preview: item.active_caption_preview,
+        caption_search_text: item.all_captions_search_text || item.active_caption_preview || '',
       }));
       if (gridFeature && typeof gridFeature.onImagesLoaded === 'function') {
         gridFeature.onImagesLoaded(app);
@@ -108,6 +110,140 @@
     const url = new URL(`/api/images/${imageId}/content`, window.location.origin);
     url.searchParams.set('project_path', app.currentProject.path);
     return url.toString();
+  }
+
+  function normalizeEditorZoomPercent(_app, value) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) {
+      return 100;
+    }
+    return Math.min(400, Math.max(25, parsed));
+  }
+
+  function setEditorZoomMode(app, mode) {
+    const normalized = String(mode || '').trim().toLowerCase();
+    if (!['fit', 'full', 'percent'].includes(normalized)) {
+      app.editorView.zoomMode = 'fit';
+      return;
+    }
+    app.editorView.zoomMode = normalized;
+    if (normalized === 'percent') {
+      app.editorView.zoomPercent = normalizeEditorZoomPercent(app, app.editorView.zoomPercent);
+    }
+  }
+
+  function setEditorZoomPercent(app, value) {
+    app.editorView.zoomPercent = normalizeEditorZoomPercent(app, value);
+    app.editorView.zoomMode = 'percent';
+  }
+
+  function resetEditorZoomToDefault(app) {
+    const defaultMode = app.settings.editorDefaultImageZoomMode || 'fit';
+    const defaultPercent = normalizeEditorZoomPercent(app, app.settings.editorDefaultImageZoomPercent);
+    app.editorView.zoomPercent = defaultPercent;
+    setEditorZoomMode(app, defaultMode);
+  }
+
+  function editorZoomPresets() {
+    return [50, 75, 100, 125, 150, 200];
+  }
+
+  function editorImageClasses(app) {
+    if (app.editorView.zoomMode === 'fit') {
+      return 'h-auto w-full object-contain mx-auto';
+    }
+    return 'h-auto max-w-none object-contain mx-auto';
+  }
+
+  function editorImageStyle(app) {
+    if (app.editorView.zoomMode === 'percent') {
+      return { width: `${normalizeEditorZoomPercent(app, app.editorView.zoomPercent)}%` };
+    }
+    if (app.editorView.zoomMode === 'full') {
+      return { width: 'auto' };
+    }
+    return {};
+  }
+
+  function editorNavigationImages(app) {
+    if (!app.editorNavigationUseFilteredGrid) {
+      return Array.isArray(app.images) ? app.images : [];
+    }
+    if (!Array.isArray(app.images) || app.images.length === 0) {
+      return [];
+    }
+    const imagesById = new Map(app.images.map((image) => [image.id, image]));
+    const filteredCards = app.filteredGridCards();
+    if (!Array.isArray(filteredCards) || filteredCards.length === 0) {
+      return app.images;
+    }
+    const ordered = filteredCards
+      .map((card) => imagesById.get(card.id))
+      .filter(Boolean);
+    return ordered.length > 0 ? ordered : app.images;
+  }
+
+  function currentImageIndex(app) {
+    if (!app.selectedImage?.id) {
+      return -1;
+    }
+    const navigationImages = editorNavigationImages(app);
+    return navigationImages.findIndex((image) => image.id === app.selectedImage.id);
+  }
+
+  function hasPreviousImage(app) {
+    return currentImageIndex(app) > 0;
+  }
+
+  function hasNextImage(app) {
+    const index = currentImageIndex(app);
+    return index >= 0 && index < (app.images.length - 1);
+  }
+
+  async function goToFirstImage(app) {
+    const navigationImages = editorNavigationImages(app);
+    if (navigationImages.length === 0 || !app.selectedImage?.id) {
+      return;
+    }
+    const first = navigationImages[0];
+    if (first?.id && first.id !== app.selectedImage.id) {
+      await app.selectImage(first.id, true);
+    }
+  }
+
+  async function goToPreviousImage(app) {
+    const navigationImages = editorNavigationImages(app);
+    const index = currentImageIndex(app);
+    if (index <= 0) {
+      return;
+    }
+    const previous = navigationImages[index - 1];
+    if (previous?.id) {
+      await app.selectImage(previous.id, true);
+    }
+  }
+
+  async function goToNextImage(app) {
+    const navigationImages = editorNavigationImages(app);
+    const index = currentImageIndex(app);
+    if (index < 0 || index >= navigationImages.length - 1) {
+      return;
+    }
+    const next = navigationImages[index + 1];
+    if (next?.id) {
+      await app.selectImage(next.id, true);
+    }
+  }
+
+  async function goToLastImage(app) {
+    const navigationImages = editorNavigationImages(app);
+    if (navigationImages.length === 0 || !app.selectedImage?.id) {
+      return;
+    }
+    const last = navigationImages[navigationImages.length - 1];
+    if (last?.id && last.id !== app.selectedImage.id) {
+      await app.selectImage(last.id, true);
+    }
   }
 
   async function toggleIncluded(app) {
@@ -975,11 +1111,236 @@
     app.captionBatch.apply.confirm = false;
   }
 
+  function captionTextEditProgressPercent(app, jobKey) {
+    const job = app.captionTextEdit?.jobs?.[jobKey];
+    if (!job) {
+      return 0;
+    }
+    if (!job.total) {
+      return 0;
+    }
+    return Math.round((Number(job.completed || 0) / Number(job.total || 0)) * 100);
+  }
+
+  function updateCaptionTextEditJobState(app, jobKey, jobPayload) {
+    const target = app.captionTextEdit.jobs[jobKey];
+    if (!target) {
+      return;
+    }
+    target.id = String(jobPayload.id || '');
+    target.status = String(jobPayload.status || 'idle');
+    target.total = Number(jobPayload.total || 0);
+    target.completed = Number(jobPayload.completed || 0);
+    target.affected = Number(jobPayload.affected || 0);
+    target.currentLabel = String(jobPayload.current_label || '');
+    target.lastError = String(jobPayload.last_error || '');
+    target.result = jobPayload.result || null;
+    target.createdAt = String(jobPayload.created_at || '');
+    target.updatedAt = String(jobPayload.updated_at || '');
+  }
+
+  function appendCaptionTextEditHistory(app, jobKey, jobPayload) {
+    const history = app.captionTextEdit?.history?.[jobKey];
+    if (!Array.isArray(history)) {
+      return;
+    }
+    const normalized = {
+      id: String(jobPayload.id || ''),
+      status: String(jobPayload.status || 'unknown'),
+      total: Number(jobPayload.total || 0),
+      completed: Number(jobPayload.completed || 0),
+      affected: Number(jobPayload.affected || 0),
+      lastError: String(jobPayload.last_error || ''),
+      result: jobPayload.result || null,
+      createdAt: String(jobPayload.created_at || ''),
+      updatedAt: String(jobPayload.updated_at || ''),
+    };
+    if (!normalized.id) {
+      return;
+    }
+    const existingIndex = history.findIndex((item) => String(item.id) === normalized.id);
+    if (existingIndex >= 0) {
+      history.splice(existingIndex, 1);
+    }
+    history.unshift(normalized);
+    const limit = Math.max(1, Number(app.captionTextEdit.historyLimit || 10));
+    if (history.length > limit) {
+      history.splice(limit);
+    }
+  }
+
+  function stopCaptionTextEditPolling(app, jobKey) {
+    const byApp = captionTextEditPollTimers.get(app) || {};
+    const timer = byApp[jobKey];
+    if (timer) {
+      clearInterval(timer);
+      delete byApp[jobKey];
+      captionTextEditPollTimers.set(app, byApp);
+    }
+  }
+
+  function startCaptionTextEditPolling(app, jobKey, jobId) {
+    stopCaptionTextEditPolling(app, jobKey);
+    const byApp = captionTextEditPollTimers.get(app) || {};
+    byApp[jobKey] = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/captions/text-edit-jobs/${jobId}`);
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(app.formatApiError(payload, 'Failed to poll text-edit job'));
+        }
+        const job = payload.job || {};
+        updateCaptionTextEditJobState(app, jobKey, job);
+        if (['completed', 'failed', 'cancelled'].includes(String(job.status || ''))) {
+          stopCaptionTextEditPolling(app, jobKey);
+          appendCaptionTextEditHistory(app, jobKey, job);
+          if (job.status === 'completed') {
+            await loadImages(app);
+            await loadImageSummary(app);
+            if (app.selectedImage?.id) {
+              await selectImage(app, app.selectedImage.id, false);
+            }
+            if (jobKey === 'deleteEmpty') {
+              app.statusMessage = `Deleted ${job.result?.deleted_captions_count || 0} empty captions.`;
+            } else if (jobKey === 'removeTags') {
+              app.statusMessage = `Updated ${job.result?.updated_captions_count || 0} captions; removed ${job.result?.removed_tags_count || 0} tags.`;
+            } else if (jobKey === 'addCommon') {
+              app.statusMessage = `Added captions to ${job.result?.created_captions_count || 0} images.`;
+            }
+          } else if (job.status === 'failed') {
+            app.errorMessage = job.last_error || 'Text-edit job failed.';
+          }
+        }
+      } catch (error) {
+        stopCaptionTextEditPolling(app, jobKey);
+        app.errorMessage = error.message;
+      }
+    }, 900);
+    captionTextEditPollTimers.set(app, byApp);
+  }
+
+  async function startDeleteEmptyCaptionsJob(app) {
+    if (!app.currentProject?.path) {
+      app.errorMessage = 'Open a project first.';
+      return;
+    }
+    await app.withSubmitting(async () => {
+      const response = await fetch('/api/captions/text-edit-jobs/delete-empty/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_path: app.currentProject.path }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(app.formatApiError(payload, 'Failed to start delete-empty job'));
+      }
+      updateCaptionTextEditJobState(app, 'deleteEmpty', payload.job || {});
+      startCaptionTextEditPolling(app, 'deleteEmpty', payload.job.id);
+      app.statusMessage = 'Delete empty captions job started.';
+    }, 'startDeleteEmptyCaptionsJob');
+  }
+
+  function parseRemoveTagPatterns(rawText) {
+    const normalized = String(rawText || '').trim();
+    if (!normalized) {
+      return [];
+    }
+    const parts = normalized
+      .split(/[\n,]+/)
+      .map((item) => item.trim())
+      .filter((item) => item.length > 0);
+    return Array.from(new Set(parts));
+  }
+
+  async function startRemoveTagsJob(app) {
+    if (!app.currentProject?.path) {
+      app.errorMessage = 'Open a project first.';
+      return;
+    }
+    const patterns = parseRemoveTagPatterns(app.captionTextEdit.removeTagsPatternsText);
+    if (patterns.length === 0) {
+      app.errorMessage = 'Add at least one tag pattern to remove.';
+      return;
+    }
+    await app.withSubmitting(async () => {
+      const response = await fetch('/api/captions/text-edit-jobs/remove-tags/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_path: app.currentProject.path,
+          patterns,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(app.formatApiError(payload, 'Failed to start remove-tags job'));
+      }
+      updateCaptionTextEditJobState(app, 'removeTags', payload.job || {});
+      startCaptionTextEditPolling(app, 'removeTags', payload.job.id);
+      app.statusMessage = 'Remove tags job started.';
+    }, 'startRemoveTagsJob');
+  }
+
+  async function startAddCommonCaptionJob(app) {
+    if (!app.currentProject?.path) {
+      app.errorMessage = 'Open a project first.';
+      return;
+    }
+    const captionText = String(app.captionTextEdit.addCommonCaptionText || '').trim();
+    if (!captionText) {
+      app.errorMessage = 'Enter caption text to add.';
+      return;
+    }
+    await app.withSubmitting(async () => {
+      const response = await fetch('/api/captions/text-edit-jobs/add-common/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_path: app.currentProject.path,
+          caption_text: captionText,
+          scope: app.captionTextEdit.addCommonScope,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(app.formatApiError(payload, 'Failed to start add-caption job'));
+      }
+      updateCaptionTextEditJobState(app, 'addCommon', payload.job || {});
+      startCaptionTextEditPolling(app, 'addCommon', payload.job.id);
+      app.statusMessage = 'Add common caption job started.';
+    }, 'startAddCommonCaptionJob');
+  }
+
+  function clearCaptionTextEditHistory(app, jobKey) {
+    if (!app.captionTextEdit?.history) {
+      return;
+    }
+    if (!['deleteEmpty', 'removeTags', 'addCommon'].includes(String(jobKey || ''))) {
+      return;
+    }
+    app.captionTextEdit.history[jobKey] = [];
+  }
+
   features.editor = {
     loadImageSummary,
     loadImages,
     selectImage,
     imageSrc,
+    normalizeEditorZoomPercent,
+    setEditorZoomMode,
+    setEditorZoomPercent,
+    resetEditorZoomToDefault,
+    editorZoomPresets,
+    editorImageClasses,
+    editorImageStyle,
+    editorNavigationImages,
+    currentImageIndex,
+    hasPreviousImage,
+    hasNextImage,
+    goToFirstImage,
+    goToPreviousImage,
+    goToNextImage,
+    goToLastImage,
     toggleIncluded,
     saveActiveCaption,
     refreshActiveTags,
@@ -1014,5 +1375,10 @@
     applyCaptionBatchReplace,
     undoCaptionBatchReplace,
     clearCaptionBatchPreview,
+    captionTextEditProgressPercent,
+    startDeleteEmptyCaptionsJob,
+    startRemoveTagsJob,
+    startAddCommonCaptionJob,
+    clearCaptionTextEditHistory,
   };
 })(window);

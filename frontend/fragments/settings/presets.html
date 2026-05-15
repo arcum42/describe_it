@@ -1,0 +1,159 @@
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-lg font-medium">LLM Presets</h2>
+                <button @click="loadLLMBackends(); loadLLMPresets()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                  Refresh
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                <div class="rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-xs text-stone-500">
+                  Presets are global for this installation and shared across projects.
+                </div>
+                <div class="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500">Presets</p>
+                    <div class="max-h-72 space-y-2 overflow-auto pr-1">
+                      <template x-for="preset in llm.presets" :key="preset.id">
+                        <button @click="applyPresetToForm(preset)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="llm.presetForm.id === preset.id ? 'border-amber-500 ring-1 ring-amber-500/50' : ''">
+                          <p class="font-medium text-stone-100" x-text="preset.name"></p>
+                          <div class="mt-1 flex items-center justify-between text-xs text-stone-500">
+                            <span x-text="`${preset.backend} / ${preset.model_name} / ${preset.caption_mode_strategy || 'auto'}`"></span>
+                            <span class="text-stone-300" x-text="modelCapabilityLabel(preset.backend, preset.model_name)"></span>
+                          </div>
+                        </button>
+                      </template>
+                      <template x-if="llm.presets.length === 0">
+                        <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No presets yet.</p>
+                      </template>
+                    </div>
+                  </div>
+
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+                    <p class="mb-3 text-xs uppercase tracking-[0.2em] text-stone-500" x-text="llm.presetForm.id ? 'Edit Preset' : 'Create Preset'"></p>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Preset Name
+                        <input x-model="llm.presetForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Description Default" />
+                      </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Backend
+                          <div class="mt-2 select-wrapper">
+                            <select x-model="llm.presetForm.backend" @change="onPresetBackendChanged()" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <template x-for="backend in llm.backends" :key="backend.name">
+                                <option :value="backend.name" :disabled="!backend.available" x-text="backend.available ? backend.name : `${backend.name} (offline)`"></option>
+                              </template>
+                            </select>
+                          </div>
+                        </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                          Model
+                          <div class="mt-2 select-wrapper">
+                            <select x-model="llm.presetForm.modelName" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <template x-for="modelInfo in availableModelsForBackend(llm.presetForm.backend)" :key="modelInfo.name">
+                                <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
+                              </template>
+                            </select>
+                          </div>
+                        </label>
+
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 md:col-span-2">
+                          Caption Mode Strategy
+                          <div class="mt-2 select-wrapper">
+                            <select x-model="llm.presetForm.captionModeStrategy" class="w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                              <option value="auto">Auto (use project caption mode)</option>
+                              <option value="description">Force description mode</option>
+                              <option value="tags">Force tags mode</option>
+                            </select>
+                          </div>
+                        </label>
+                      </div>
+
+                      <p class="mt-3 text-xs text-stone-500" x-show="!llm.showAllModels">Preset model selector is filtered to vision-capable models. Enable "Show all models" to include text-only models.</p>
+
+                      <label class="mt-3 block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Prompt Template
+                        <textarea x-model="llm.presetForm.systemPrompt" class="mt-2 min-h-40 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="You are a captioning assistant for {project_name}. Current caption: {active_caption}"></textarea>
+                      </label>
+
+                      <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900/70 p-3">
+                        <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Preset Tools</p>
+                        <div class="grid gap-2 md:grid-cols-2">
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.toolWebSearch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Enable web_search
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.toolWebFetch" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Enable web_fetch
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.includeProjectNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include project notes as context
+                          </label>
+                          <label class="field-checkbox">
+                            <input type="checkbox" x-model="llm.presetForm.includeGlobalNotes" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                            Include global notes as context
+                          </label>
+                        </div>
+                        <div class="mt-3 grid gap-3 md:grid-cols-2">
+                          <label class="block text-xs text-stone-400">
+                            Reasoning
+                            <div class="mt-1 select-wrapper">
+                              <select x-model="llm.presetForm.reasoningMode" class="w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                                <option value="off">Off</option>
+                                <option value="on">On (auto)</option>
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                              </select>
+                            </div>
+                          </label>
+                          <label class="block text-xs text-stone-400">
+                            Reasoning Output
+                            <div class="mt-1 select-wrapper">
+                              <select x-model="llm.presetForm.reasoningVisibility" class="w-full rounded-xl border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none">
+                                <option value="hidden">Hide reasoning text</option>
+                                <option value="blockquote">Show as blockquote</option>
+                                <option value="code">Show as code block</option>
+                              </select>
+                            </div>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 grid gap-3 md:grid-cols-2">
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Context URL Template
+                          <input x-model="llm.presetForm.contextUrlTemplate" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="{project_context_url}" />
+                        </label>
+                        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                          Context File Path Template
+                          <input x-model="llm.presetForm.contextFileTemplate" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="{project_context_file_path}" />
+                        </label>
+                      </div>
+
+                      <div class="mt-3 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-500">
+                        Supported placeholders in all preset template fields (prompt, URL, file path): {project_name}, {project_description}, {project_trigger_word}, {project_caption_mode}, {project_context_url}, {project_context_file_path}, {filename}, {active_caption}, {caption_1}, {caption_2}, ...
+                      </div>
+
+                    <div class="mt-4 flex flex-wrap gap-3">
+                      <button @click="createPreset()" :disabled="isSubmitting" class="rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+                        Create
+                      </button>
+                      <button @click="updatePreset()" :disabled="isSubmitting || !llm.presetForm.id" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Update
+                      </button>
+                      <button @click="deletePreset()" :disabled="isSubmitting || !llm.presetForm.id" class="rounded-xl border border-red-700 px-4 py-2 text-sm font-medium text-red-300 transition hover:border-red-500 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Delete
+                      </button>
+                      <button @click="resetPresetForm()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        New Draft
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, UTC
-from pathlib import Path
 
 from sqlalchemy import select
 
-from backend.config import get_settings
-from backend.db.models import NoteRecord, ProjectRecord
+from backend.db.models import NoteRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path
 from backend.services.rag_service import rag_service
 
 _ALLOWED_FORMATS = {"text", "markdown"}
@@ -25,13 +24,6 @@ class NoteItem:
     is_archived: bool
     created_at: str
     updated_at: str
-
-
-def _resolve_path(raw_path: str) -> Path:
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        candidate = get_settings().base_dir / candidate
-    return candidate.resolve()
 
 
 def _validate_format(value: str) -> str:
@@ -55,21 +47,12 @@ def _serialize_note(note: NoteRecord) -> NoteItem:
     )
 
 
-def _load_project(session, project_path: Path) -> ProjectRecord:
-    project = session.scalar(select(ProjectRecord).limit(1))
-    if project is None:
-        raise ValueError(f"Project database has no project metadata: {project_path}")
-    return project
-
-
 def list_notes(*, project_path: str, include_archived: bool = True) -> list[NoteItem]:
-    resolved = _resolve_path(project_path)
-    if not resolved.exists():
-        raise ValueError(f"Project file does not exist: {resolved}")
+    resolved = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved)
     with session_factory() as session:
-        project = _load_project(session, resolved)
+        project = load_project_record(session, resolved)
         query = select(NoteRecord).where(NoteRecord.project_id == project.id)
         if not include_archived:
             query = query.where(NoteRecord.is_archived.is_(False))
@@ -85,14 +68,12 @@ def create_note(
     format: str,
     tags: str = "",
 ) -> NoteItem:
-    resolved = _resolve_path(project_path)
-    if not resolved.exists():
-        raise ValueError(f"Project file does not exist: {resolved}")
+    resolved = require_existing_project_path(project_path)
 
     normalized_format = _validate_format(format)
     session_factory = create_sqlite_session_factory(resolved)
     with session_factory() as session:
-        project = _load_project(session, resolved)
+        project = load_project_record(session, resolved)
         note = NoteRecord(
             project_id=project.id,
             title=(title or "").strip(),
@@ -128,14 +109,12 @@ def update_note(
     tags: str,
     is_archived: bool,
 ) -> NoteItem:
-    resolved = _resolve_path(project_path)
-    if not resolved.exists():
-        raise ValueError(f"Project file does not exist: {resolved}")
+    resolved = require_existing_project_path(project_path)
 
     normalized_format = _validate_format(format)
     session_factory = create_sqlite_session_factory(resolved)
     with session_factory() as session:
-        project = _load_project(session, resolved)
+        project = load_project_record(session, resolved)
         note = session.scalar(
             select(NoteRecord).where(NoteRecord.id == note_id, NoteRecord.project_id == project.id).limit(1)
         )
@@ -166,13 +145,11 @@ def update_note(
 
 
 def delete_note(*, project_path: str, note_id: int) -> dict[str, int]:
-    resolved = _resolve_path(project_path)
-    if not resolved.exists():
-        raise ValueError(f"Project file does not exist: {resolved}")
+    resolved = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved)
     with session_factory() as session:
-        project = _load_project(session, resolved)
+        project = load_project_record(session, resolved)
         note = session.scalar(
             select(NoteRecord).where(NoteRecord.id == note_id, NoteRecord.project_id == project.id).limit(1)
         )

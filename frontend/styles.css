@@ -6,6 +6,10 @@ body {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
+[x-cloak] {
+  display: none !important;
+}
+
 textarea {
   resize: vertical;
 }

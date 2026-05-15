@@ -3,14 +3,13 @@ from __future__ import annotations
 import json
 import re
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
 from sqlalchemy import select, text
 
-from backend.config import get_settings
-from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
+from backend.db.models import CaptionRecord, ImageRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path
 
 
 class BatchPreviewNotFoundError(Exception):
@@ -27,20 +26,6 @@ class BatchOperationNotFoundError(Exception):
 
 class BatchOperationAlreadyUndoneError(Exception):
     pass
-
-
-def _resolve_path(raw_path: str) -> Path:
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        candidate = get_settings().base_dir / candidate
-    return candidate.resolve()
-
-
-def _load_project(session, project_path: Path) -> ProjectRecord:
-    project = session.scalar(select(ProjectRecord).limit(1))
-    if project is None:
-        raise ValueError(f"Project database has no project metadata: {project_path}")
-    return project
 
 
 def _compile_pattern(*, find_text: str, mode: str, case_sensitive: bool) -> re.Pattern[str]:
@@ -95,9 +80,7 @@ def _load_candidate_captions(*, session, project_id: int, scope: dict[str, objec
 
 
 def preview_batch_replace(*, project_path: str, query: dict[str, object], scope: dict[str, object]) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     find_text = str(query.get("find_text") or "")
     replace_text = str(query.get("replace_text") or "")
@@ -108,7 +91,7 @@ def preview_batch_replace(*, project_path: str, query: dict[str, object], scope:
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = _load_project(session, resolved_project_path)
+        project = load_project_record(session, resolved_project_path)
         rows = _load_candidate_captions(session=session, project_id=project.id, scope=scope)
 
         changes: list[dict[str, object]] = []
@@ -209,13 +192,11 @@ def apply_batch_replace(
     if not confirm:
         raise ValueError("confirm must be true to apply a batch replace")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = _load_project(session, resolved_project_path)
+        project = load_project_record(session, resolved_project_path)
         preview_row = session.execute(
             text(
                 """
@@ -349,13 +330,11 @@ def apply_batch_replace(
 
 
 def undo_batch_replace(*, project_path: str, operation_id: str | None = None) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = _load_project(session, resolved_project_path)
+        project = load_project_record(session, resolved_project_path)
 
         if operation_id:
             operation_row = session.execute(
@@ -436,13 +415,11 @@ def list_batch_operations(*, project_path: str, limit: int = 50) -> list[dict[st
     if limit > 200:
         raise ValueError("limit must be <= 200")
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
-        project = _load_project(session, resolved_project_path)
+        project = load_project_record(session, resolved_project_path)
         rows = session.execute(
             text(
                 """

@@ -66,6 +66,14 @@
     return `${value.slice(0, maxLength - 1)}...`;
   }
 
+  function selectedBatchPresetTemplate(app) {
+    const preset = app.llm.presets.find((item) => String(item.id) === String(app.llm.selectedPresetId));
+    if (!preset) {
+      return '';
+    }
+    return String(preset.system_prompt || '');
+  }
+
   function applyBatchJob(app, job) {
     app.batch.jobId = job.id || '';
     app.batch.status = job.status || 'idle';
@@ -91,6 +99,9 @@
     }
     if (typeof job.retry_count === 'number') {
       app.batch.retryCount = job.retry_count;
+    }
+    if (typeof job.exclude_captioned === 'boolean') {
+      app.batch.excludeCaptioned = job.exclude_captioned;
     }
   }
 
@@ -317,6 +328,13 @@
     app.batch.currentGeneratedText = '';
     app.batch.currentFilename = '';
     app.batch.currentImageId = null;
+    const filteredImageIds = app.batch.target === 'filtered'
+      ? Array.from(new Set((app.filteredGridCards() || []).map((card) => Number(card.id)).filter((value) => Number.isInteger(value) && value > 0)))
+      : [];
+    if (app.batch.target === 'filtered' && filteredImageIds.length === 0) {
+      app.errorMessage = 'No images match the current grid filters.';
+      return;
+    }
     await app.withSubmitting(async () => {
       const response = await fetch('/api/llm/batch-jobs/create', {
         method: 'POST',
@@ -324,11 +342,14 @@
         body: JSON.stringify({
           project_path: app.currentProject.path,
           target: app.batch.target,
+          filtered_image_ids: app.batch.target === 'filtered' ? filteredImageIds : null,
+          exclude_captioned: app.batch.excludeCaptioned === true,
           use_preset: app.batch.usePreset,
           preset_id: app.batch.usePreset && app.llm.selectedPresetId ? Number(app.llm.selectedPresetId) : null,
           backend: app.batch.usePreset ? '' : app.llm.backend,
           model: app.batch.usePreset ? '' : app.llm.model,
           extra_instructions: app.batch.usePreset ? '' : app.llm.extraInstructions,
+          preset_prompt_suffix: app.batch.usePreset ? String(app.batch.presetPromptSuffix || '') : '',
           timeout_seconds: app.settings.llmTimeoutSeconds,
           make_active: app.llm.makeActive,
           output_mode: app.batch.outputMode,
@@ -362,6 +383,7 @@
     filteredBatchHistory,
     formatBatchTimestamp,
     batchResultTextPreview,
+    selectedBatchPresetTemplate,
     applyBatchJob,
     startBatchPolling,
     stopBatchPollingIfTerminal,

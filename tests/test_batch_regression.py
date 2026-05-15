@@ -7,6 +7,7 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -36,6 +37,7 @@ def _make_job(job_id: str, project_path: str, status: str) -> BatchJob:
         backend="ollama",
         model="test-model",
         extra_instructions="",
+        preset_prompt_suffix="",
         timeout_seconds=30,
         make_active=True,
         output_mode="append",
@@ -415,3 +417,92 @@ def test_export_csv_is_empty_when_no_results(tmp_path: Path, monkeypatch) -> Non
     reader = csv.DictReader(io.StringIO(csv_text))
     rows = list(reader)
     assert rows == [], f"Expected no data rows, got {rows}"
+
+
+def test_generate_for_image_passes_preset_prompt_suffix(monkeypatch) -> None:
+    """Batch preset generation should forward per-run suffix text to the preset generator."""
+    captured: dict[str, object] = {}
+
+    def _fake_generate_text_for_image_with_preset(**kwargs):
+        captured.update(kwargs)
+        return {"backend": "ollama", "model": "demo", "text": "caption"}
+
+    monkeypatch.setattr(
+        "backend.services.batch_service.generate_text_for_image_with_preset",
+        _fake_generate_text_for_image_with_preset,
+    )
+
+    service = BatchService.__new__(BatchService)
+    service._lock = __import__("threading").Lock()
+    service._jobs = {}
+
+    job = BatchJob(
+        id=str(uuid.uuid4()),
+        project_path="/tmp/project.db",
+        target="all",
+        use_preset=True,
+        preset_id=7,
+        backend="",
+        model="",
+        extra_instructions="",
+        preset_prompt_suffix="Batch note: this set is all outdoor daytime shots.",
+        timeout_seconds=30,
+        make_active=True,
+        output_mode="new_candidate",
+        skip_on_failure=True,
+        retry_count=0,
+        image_ids=[1],
+        image_filenames={1: "img.png"},
+        total=1,
+    )
+
+    generated_text, backend, model = BatchService._generate_for_image(service, job, 1)
+    assert generated_text == "caption"
+    assert backend == "ollama"
+    assert model == "demo"
+    assert captured["preset_id"] == 7
+    assert captured["preset_prompt_suffix"] == "Batch note: this set is all outdoor daytime shots."
+
+
+def test_collect_images_supports_excluded_and_filtered_targets(monkeypatch) -> None:
+    """Batch image collection should support excluded and filtered target scopes."""
+    fake_images = [
+        SimpleNamespace(id=1, filename="a.png", included=True, active_caption_preview="caption"),
+        SimpleNamespace(id=2, filename="b.png", included=False, active_caption_preview=""),
+        SimpleNamespace(id=3, filename="c.png", included=False, active_caption_preview="caption"),
+        SimpleNamespace(id=4, filename="d.png", included=True, active_caption_preview=""),
+    ]
+
+    monkeypatch.setattr("backend.services.batch_service.list_project_images", lambda project_path: fake_images)
+
+    service = BatchService.__new__(BatchService)
+    image_ids, _ = BatchService._collect_images(service, project_path="/tmp/project.db", target="excluded")
+    assert image_ids == [2, 3]
+
+    filtered_ids, _ = BatchService._collect_images(
+        service,
+        project_path="/tmp/project.db",
+        target="filtered",
+        filtered_image_ids=[4, 2, 999],
+    )
+    assert filtered_ids == [2, 4]
+
+
+def test_collect_images_exclude_captioned_applies_after_target_scope(monkeypatch) -> None:
+    """exclude_captioned should remove captioned images from the selected target scope."""
+    fake_images = [
+        SimpleNamespace(id=1, filename="a.png", included=False, active_caption_preview="caption"),
+        SimpleNamespace(id=2, filename="b.png", included=False, active_caption_preview=""),
+        SimpleNamespace(id=3, filename="c.png", included=True, active_caption_preview=""),
+    ]
+
+    monkeypatch.setattr("backend.services.batch_service.list_project_images", lambda project_path: fake_images)
+
+    service = BatchService.__new__(BatchService)
+    image_ids, _ = BatchService._collect_images(
+        service,
+        project_path="/tmp/project.db",
+        target="excluded",
+        exclude_captioned=True,
+    )
+    assert image_ids == [2]

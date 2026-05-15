@@ -46,6 +46,17 @@ pip install -r requirements-optional.txt
 
 See [PHASE_7_RAG_GUIDE.md](PHASE_7_RAG_GUIDE.md) for setup and usage.
 
+## Optional: Complexity Checks
+
+If you are contributing refactors and want a quick complexity gate:
+
+```bash
+pip install -r requirements-optional.txt
+bash scripts/check_complexity.sh
+```
+
+This uses `radon` and `xenon` with permissive baseline thresholds suitable for incremental cleanup.
+
 ## Frontend Contributor Notes
 
 - Baseline runtime must stay Python-only: users should only need venv + `pip install -r requirements.txt` + `python run.py`.

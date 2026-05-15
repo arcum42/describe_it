@@ -1,3 +1,164 @@
+function createDefaultNotesState() {
+  const notesState = window.DescribeItState?.notes;
+  if (notesState && typeof notesState.createDefaultNotesState === 'function') {
+    return notesState.createDefaultNotesState();
+  }
+
+  return {
+    scope: 'project',
+    includeArchived: false,
+    projectItems: [],
+    globalItems: [],
+    selectedNoteId: null,
+    editor: {
+      id: null,
+      title: '',
+      content: '',
+      format: 'markdown',
+      tags: '',
+      is_archived: false,
+    },
+    llm: {
+      prompt: '',
+      useSelectedImage: false,
+      backend: '',
+      model: '',
+      outputFormat: 'markdown',
+      title: '',
+      tags: '',
+      webSearch: false,
+      webFetch: false,
+      contextUrl: '',
+      contextFile: '',
+      includeProjectNotes: false,
+      includeGlobalNotes: false,
+      reasoningMode: 'off',
+      reasoningVisibility: 'hidden',
+    },
+  };
+}
+
+function createDefaultCaptionBatchState() {
+  const batchState = window.DescribeItState?.batch;
+  if (batchState && typeof batchState.createDefaultCaptionBatchState === 'function') {
+    return batchState.createDefaultCaptionBatchState();
+  }
+
+  return {
+    query: {
+      findText: '',
+      replaceText: '',
+      mode: 'plain',
+      caseSensitive: false,
+    },
+    scope: {
+      captionScope: 'active_only',
+      imageScope: 'included_only',
+      imageIdsText: '',
+    },
+    apply: {
+      confirm: false,
+      createUndoSnapshot: true,
+    },
+    preview: null,
+    operations: [],
+    historyLimit: 20,
+    lastOperationId: '',
+  };
+}
+
+function createDefaultCaptionTextEditJobState() {
+  const batchState = window.DescribeItState?.batch;
+  if (batchState && typeof batchState.createDefaultCaptionTextEditJobState === 'function') {
+    return batchState.createDefaultCaptionTextEditJobState();
+  }
+
+  return {
+    id: '',
+    status: 'idle',
+    total: 0,
+    completed: 0,
+    affected: 0,
+    currentLabel: '',
+    lastError: '',
+    result: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+}
+
+function createDefaultCaptionTextEditState() {
+  const batchState = window.DescribeItState?.batch;
+  if (batchState && typeof batchState.createDefaultCaptionTextEditState === 'function') {
+    return batchState.createDefaultCaptionTextEditState();
+  }
+
+  return {
+    removeTagsPatternsText: '',
+    addCommonCaptionText: '',
+    addCommonScope: 'without_caption',
+    historyLimit: 10,
+    jobs: {
+      deleteEmpty: createDefaultCaptionTextEditJobState(),
+      removeTags: createDefaultCaptionTextEditJobState(),
+      addCommon: createDefaultCaptionTextEditJobState(),
+    },
+    history: {
+      deleteEmpty: [],
+      removeTags: [],
+      addCommon: [],
+    },
+  };
+}
+
+function createDefaultBatchState() {
+  const batchState = window.DescribeItState?.batch;
+  if (batchState && typeof batchState.createDefaultBatchState === 'function') {
+    return batchState.createDefaultBatchState();
+  }
+
+  return {
+    subTab: 'generate',
+    target: 'included',
+    excludeCaptioned: false,
+    usePreset: true,
+    presetPromptSuffix: '',
+    outputMode: 'new_candidate',
+    skipOnFailure: true,
+    retryCount: 0,
+    jobId: '',
+    status: 'idle',
+    total: 0,
+    completed: 0,
+    succeeded: 0,
+    failed: 0,
+    currentImageId: null,
+    currentFilename: '',
+    currentGeneratedText: '',
+    lastError: '',
+    history: [],
+    historyStatusFilter: 'all',
+    results: [],
+  };
+}
+
+function createDefaultGridFilterState() {
+  const gridState = window.DescribeItState?.grid;
+  if (gridState && typeof gridState.createDefaultGridFilterState === 'function') {
+    return gridState.createDefaultGridFilterState();
+  }
+
+  return {
+    searchText: '',
+    searchMode: 'filename', // 'filename', 'caption', 'both'
+    inclusionStatus: 'all', // 'all', 'included', 'excluded'
+    captionStatus: 'all', // 'all', 'with_captions', 'blank_captions'
+    sortBy: 'name', // 'name', 'status', 'caption_count'
+    sortOrder: 'asc', // 'asc', 'desc'
+    pageSize: 100, // Items per page: 25, 50, 100, all
+  };
+}
+
 function describeItApp() {
   return {
     healthLabel: 'checking',
@@ -24,6 +185,15 @@ function describeItApp() {
       source_folder: 'practice_dataset/sample_set',
       source_image: '',
       replace_existing: false,
+      default_caption: '',
+    },
+    importProgress: {
+      active: false,
+      total: 0,
+      current: 0,
+      percent: 0,
+      currentFilename: '',
+      label: '',
     },
     exportForm: {
       output_folder: 'exports',
@@ -88,27 +258,8 @@ function describeItApp() {
         addSourceReferenceNote: true,
       },
     },
-    captionBatch: {
-      query: {
-        findText: '',
-        replaceText: '',
-        mode: 'plain',
-        caseSensitive: false,
-      },
-      scope: {
-        captionScope: 'active_only',
-        imageScope: 'included_only',
-        imageIdsText: '',
-      },
-      apply: {
-        confirm: false,
-        createUndoSnapshot: true,
-      },
-      preview: null,
-      operations: [],
-      historyLimit: 20,
-      lastOperationId: '',
-    },
+    captionBatch: createDefaultCaptionBatchState(),
+    captionTextEdit: createDefaultCaptionTextEditState(),
     tagEditor: {
       activeCaptionId: null,
       tags: [],
@@ -170,59 +321,9 @@ function describeItApp() {
         reasoningVisibility: 'hidden',
       },
     },
-    batch: {
-      target: 'included',
-      usePreset: true,
-      outputMode: 'new_candidate',
-      skipOnFailure: true,
-      retryCount: 0,
-      jobId: '',
-      status: 'idle',
-      total: 0,
-      completed: 0,
-      succeeded: 0,
-      failed: 0,
-      currentImageId: null,
-      currentFilename: '',
-      currentGeneratedText: '',
-      lastError: '',
-      history: [],
-      historyStatusFilter: 'all',
-      results: [],
-    },
+    batch: createDefaultBatchState(),
     batchPollTimer: null,
-    notes: {
-      scope: 'project',
-      includeArchived: false,
-      projectItems: [],
-      globalItems: [],
-      selectedNoteId: null,
-      editor: {
-        id: null,
-        title: '',
-        content: '',
-        format: 'markdown',
-        tags: '',
-        is_archived: false,
-      },
-      llm: {
-        prompt: '',
-        useSelectedImage: false,
-        backend: '',
-        model: '',
-        outputFormat: 'markdown',
-        title: '',
-        tags: '',
-        webSearch: false,
-        webFetch: false,
-        contextUrl: '',
-        contextFile: '',
-        includeProjectNotes: false,
-        includeGlobalNotes: false,
-        reasoningMode: 'off',
-        reasoningVisibility: 'hidden',
-      },
-    },
+    notes: createDefaultNotesState(),
     settings: {
       llmTimeoutSeconds: 120,
       usePresetByDefault: false,
@@ -308,6 +409,7 @@ function describeItApp() {
       ioImport: true,
       ioExport: true,
       batchConfig: true,
+      batchTextEdit: true,
       batchProgress: true,
       batchCurrent: true,
       batchHistory: true,
@@ -324,14 +426,7 @@ function describeItApp() {
       showShortcutsHelp: false,
       shortcuts: [],
     },
-    gridFilter: {
-      searchText: '',
-      inclusionStatus: 'all', // 'all', 'included', 'excluded'
-      captionStatus: 'all', // 'all', 'with_captions', 'blank_captions'
-      sortBy: 'name', // 'name', 'status', 'caption_count'
-      sortOrder: 'asc', // 'asc', 'desc'
-      pageSize: 100, // Items per page: 25, 50, 100, all
-    },
+    gridFilter: createDefaultGridFilterState(),
     async init() {
       // Initialize keyboard shortcuts
       if (window.DescribeItFeatures && window.DescribeItFeatures.shortcuts) {
@@ -456,22 +551,7 @@ function describeItApp() {
         await projectsFeature.loadProjectSessionState(this, isStartup);
         return;
       }
-      try {
-        const response = await this.fetchWithRetry('/api/projects/session-state', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to load project session state');
-        }
-        this.projectSession.lastProjectPath = payload.last_project_path || '';
-        this.projectSession.lastProjectDirectory = payload.last_project_directory || '';
-        this.projectSession.reopenLastProject = payload.reopen_last_project !== false;
-        this.settings.reopenLastProjectOnStartup = this.projectSession.reopenLastProject;
-      } catch (error) {
-        this.projectSession.lastProjectPath = '';
-        this.projectSession.lastProjectDirectory = '';
-        this.projectSession.reopenLastProject = true;
-        this.settings.reopenLastProjectOnStartup = true;
-      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async saveProjectSessionState() {
       const projectsFeature = window.DescribeItFeatures?.projects;
@@ -479,19 +559,7 @@ function describeItApp() {
         await projectsFeature.saveProjectSessionState(this);
         return;
       }
-      try {
-        await fetch('/api/projects/session-state', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            last_project_path: this.projectSession.lastProjectPath,
-            last_project_directory: this.projectSession.lastProjectDirectory,
-            reopen_last_project: this.projectSession.reopenLastProject,
-          }),
-        });
-      } catch (error) {
-        // Ignore persistence errors to avoid interrupting normal UI interactions.
-      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     async autoOpenLastProjectIfNeeded() {
       const projectsFeature = window.DescribeItFeatures?.projects;
@@ -499,71 +567,112 @@ function describeItApp() {
         await projectsFeature.autoOpenLastProjectIfNeeded(this);
         return;
       }
-      if (!this.projectSession.reopenLastProject || !this.projectSession.lastProjectPath) {
-        return;
-      }
-      this.openForm.path = this.projectSession.lastProjectPath;
-      try {
-        const response = await fetch('/api/projects/open', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: this.projectSession.lastProjectPath }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(payload.detail ?? 'Failed to reopen last project');
-        }
-        this.applyProject(payload.project, { preserveMainView: true });
-        await this.loadRecentProjects();
-        this.statusMessage = `Reopened last project ${payload.project.name}.`;
-      } catch (error) {
-        this.projectSession.lastProjectPath = '';
-        await this.saveProjectSessionState();
-      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     openSettings(tab = 'general') {
-      this.uiSection = 'settings';
-      this.settingsTab = tab;
-      this.errorMessage = '';
-      this.statusMessage = '';
-      this.checkRAGStatus();
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.openSettings === 'function') {
+        projectsFeature.openSettings(this, tab);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     openPresetSettings() {
-      this.openSettings('presets');
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.openPresetSettings === 'function') {
+        projectsFeature.openPresetSettings(this);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     openWorkspace() {
-      this.uiSection = 'workspace';
+      const projectsFeature = window.DescribeItFeatures?.projects;
+      if (projectsFeature && typeof projectsFeature.openWorkspace === 'function') {
+        projectsFeature.openWorkspace(this);
+        return;
+      }
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     showKeyboardShortcutsHelp() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.showKeyboardShortcutsHelp === 'function') {
+        uiShellFeature.showKeyboardShortcutsHelp(this);
+        return;
+      }
       this.keyboard.showShortcutsHelp = true;
     },
     closeKeyboardShortcutsHelp() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.closeKeyboardShortcutsHelp === 'function') {
+        uiShellFeature.closeKeyboardShortcutsHelp(this);
+        return;
+      }
       this.keyboard.showShortcutsHelp = false;
     },
     isTagMode() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.isTagMode === 'function') {
+        return uiShellFeature.isTagMode(this);
+      }
       return this.currentProject?.caption_mode === 'tags';
     },
     editorSubTabs() {
-      const tabs = [
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.editorSubTabs === 'function') {
+        return uiShellFeature.editorSubTabs(this);
+      }
+      return [
         { id: 'caption', label: 'Caption' },
         { id: 'image', label: 'Image' },
       ];
-      if (this.isTagMode()) {
-        tabs.push({ id: 'batch_tags', label: 'Batch Tags' });
-      }
-      return tabs;
     },
     setEditorSubTab(nextTab) {
-      const allowed = this.editorSubTabs().map((tab) => tab.id);
-      this.editorView.subTab = allowed.includes(nextTab) ? nextTab : 'caption';
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.setEditorSubTab === 'function') {
+        uiShellFeature.setEditorSubTab(this, nextTab);
+        return;
+      }
+      this.editorView.subTab = 'caption';
     },
     ensureEditorSubTab() {
-      const allowed = this.editorSubTabs().map((tab) => tab.id);
-      if (!allowed.includes(this.editorView.subTab)) {
-        this.editorView.subTab = 'caption';
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.ensureEditorSubTab === 'function') {
+        uiShellFeature.ensureEditorSubTab(this);
+        return;
       }
+      this.editorView.subTab = 'caption';
+    },
+    batchSubTabs() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.batchSubTabs === 'function') {
+        return uiShellFeature.batchSubTabs(this);
+      }
+      return [
+        { id: 'generate', label: 'Generate' },
+        { id: 'text_edit', label: 'Text Edit' },
+      ];
+    },
+    setBatchSubTab(nextTab) {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.setBatchSubTab === 'function') {
+        uiShellFeature.setBatchSubTab(this, nextTab);
+        return;
+      }
+      this.batch.subTab = 'generate';
+    },
+    ensureBatchSubTab() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.ensureBatchSubTab === 'function') {
+        uiShellFeature.ensureBatchSubTab(this);
+        return;
+      }
+      this.batch.subTab = 'generate';
     },
     normalizeEditorZoomPercent(value) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.normalizeEditorZoomPercent === 'function') {
+        return editorFeature.normalizeEditorZoomPercent(this, value);
+      }
       const parsed = Number.parseInt(value, 10);
       if (!Number.isFinite(parsed)) {
         return 100;
@@ -571,41 +680,47 @@ function describeItApp() {
       return Math.min(400, Math.max(25, parsed));
     },
     setEditorZoomMode(mode) {
-      const normalized = String(mode || '').trim().toLowerCase();
-      if (!['fit', 'full', 'percent'].includes(normalized)) {
-        this.editorView.zoomMode = 'fit';
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.setEditorZoomMode === 'function') {
+        editorFeature.setEditorZoomMode(this, mode);
         return;
       }
-      this.editorView.zoomMode = normalized;
-      if (normalized === 'percent') {
-        this.editorView.zoomPercent = this.normalizeEditorZoomPercent(this.editorView.zoomPercent);
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     setEditorZoomPercent(value) {
-      this.editorView.zoomPercent = this.normalizeEditorZoomPercent(value);
-      this.editorView.zoomMode = 'percent';
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.setEditorZoomPercent === 'function') {
+        editorFeature.setEditorZoomPercent(this, value);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     resetEditorZoomToDefault() {
-      const defaultMode = this.settings.editorDefaultImageZoomMode || 'fit';
-      const defaultPercent = this.normalizeEditorZoomPercent(this.settings.editorDefaultImageZoomPercent);
-      this.editorView.zoomPercent = defaultPercent;
-      this.setEditorZoomMode(defaultMode);
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.resetEditorZoomToDefault === 'function') {
+        editorFeature.resetEditorZoomToDefault(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     editorZoomPresets() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.editorZoomPresets === 'function') {
+        return editorFeature.editorZoomPresets(this);
+      }
       return [50, 75, 100, 125, 150, 200];
     },
     editorImageClasses() {
-      if (this.editorView.zoomMode === 'fit') {
-        return 'h-auto w-full object-contain mx-auto';
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.editorImageClasses === 'function') {
+        return editorFeature.editorImageClasses(this);
       }
-      return 'h-auto max-w-none object-contain mx-auto';
+      return 'h-auto w-full object-contain mx-auto';
     },
     editorImageStyle() {
-      if (this.editorView.zoomMode === 'percent') {
-        return { width: `${this.normalizeEditorZoomPercent(this.editorView.zoomPercent)}%` };
-      }
-      if (this.editorView.zoomMode === 'full') {
-        return { width: 'auto' };
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.editorImageStyle === 'function') {
+        return editorFeature.editorImageStyle(this);
       }
       return {};
     },
@@ -624,51 +739,7 @@ function describeItApp() {
         projectsFeature.applyProject(this, project, options);
         return;
       }
-      const preserveMainView = options.preserveMainView === true;
-      this.currentProject = project;
-      if (!preserveMainView) {
-        this.mainView = 'grid';
-      }
-      this.metadataForm = {
-        path: project.path,
-        name: project.name ?? '',
-        description: project.description ?? '',
-        trigger_word: project.trigger_word ?? '',
-        caption_mode: project.caption_mode ?? 'description',
-        context_url: project.context_url ?? '',
-        context_file_path: project.context_file_path ?? '',
-      };
-      this.openForm.path = project.path;
-      const lastSeparator = project.path.lastIndexOf('/');
-      if (lastSeparator > 0) {
-        this.projectSession.lastProjectDirectory = project.path.slice(0, lastSeparator);
-      }
-      this.projectSession.lastProjectPath = project.path;
-      this.projectSession.reopenLastProject = true;
-      this.saveProjectSessionState();
-      this.selectedImage = null;
-      this.editorView.subTab = 'caption';
-      this.resetEditorZoomToDefault();
-      this.editorCaptionText = '';
-      this.newCaptionText = '';
-      this.tagEditor.activeCaptionId = null;
-      this.tagEditor.tags = [];
-      this.tagEditor.newTagText = '';
-      this.tagEditor.editingTagIndex = null;
-      this.tagEditor.editingTagText = '';
-      this.tagEditor.dragTagIndex = null;
-      this.tagEditor.stats = {
-        total_tags: 0,
-        total_occurrences: 0,
-        top_tags: [],
-      };
-      this.tagEditor.batch.clearConfirm = false;
-      this.resetPresetForm();
-      this.loadImageSummary();
-      this.loadImages();
-      this.loadTagStatistics(true);
-      this.loadLatestBatchJob();
-      this.loadProjectNotes();
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     closeProject() {
       const projectsFeature = window.DescribeItFeatures?.projects;
@@ -676,66 +747,7 @@ function describeItApp() {
         projectsFeature.closeProject(this);
         return;
       }
-      const activeCaption = this.selectedImage?.captions?.find((c) => c.is_active);
-      const savedText = activeCaption?.text ?? '';
-      if (this.selectedImage && this.editorCaptionText !== savedText) {
-        if (!window.confirm('You have unsaved caption changes. Close project anyway?')) {
-          return;
-        }
-      }
-      this.currentProject = null;
-      this.mainView = 'grid';
-      this.selectedImage = null;
-      this.editorView.subTab = 'caption';
-      this.resetEditorZoomToDefault();
-      this.images = [];
-      this.gridCards = [];
-      this.editorCaptionText = '';
-      this.newCaptionText = '';
-      this.tagEditor.activeCaptionId = null;
-      this.tagEditor.tags = [];
-      this.tagEditor.newTagText = '';
-      this.tagEditor.editingTagIndex = null;
-      this.tagEditor.editingTagText = '';
-      this.tagEditor.dragTagIndex = null;
-      this.tagEditor.stats = {
-        total_tags: 0,
-        total_occurrences: 0,
-        top_tags: [],
-      };
-      this.metadataForm = {
-        path: '',
-        name: '',
-        description: '',
-        trigger_word: '',
-        caption_mode: 'description',
-        context_url: '',
-        context_file_path: '',
-      };
-      this.imageSummary = {
-        count: 0,
-        non_empty_caption_count: 0,
-        blank_caption_count: 0,
-        previews: [],
-      };
-      this.projectSession.lastProjectPath = '';
-      this.projectSession.reopenLastProject = false;
-      this.saveProjectSessionState();
-      this.statusMessage = 'Closed current project.';
-      this.errorMessage = '';
-      if (this.batchPollTimer) {
-        clearInterval(this.batchPollTimer);
-        this.batchPollTimer = null;
-      }
-      this.batch.jobId = '';
-      this.batch.status = 'idle';
-      this.batch.history = [];
-      this.batch.historyStatusFilter = 'all';
-      this.batch.results = [];
-      this.notes.projectItems = [];
-      this.notes.selectedNoteId = null;
-      this.newNoteDraft();
-      this.loadBrowser(this.projectSession.lastProjectDirectory || null);
+      this.errorMessage = 'Projects module unavailable. Refresh and try again.';
     },
     applyImageToolPreset(presetKey) {
       if (!this.selectedImage) {
@@ -843,132 +855,71 @@ function describeItApp() {
       return { ok: true, message: '' };
     },
     filteredGridCards() {
-      let filtered = [...this.gridCards];
-
-      // Apply search filter
-      if (this.gridFilter.searchText.trim()) {
-        const search = this.gridFilter.searchText.toLowerCase();
-        filtered = filtered.filter(card => 
-          card.label.toLowerCase().includes(search) || 
-          (card.filename && card.filename.toLowerCase().includes(search))
-        );
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.filteredGridCards === 'function') {
+        return gridFeature.filteredGridCards(this);
       }
-
-      // Apply inclusion status filter
-      if (this.gridFilter.inclusionStatus === 'included') {
-        filtered = filtered.filter(card => card.included === true);
-      } else if (this.gridFilter.inclusionStatus === 'excluded') {
-        filtered = filtered.filter(card => card.included === false);
-      }
-
-      // Apply caption status filter
-      if (this.gridFilter.captionStatus === 'with_captions') {
-        filtered = filtered.filter(card => card.active_caption_preview && card.active_caption_preview.trim() !== '');
-      } else if (this.gridFilter.captionStatus === 'blank_captions') {
-        filtered = filtered.filter(card => !card.active_caption_preview || card.active_caption_preview.trim() === '');
-      }
-
-      // Apply sorting
-      const sortBy = this.gridFilter.sortBy;
-      const sortOrder = this.gridFilter.sortOrder === 'desc' ? -1 : 1;
-
-      if (sortBy === 'name') {
-        filtered.sort((a, b) => sortOrder * a.label.localeCompare(b.label));
-      } else if (sortBy === 'status') {
-        const statusOrder = { excluded: 0, included: 1 };
-        filtered.sort((a, b) => {
-          const aStatus = statusOrder[a.status] ?? 2;
-          const bStatus = statusOrder[b.status] ?? 2;
-          return sortOrder * (aStatus - bStatus);
-        });
-      } else if (sortBy === 'caption_count') {
-        filtered.sort((a, b) => {
-          const aEmpty = !a.active_caption_preview || a.active_caption_preview.trim() === '' ? 0 : 1;
-          const bEmpty = !b.active_caption_preview || b.active_caption_preview.trim() === '' ? 0 : 1;
-          return sortOrder * (bEmpty - aEmpty);
-        });
-      }
-
-      // Apply pagination
-      if (this.gridFilter.pageSize && this.gridFilter.pageSize !== 'all') {
-        const pageSize = parseInt(this.gridFilter.pageSize, 10);
-        filtered = filtered.slice(0, pageSize);
-      }
-
-      return filtered;
+      return Array.isArray(this.gridCards) ? [...this.gridCards] : [];
     },
     editorNavigationImages() {
-      if (!this.editorNavigationUseFilteredGrid) {
-        return Array.isArray(this.images) ? this.images : [];
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.editorNavigationImages === 'function') {
+        return editorFeature.editorNavigationImages(this);
       }
-      if (!Array.isArray(this.images) || this.images.length === 0) {
-        return [];
-      }
-      const imagesById = new Map(this.images.map((image) => [image.id, image]));
-      const filteredCards = this.filteredGridCards();
-      if (!Array.isArray(filteredCards) || filteredCards.length === 0) {
-        return this.images;
-      }
-      const ordered = filteredCards
-        .map((card) => imagesById.get(card.id))
-        .filter(Boolean);
-      return ordered.length > 0 ? ordered : this.images;
+      return Array.isArray(this.images) ? this.images : [];
     },
     currentImageIndex() {
-      if (!this.selectedImage?.id) {
-        return -1;
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.currentImageIndex === 'function') {
+        return editorFeature.currentImageIndex(this);
       }
-      const navigationImages = this.editorNavigationImages();
-      return navigationImages.findIndex((image) => image.id === this.selectedImage.id);
+      return -1;
     },
     hasPreviousImage() {
-      return this.currentImageIndex() > 0;
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.hasPreviousImage === 'function') {
+        return editorFeature.hasPreviousImage(this);
+      }
+      return false;
     },
     hasNextImage() {
-      const index = this.currentImageIndex();
-      return index >= 0 && index < (this.images.length - 1);
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.hasNextImage === 'function') {
+        return editorFeature.hasNextImage(this);
+      }
+      return false;
     },
     async goToFirstImage() {
-      const navigationImages = this.editorNavigationImages();
-      if (navigationImages.length === 0 || !this.selectedImage?.id) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.goToFirstImage === 'function') {
+        await editorFeature.goToFirstImage(this);
         return;
       }
-      const first = navigationImages[0];
-      if (first?.id && first.id !== this.selectedImage.id) {
-        await this.selectImage(first.id, true);
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async goToPreviousImage() {
-      const navigationImages = this.editorNavigationImages();
-      const index = this.currentImageIndex();
-      if (index <= 0) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.goToPreviousImage === 'function') {
+        await editorFeature.goToPreviousImage(this);
         return;
       }
-      const previous = navigationImages[index - 1];
-      if (previous?.id) {
-        await this.selectImage(previous.id, true);
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async goToNextImage() {
-      const navigationImages = this.editorNavigationImages();
-      const index = this.currentImageIndex();
-      if (index < 0 || index >= navigationImages.length - 1) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.goToNextImage === 'function') {
+        await editorFeature.goToNextImage(this);
         return;
       }
-      const next = navigationImages[index + 1];
-      if (next?.id) {
-        await this.selectImage(next.id, true);
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     async goToLastImage() {
-      const navigationImages = this.editorNavigationImages();
-      if (navigationImages.length === 0 || !this.selectedImage?.id) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.goToLastImage === 'function') {
+        await editorFeature.goToLastImage(this);
         return;
       }
-      const last = navigationImages[navigationImages.length - 1];
-      if (last?.id && last.id !== this.selectedImage.id) {
-        await this.selectImage(last.id, true);
-      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
     },
     isGridImageSelected(imageId) {
       const gridFeature = window.DescribeItFeatures?.grid;
@@ -1233,120 +1184,70 @@ function describeItApp() {
       this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     async openPathPicker(target) {
-      const pickerConfig = {
-        create_project_path: { label: 'project folder for create path', expects: 'directory' },
-        open_project_db: { label: 'project database file', expects: 'db_file' },
-        import_source_folder: { label: 'import source folder', expects: 'directory' },
-        import_source_image: { label: 'import source image file', expects: 'file' },
-        export_output_folder: { label: 'export output folder', expects: 'directory' },
-        metadata_context_file: { label: 'project context file', expects: 'file' },
-        llm_context_file: { label: 'LLM context file', expects: 'file' },
-        notes_context_file: { label: 'notes context file', expects: 'file' },
-      };
-      const config = pickerConfig[target];
-      if (!config) {
-        this.errorMessage = 'Unsupported browse target.';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.openPathPicker === 'function') {
+        await browserFeature.openPathPicker(this, target);
         return;
       }
-
-      this.pathPicker.target = target;
-      this.pathPicker.label = config.label;
-      this.pathPicker.expects = config.expects;
-      const startPath = this.pathPickerStartPath(target);
-
-      if (!this.settings.useNativePathPicker) {
-        this.showBrowser = true;
-        await this.loadBrowser(startPath || this.browser.currentPath || this.projectSession.lastProjectDirectory || null);
-        this.statusMessage = `Select ${config.label} from browser.`;
-        this.errorMessage = '';
-        return;
-      }
-
-      this.statusMessage = 'Opening native picker...';
-      this.errorMessage = '';
-      const nativeResult = await this.requestNativePathPicker(config, startPath);
-      if (nativeResult.available) {
-        if (nativeResult.selected_path) {
-          const selectionKind = config.expects === 'directory' ? 'directory' : 'file';
-          this.applyPathPickerSelection(nativeResult.selected_path, selectionKind);
-          return;
-        }
-        this.clearPathPicker();
-        this.statusMessage = 'Native picker canceled.';
-        this.errorMessage = '';
-        return;
-      }
-
-      this.showBrowser = true;
-      await this.loadBrowser(startPath || this.browser.currentPath || this.projectSession.lastProjectDirectory || null);
-      this.statusMessage = nativeResult.reason
-        ? `Native picker unavailable (${nativeResult.reason}). Select ${config.label} from browser.`
-        : `Select ${config.label} from browser.`;
-      this.errorMessage = '';
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     pathPickerStartPath(target) {
-      const pickerSourceMap = {
-        create_project_path: this.createForm.path,
-        open_project_db: this.openForm.path,
-        import_source_folder: this.importForm.source_folder,
-        import_source_image: this.importForm.source_image,
-        export_output_folder: this.exportForm.output_folder,
-        metadata_context_file: this.metadataForm.context_file_path,
-        llm_context_file: this.llm.tools.contextFile,
-        notes_context_file: this.notes.llm.contextFile,
-      };
-      const rawValue = pickerSourceMap[target];
-      if (typeof rawValue !== 'string') {
-        return '';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.pathPickerStartPath === 'function') {
+        return browserFeature.pathPickerStartPath(this, target);
       }
-      return rawValue.trim();
+      return '';
     },
     async requestNativePathPicker(config, startPath = '') {
-      const fallbackStartPath = this.browser.currentPath || this.projectSession.lastProjectDirectory || '';
-      try {
-        const response = await fetch('/api/projects/native-picker', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            kind: config.expects,
-            title: `Select ${config.label}`,
-            start_path: startPath || fallbackStartPath,
-          }),
-        });
-        const payload = await response.json();
-        if (!response.ok) {
-          throw new Error(this.formatApiError(payload, 'Failed to open native picker'));
-        }
-        return {
-          available: payload.available === true,
-          selected_path: payload.selected_path || '',
-          reason: payload.reason || '',
-        };
-      } catch (error) {
-        return {
-          available: false,
-          selected_path: '',
-          reason: error?.message || 'Failed to invoke native picker.',
-        };
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.requestNativePathPicker === 'function') {
+        return browserFeature.requestNativePathPicker(this, config, startPath);
       }
+      return {
+        available: false,
+        selected_path: '',
+        reason: 'Browser module unavailable. Refresh and try again.',
+      };
     },
     browsePickerModeLabel() {
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.browsePickerModeLabel === 'function') {
+        return browserFeature.browsePickerModeLabel(this);
+      }
       return this.settings.useNativePathPicker ? 'Native' : 'Browser';
     },
     isPanelOpen(panelKey, fallback = true) {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.isPanelOpen === 'function') {
+        return uiShellFeature.isPanelOpen(this, panelKey, fallback);
+      }
       if (Object.prototype.hasOwnProperty.call(this.panelState, panelKey)) {
         return this.panelState[panelKey] === true;
       }
       return fallback;
     },
     togglePanel(panelKey, fallback = true) {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.togglePanel === 'function') {
+        uiShellFeature.togglePanel(this, panelKey, fallback);
+        return;
+      }
       const current = this.isPanelOpen(panelKey, fallback);
       this.panelState[panelKey] = !current;
     },
     panelTriangle(panelKey, fallback = true) {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.panelTriangle === 'function') {
+        return uiShellFeature.panelTriangle(this, panelKey, fallback);
+      }
       return this.isPanelOpen(panelKey, fallback) ? '▼' : '▶';
     },
     applyPanelStateFromSettings(panelStatePayload) {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.applyPanelStateFromSettings === 'function') {
+        uiShellFeature.applyPanelStateFromSettings(this, panelStatePayload);
+        return;
+      }
       if (!panelStatePayload || typeof panelStatePayload !== 'object') {
         return;
       }
@@ -1359,6 +1260,10 @@ function describeItApp() {
       this.panelState = nextPanelState;
     },
     panelStatePayload() {
+      const uiShellFeature = window.DescribeItFeatures?.uiShell;
+      if (uiShellFeature && typeof uiShellFeature.panelStatePayload === 'function') {
+        return uiShellFeature.panelStatePayload(this);
+      }
       const payload = {};
       Object.keys(this.panelState).forEach((key) => {
         payload[key] = this.panelState[key] === true;
@@ -1366,104 +1271,65 @@ function describeItApp() {
       return payload;
     },
     clearPathPicker() {
-      this.pathPicker.target = '';
-      this.pathPicker.label = '';
-      this.pathPicker.expects = 'directory';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.clearPathPicker === 'function') {
+        browserFeature.clearPathPicker(this);
+        return;
+      }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     pickerExpectsDirectory() {
-      return this.pathPicker.expects === 'directory';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.pickerExpectsDirectory === 'function') {
+        return browserFeature.pickerExpectsDirectory(this);
+      }
+      return false;
     },
     pickerExpectsFile() {
-      return this.pathPicker.expects === 'file' || this.pathPicker.expects === 'db_file';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.pickerExpectsFile === 'function') {
+        return browserFeature.pickerExpectsFile(this);
+      }
+      return false;
     },
     pickerAcceptsFile(fileKind = 'file') {
-      if (!this.pathPicker.target) {
-        return false;
-      }
-      if (this.pathPicker.expects === 'db_file') {
-        return fileKind === 'db';
-      }
-      if (this.pathPicker.expects === 'file') {
-        return fileKind === 'file' || fileKind === 'db';
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.pickerAcceptsFile === 'function') {
+        return browserFeature.pickerAcceptsFile(this, fileKind);
       }
       return false;
     },
     updateLastDirectoryFromPath(path, isFile = false) {
-      if (!path) {
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.updateLastDirectoryFromPath === 'function') {
+        browserFeature.updateLastDirectoryFromPath(this, path, isFile);
         return;
       }
-      if (!isFile) {
-        this.projectSession.lastProjectDirectory = path;
-        this.saveProjectSessionState();
-        return;
-      }
-      const lastSeparator = path.lastIndexOf('/');
-      if (lastSeparator > 0) {
-        this.projectSession.lastProjectDirectory = path.slice(0, lastSeparator);
-        this.saveProjectSessionState();
-      }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     useCurrentBrowserDirectory() {
-      if (!this.pathPicker.target || !this.pickerExpectsDirectory() || !this.browser.currentPath) {
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.useCurrentBrowserDirectory === 'function') {
+        browserFeature.useCurrentBrowserDirectory(this);
         return;
       }
-      this.applyPathPickerSelection(this.browser.currentPath, 'directory');
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     useBrowserFile(path, fileKind = 'file') {
-      if (this.pathPicker.target) {
-        if (!this.pickerAcceptsFile(fileKind)) {
-          this.errorMessage = 'Selected file type is not valid for this field.';
-          return;
-        }
-        this.applyPathPickerSelection(path, 'file');
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.useBrowserFile === 'function') {
+        browserFeature.useBrowserFile(this, path, fileKind);
         return;
       }
-      if (fileKind === 'db') {
-        this.chooseOpenFile(path);
-      }
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     applyPathPickerSelection(path, kind) {
-      if (!this.pathPicker.target) {
+      const browserFeature = window.DescribeItFeatures?.browser;
+      if (browserFeature && typeof browserFeature.applyPathPickerSelection === 'function') {
+        browserFeature.applyPathPickerSelection(this, path, kind);
         return;
       }
-      if (kind === 'directory') {
-        if (this.pathPicker.target === 'create_project_path') {
-          this.chooseCreateDirectory(path);
-        } else if (this.pathPicker.target === 'import_source_folder') {
-          this.importForm.source_folder = path;
-          this.updateLastDirectoryFromPath(path, false);
-          this.statusMessage = `Import folder set to ${path}`;
-          this.errorMessage = '';
-        } else if (this.pathPicker.target === 'export_output_folder') {
-          this.chooseExportDirectory(path);
-        }
-        this.clearPathPicker();
-        return;
-      }
-
-      if (this.pathPicker.target === 'open_project_db') {
-        this.openForm.path = path;
-        this.updateLastDirectoryFromPath(path, true);
-        this.statusMessage = `Open path set to ${path}`;
-      } else if (this.pathPicker.target === 'import_source_image') {
-        this.importForm.source_image = path;
-        this.updateLastDirectoryFromPath(path, true);
-        this.statusMessage = `Import image path set to ${path}`;
-      } else if (this.pathPicker.target === 'metadata_context_file') {
-        this.metadataForm.context_file_path = path;
-        this.updateLastDirectoryFromPath(path, true);
-        this.statusMessage = `Project context file set to ${path}`;
-      } else if (this.pathPicker.target === 'llm_context_file') {
-        this.llm.tools.contextFile = path;
-        this.updateLastDirectoryFromPath(path, true);
-        this.statusMessage = `LLM context file set to ${path}`;
-      } else if (this.pathPicker.target === 'notes_context_file') {
-        this.notes.llm.contextFile = path;
-        this.updateLastDirectoryFromPath(path, true);
-        this.statusMessage = `Notes context file set to ${path}`;
-      }
-      this.errorMessage = '';
-      this.clearPathPicker();
+      this.errorMessage = 'Browser module unavailable. Refresh and try again.';
     },
     chooseCreateDirectory(path) {
       const browserFeature = window.DescribeItFeatures?.browser;
@@ -1792,6 +1658,13 @@ function describeItApp() {
         return batchFeature.batchResultTextPreview(this, value, maxLength);
       }
       return value ? String(value) : '-';
+    },
+    selectedBatchPresetTemplate() {
+      const batchFeature = window.DescribeItFeatures?.batch;
+      if (batchFeature && typeof batchFeature.selectedBatchPresetTemplate === 'function') {
+        return batchFeature.selectedBatchPresetTemplate(this);
+      }
+      return '';
     },
     _applyBatchJob(job) {
       const batchFeature = window.DescribeItFeatures?.batch;
@@ -2242,6 +2115,47 @@ function describeItApp() {
       }
       this.captionBatch.preview = null;
       this.captionBatch.apply.confirm = false;
+    },
+    captionTextEditProgressPercent(jobKey) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.captionTextEditProgressPercent === 'function') {
+        return editorFeature.captionTextEditProgressPercent(this, jobKey);
+      }
+      return 0;
+    },
+    async startDeleteEmptyCaptionsJob() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startDeleteEmptyCaptionsJob === 'function') {
+        await editorFeature.startDeleteEmptyCaptionsJob(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async startRemoveTagsJob() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startRemoveTagsJob === 'function') {
+        await editorFeature.startRemoveTagsJob(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    async startAddCommonCaptionJob() {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.startAddCommonCaptionJob === 'function') {
+        await editorFeature.startAddCommonCaptionJob(this);
+        return;
+      }
+      this.errorMessage = 'Editor module unavailable. Refresh and try again.';
+    },
+    clearCaptionTextEditHistory(jobKey) {
+      const editorFeature = window.DescribeItFeatures?.editor;
+      if (editorFeature && typeof editorFeature.clearCaptionTextEditHistory === 'function') {
+        editorFeature.clearCaptionTextEditHistory(this, jobKey);
+        return;
+      }
+      if (this.captionTextEdit?.history && Array.isArray(this.captionTextEdit.history[jobKey])) {
+        this.captionTextEdit.history[jobKey] = [];
+      }
     },
     async importFolder() {
       const importFeature = window.DescribeItFeatures?.import;

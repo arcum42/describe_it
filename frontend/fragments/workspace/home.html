@@ -1,0 +1,77 @@
+<template x-if="!currentProject">
+  <section class="rounded-2xl border border-stone-800 bg-stone-900 p-6 shadow-2xl shadow-black/20">
+    <div class="mb-5">
+      <p class="text-xs uppercase tracking-[0.2em] text-amber-400">Home</p>
+      <h2 class="mt-1 text-xl font-semibold text-stone-100">Create or open a project</h2>
+      <p class="mt-2 text-sm text-stone-400">Start by creating a new project database or opening an existing .db file.</p>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+        <div>
+          <p class="text-sm font-medium text-stone-200">Create Project</p>
+          <p class="text-xs text-stone-500">Create a per-project SQLite database and add it to recents.</p>
+        </div>
+        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          Name
+          <input x-model="createForm.name" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="My Dataset" />
+        </label>
+        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          Path
+          <div class="mt-2 flex items-center gap-2">
+            <input x-model="createForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="projects/my_dataset.db" />
+            <button @click="openPathPicker('create_project_path')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+              <span>Browse</span>
+              <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+            </button>
+          </div>
+        </label>
+        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          Description
+          <textarea x-model="createForm.description" class="mt-2 min-h-20 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Optional project description"></textarea>
+        </label>
+        <button @click="createProject()" :disabled="isSubmitting" class="w-full rounded-xl bg-amber-400 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+          Create Project
+        </button>
+      </div>
+
+      <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/70 p-4">
+        <div>
+          <p class="text-sm font-medium text-stone-200">Open Project</p>
+          <p class="text-xs text-stone-500">Open an existing project database, or pick one from the sidebar browser.</p>
+        </div>
+        <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+          Existing DB Path
+          <div class="mt-2 flex items-center gap-2">
+            <input x-model="openForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+            <button @click="openPathPicker('open_project_db')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+              <span>Browse</span>
+              <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+            </button>
+          </div>
+        </label>
+        <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+          Open Project
+        </button>
+
+        <div class="border-t border-stone-800 pt-4">
+          <div class="mb-2 flex items-center justify-between">
+            <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Recent Projects</p>
+            <span class="text-[10px] text-stone-500" x-text="`${recentProjects.length} tracked`"></span>
+          </div>
+          <div class="space-y-2">
+            <template x-for="project in recentProjects" :key="project.path">
+              <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 transition hover:border-amber-400/60">
+                <p class="truncate font-medium text-stone-100" x-text="project.name"></p>
+                <p class="mt-1 break-all text-xs text-stone-500" x-text="project.path"></p>
+              </button>
+            </template>
+            <template x-if="recentProjects.length === 0">
+              <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No recent projects yet.</p>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</template>

@@ -1,0 +1,44 @@
+<section class="space-y-6">
+  <template x-if="uiSection === 'workspace'">
+    <div class="space-y-6">
+      <template x-if="!currentProject">
+        <div data-fragment="workspace/home"></div>
+      </template>
+
+      <template x-if="currentProject">
+        <div class="space-y-6">
+          <div data-fragment="workspace/view_header"></div>
+
+          <template x-if="mainView === 'project'">
+            <div data-fragment="workspace/project"></div>
+          </template>
+
+          <div data-fragment="workspace/grid"></div>
+          <div data-fragment="workspace/editor"></div>
+        </div>
+      </template>
+    </div>
+  </template>
+
+  <template x-if="uiSection === 'workspace' && currentProject && mainView === 'notes'">
+    <div data-fragment="workspace/notes"></div>
+  </template>
+  <template x-if="uiSection === 'workspace' && currentProject && mainView === 'io'">
+    <div data-fragment="workspace/io"></div>
+  </template>
+  <template x-if="uiSection === 'settings'">
+    <div data-fragment="settings/tab_header"></div>
+  </template>
+  <template x-if="uiSection === 'settings' && settingsTab === 'presets'">
+    <div data-fragment="settings/presets"></div>
+  </template>
+  <template x-if="uiSection === 'workspace' && currentProject && mainView === 'batch'">
+    <div data-fragment="workspace/batch"></div>
+  </template>
+  <template x-if="uiSection === 'settings' && settingsTab === 'general'">
+    <div data-fragment="settings/general"></div>
+  </template>
+  <template x-if="uiSection === 'settings' && settingsTab === 'imageboards'">
+    <div data-fragment="settings/imageboards"></div>
+  </template>
+</section>

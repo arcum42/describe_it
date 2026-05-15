@@ -12,6 +12,7 @@ from sqlalchemy import select
 from backend.config import get_settings
 from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path, resolve_project_path
 
 
 @dataclass
@@ -43,9 +44,7 @@ class ExportPreviewResult:
 def _load_project_images_and_captions(*, project_path: Path, included_only: bool) -> tuple[ProjectRecord, list[ImageRecord], dict[int, CaptionRecord]]:
     session_factory = create_sqlite_session_factory(project_path)
     with session_factory() as session:
-        project = session.scalar(select(ProjectRecord).limit(1))
-        if project is None:
-            raise ValueError(f"Project database has no project metadata: {project_path}")
+        project = load_project_record(session, project_path)
 
         image_query = select(ImageRecord).where(ImageRecord.project_id == project.id).order_by(ImageRecord.id.asc())
         if included_only:
@@ -65,13 +64,6 @@ def _load_project_images_and_captions(*, project_path: Path, included_only: bool
         active_caption_by_image = {caption.image_id: caption for caption in captions}
 
     return project, images, active_caption_by_image
-
-
-def _resolve_path(raw_path: str) -> Path:
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        candidate = get_settings().base_dir / candidate
-    return candidate.resolve()
 
 
 def _apply_trigger_word(caption: str, trigger_word: str) -> str:
@@ -99,7 +91,7 @@ def _sanitize_folder_name(raw_name: str) -> str:
 
 
 def _resolve_output_folder(*, output_folder: str, create_new_folder: bool, new_folder_name: str) -> Path:
-    base_output = _resolve_path(output_folder)
+    base_output = resolve_project_path(output_folder)
     if not create_new_folder:
         return base_output
 
@@ -138,9 +130,7 @@ def preview_project_export(
     create_new_folder: bool = False,
     new_folder_name: str = "",
 ) -> ExportPreviewResult:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     resolved_output_folder = _resolve_output_folder(
         output_folder=output_folder,
@@ -178,12 +168,11 @@ def preview_project_export(
     if included_only:
         session_factory = create_sqlite_session_factory(resolved_project_path)
         with session_factory() as session:
-            project_row = session.scalar(select(ProjectRecord).limit(1))
-            if project_row is not None:
-                all_images = session.scalars(
-                    select(ImageRecord).where(ImageRecord.project_id == project_row.id).order_by(ImageRecord.id.asc())
-                ).all()
-                excluded_images = max(0, len(all_images) - total_images)
+            project_row = load_project_record(session, resolved_project_path)
+            all_images = session.scalars(
+                select(ImageRecord).where(ImageRecord.project_id == project_row.id).order_by(ImageRecord.id.asc())
+            ).all()
+            excluded_images = max(0, len(all_images) - total_images)
 
     trigger_word = (project.trigger_word or "").strip() if apply_trigger_word else ""
 
@@ -260,9 +249,7 @@ def export_project_dataset(
     new_folder_name: str = "",
     include_project_notes: bool = True,
 ) -> ExportResult:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     if clean_output_folder and overwrite_existing:
         raise ValueError("Choose either clean output folder or overwrite existing files, not both")

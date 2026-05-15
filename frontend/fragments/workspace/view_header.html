@@ -1,0 +1,51 @@
+              <div class="flex items-center justify-between rounded-2xl border border-stone-800 bg-stone-900 p-3 shadow-2xl shadow-black/20">
+                <div class="inline-flex gap-2 rounded-xl border border-stone-800 bg-stone-950/60 p-1">
+                  <button
+                    @click="mainView = 'project'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'project' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Project
+                  </button>
+                  <button
+                    @click="mainView = 'grid'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'grid' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Grid
+                  </button>
+                  <button
+                    @click="selectedImage && (mainView = 'editor')"
+                    :disabled="!selectedImage"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-50"
+                    :class="mainView === 'editor' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Editor
+                  </button>
+                  <button
+                    @click="mainView = 'batch'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'batch' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Batch
+                  </button>
+                  <button
+                    @click="mainView = 'notes'; refreshNotes()"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                    :class="mainView === 'notes' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Notes
+                  </button>
+                  <button
+                    @click="mainView = 'io'"
+                    class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition disabled:cursor-not-allowed disabled:opacity-40"
+                    :class="mainView === 'io' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                  >
+                    Data I/O
+                  </button>
+                </div>
+                <span class="text-xs text-stone-500"
+                  x-show="(mainView === 'editor' && selectedImage) || (mainView === 'batch' && batchIsActive())"
+                  x-text="mainView === 'editor' && selectedImage ? selectedImage.filename : mainView === 'batch' ? 'Batch job running…' : ''"
+                ></span>
+              </div>

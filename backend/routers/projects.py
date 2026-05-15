@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from backend.services.app_state_service import get_project_session_state, update_project_session_state
 from backend.services.export_service import export_project_dataset, preview_project_export
-from backend.services.import_service import import_folder_into_project, import_single_image_into_project
+from backend.services.import_service import import_folder_into_project, import_single_image_into_project, iter_import_folder_into_project
 from backend.services.native_picker_service import open_native_path_picker
 from backend.services.project_service import browse_project_paths, create_project, list_recent_projects, open_project, update_project_metadata
 
@@ -36,6 +39,7 @@ class ImportFolderRequest(BaseModel):
     project_path: str = Field(min_length=1)
     source_folder: str = Field(min_length=1)
     replace_existing: bool = False
+    default_caption: str = ""
 
 
 class ImportSingleImageRequest(BaseModel):
@@ -154,10 +158,43 @@ def import_folder_route(request: ImportFolderRequest) -> dict[str, object]:
             project_path=request.project_path.strip(),
             source_folder=request.source_folder.strip(),
             replace_existing=request.replace_existing,
+            default_caption=request.default_caption,
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {"result": result.__dict__}
+
+
+@router.post("/import-folder-stream")
+def import_folder_stream_route(request: ImportFolderRequest) -> StreamingResponse:
+    project_path = request.project_path.strip()
+    source_folder = request.source_folder.strip()
+
+    def stream_events():
+        try:
+            for event in iter_import_folder_into_project(
+                project_path=project_path,
+                source_folder=source_folder,
+                replace_existing=request.replace_existing,
+                default_caption=request.default_caption,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except ValueError as error:
+            error_event = {
+                "type": "error",
+                "message": str(error),
+            }
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        stream_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/import-image")

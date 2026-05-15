@@ -1,25 +1,14 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from sqlalchemy import select
 
-from backend.config import get_settings
-from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
+from backend.db.models import CaptionRecord, ImageRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path
 
 
-def _resolve_path(raw_path: str) -> Path:
-    candidate = Path(raw_path).expanduser()
-    if not candidate.is_absolute():
-        candidate = get_settings().base_dir / candidate
-    return candidate.resolve()
-
-
-def _load_image_for_project(session, project_path: Path, image_id: int) -> ImageRecord:
-    project = session.scalar(select(ProjectRecord).limit(1))
-    if project is None:
-        raise ValueError(f"Project database has no project metadata: {project_path}")
+def _load_image_for_project(session, resolved_project_path, image_id: int) -> ImageRecord:
+    project = load_project_record(session, resolved_project_path)
 
     image = session.scalar(select(ImageRecord).where(ImageRecord.id == image_id, ImageRecord.project_id == project.id))
     if image is None:
@@ -28,9 +17,7 @@ def _load_image_for_project(session, project_path: Path, image_id: int) -> Image
 
 
 def create_caption_candidate(*, project_path: str, image_id: int, text: str, make_active: bool, source: str = "manual") -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -56,9 +43,7 @@ def create_caption_candidate(*, project_path: str, image_id: int, text: str, mak
 
 
 def set_active_caption(*, project_path: str, image_id: int, caption_id: int) -> dict[str, int]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -82,9 +67,7 @@ def set_active_caption(*, project_path: str, image_id: int, caption_id: int) -> 
 
 
 def update_active_caption_text(*, project_path: str, image_id: int, text: str) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -110,9 +93,7 @@ def update_active_caption_text(*, project_path: str, image_id: int, text: str) -
 
 
 def update_caption_text(*, project_path: str, image_id: int, caption_id: int, text: str) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -137,9 +118,7 @@ def update_caption_text(*, project_path: str, image_id: int, caption_id: int, te
 
 
 def delete_caption(*, project_path: str, image_id: int, caption_id: int) -> dict[str, object]:
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:
@@ -200,9 +179,7 @@ def _apply_generated_caption(
             source=source,
         )
 
-    resolved_project_path = _resolve_path(project_path)
-    if not resolved_project_path.exists():
-        raise ValueError(f"Project file does not exist: {resolved_project_path}")
+    resolved_project_path = require_existing_project_path(project_path)
 
     session_factory = create_sqlite_session_factory(resolved_project_path)
     with session_factory() as session:

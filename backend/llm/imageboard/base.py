@@ -88,7 +88,6 @@ class ImageboardClient(ABC):
             Normalized tag list (lowercase, filtered, etc.)
         """
 
-    @abstractmethod
     async def fetch_image_bytes(self, image_url: str) -> bytes:
         """
         Download image data from URL.
@@ -102,6 +101,16 @@ class ImageboardClient(ABC):
         Raises:
             ValueError: If download fails or content is invalid
         """
+        ensure_http_client = getattr(self, "_ensure_http_client", None)
+        if callable(ensure_http_client):
+            await ensure_http_client()
+
+        http_client = getattr(self, "http_client", None)
+        if http_client is None:
+            raise NotImplementedError(
+                "fetch_image_bytes requires a subclass http_client or an override implementation"
+            )
+        return await http_client.get_binary(image_url)
 
     async def get_gallery_or_pool(self, gallery_id: int) -> SearchResult:
         """

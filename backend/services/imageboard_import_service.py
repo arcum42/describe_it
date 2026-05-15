@@ -5,12 +5,14 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+from pathlib import Path
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from backend.db.models import CaptionRecord, ImageRecord, ProjectRecord
+from backend.db.models import CaptionRecord, ImageRecord
 from backend.db.session import create_sqlite_session_factory
+from backend.services.project_db_utils import load_project_record, require_existing_project_path
 from backend.llm.imageboard import (
     DanbooruClient,
     DerpibooruClient,
@@ -348,7 +350,8 @@ class ImageboardImportService:
             )
 
             # Open project database
-            session_factory = create_sqlite_session_factory(project_path)
+            resolved_project_path = require_existing_project_path(project_path)
+            session_factory = create_sqlite_session_factory(resolved_project_path)
 
             # Build hash set of existing images once before the loop
             existing_hashes: set[str] = (
@@ -360,6 +363,7 @@ class ImageboardImportService:
                 try:
                     imported, is_dup = await self._import_single_image(
                         session_factory=session_factory,
+                        project_db_path=resolved_project_path,
                         client=client,
                         image_data=image_data,
                         board_id=board_id,
@@ -390,6 +394,7 @@ class ImageboardImportService:
     async def _import_single_image(
         self,
         session_factory,
+        project_db_path: Path,
         client: ImageboardClient,
         image_data,
         board_id: str,
@@ -438,9 +443,7 @@ class ImageboardImportService:
 
         # Create image record
         with session_factory() as session:
-            project = session.scalar(select(ProjectRecord).limit(1))
-            if project is None:
-                raise ValueError("No project record found in database")
+            project = load_project_record(session, project_db_path)
 
             image_record = ImageRecord(
                 project_id=project.id,

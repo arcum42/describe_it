@@ -1,0 +1,178 @@
+<aside class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+  <div class="mb-6">
+    <h2 class="text-lg font-medium">Projects</h2>
+  </div>
+
+  <!-- ── No project open: compact sidebar state ────────────────── -->
+  <template x-if="!currentProject">
+    <div class="space-y-3 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+      <p class="text-sm font-medium text-stone-200">No Project Open</p>
+      <p class="text-xs text-stone-500">Use the Home workspace to create or open a project database.</p>
+    </div>
+  </template>
+
+  <!-- ── Project open: metadata + switch ───────────────────────── -->
+  <template x-if="currentProject">
+    <div class="space-y-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-sm font-medium text-stone-200">Current Project</p>
+        </div>
+        <button @click="closeProject()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+          Close
+        </button>
+      </div>
+      <div>
+        <p class="font-medium text-stone-100" x-text="currentProject.name"></p>
+        <p class="mt-1 break-all text-xs text-stone-400" x-text="currentProject.path"></p>
+        <p class="mt-3 text-sm text-stone-300" x-text="currentProject.description || 'No description yet.'"></p>
+      </div>
+
+      <!-- Switch project accordion -->
+      <div class="border-t border-stone-800 pt-4">
+        <button
+          @click="showOpenProject = !showOpenProject"
+          class="flex w-full items-center justify-between text-xs uppercase tracking-[0.2em] text-stone-400 hover:text-amber-300"
+        >
+          Switch Project
+          <svg class="h-3 w-3 transition-transform" :class="showOpenProject ? 'rotate-180' : ''" viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg>
+        </button>
+        <div x-show="showOpenProject" class="mt-3 space-y-3">
+          <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+            DB Path
+            <div class="mt-2 flex items-center gap-2">
+              <input x-model="openForm.path" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="/absolute/path/to/project.db" />
+              <button @click="openPathPicker('open_project_db')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                <span>Browse</span>
+                <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+              </button>
+            </div>
+          </label>
+          <button @click="openProject()" :disabled="isSubmitting" class="w-full rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+            Open Project
+          </button>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- ── Path browser (collapsible) ────────────────────────────── -->
+  <div class="mt-4 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+    <div class="flex items-center justify-between gap-3">
+      <button
+        @click="showBrowser = !showBrowser; showBrowser && loadBrowser(browser.currentPath)"
+        class="flex min-w-0 flex-1 items-center justify-between text-sm font-medium text-stone-200 hover:text-amber-300"
+      >
+        <span>Browse Filesystem</span>
+        <svg class="h-3 w-3 transition-transform" :class="showBrowser ? 'rotate-180' : ''" viewBox="0 0 10 6" fill="currentColor"><path d="M0 0l5 6 5-6z"/></svg>
+      </button>
+      <label class="field-checkbox whitespace-nowrap text-[10px] uppercase tracking-[0.15em] text-stone-500">
+        <input type="checkbox" x-model="settings.useNativePathPicker" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+        Native Picker
+      </label>
+    </div>
+    <div x-show="showBrowser" class="mt-4 space-y-3">
+      <template x-if="pathPicker.target">
+        <div class="rounded-xl border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs text-amber-200">
+          <div class="flex items-center justify-between gap-3">
+            <span x-text="`Picker active: ${pathPicker.label}`"></span>
+            <button @click="clearPathPicker()" class="rounded-lg border border-amber-700/70 px-2 py-1 text-[10px] uppercase tracking-[0.15em] text-amber-200 hover:border-amber-400">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </template>
+      <div class="flex items-center justify-between gap-2">
+        <div class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-xs text-stone-400 truncate" x-text="browser.currentPath"></div>
+        <button @click="loadBrowser(browser.currentPath)" class="shrink-0 rounded-xl border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+          ↺
+        </button>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <template x-for="root in browser.roots" :key="root">
+          <button @click="loadBrowser(root)" class="rounded-full border border-stone-700 px-3 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200" x-text="root"></button>
+        </template>
+      </div>
+
+      <div class="flex flex-wrap gap-2">
+        <button @click="browser.parentPath && loadBrowser(browser.parentPath)" :disabled="!browser.parentPath" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+          ↑ Up
+        </button>
+        <template x-if="!currentProject">
+          <button @click="chooseCreateDirectory(browser.currentPath)" class="rounded-xl bg-stone-200 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-950 hover:bg-stone-100">
+            Use For Create
+          </button>
+        </template>
+        <template x-if="pathPicker.target && pickerExpectsDirectory()">
+          <button @click="useCurrentBrowserDirectory()" class="rounded-xl border border-amber-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-amber-200 hover:border-amber-400">
+            Use Current Folder
+          </button>
+        </template>
+      </div>
+
+      <div class="grid gap-3 md:grid-cols-2">
+        <div>
+          <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Directories</p>
+          <div class="max-h-48 space-y-2 overflow-auto pr-1">
+            <template x-for="directory in browser.directories" :key="directory.path">
+              <button @click="loadBrowser(directory.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60">
+                <span x-text="directory.name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+        <div>
+          <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Project DB Files</p>
+          <div class="max-h-48 space-y-2 overflow-auto pr-1">
+            <template x-if="browser.dbFiles.length === 0">
+              <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No .db files here.</p>
+            </template>
+            <template x-for="file in browser.dbFiles" :key="file.path">
+              <button @click="useBrowserFile(file.path, 'db')" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="pathPicker.target && !pickerAcceptsFile('db') ? 'opacity-50' : ''">
+                <span x-text="file.name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <template x-if="pathPicker.target && pickerExpectsFile()">
+        <div>
+          <p class="mb-2 text-xs uppercase tracking-[0.2em] text-stone-500">Files</p>
+          <div class="max-h-48 space-y-2 overflow-auto pr-1">
+            <template x-if="browser.files.length === 0">
+              <p class="rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-500">No files here.</p>
+            </template>
+            <template x-for="file in browser.files" :key="file.path">
+              <button @click="useBrowserFile(file.path, 'file')" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-sm text-stone-200 hover:border-amber-400/60" :class="pathPicker.target && !pickerAcceptsFile('file') ? 'opacity-50' : ''">
+                <span x-text="file.name"></span>
+              </button>
+            </template>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- ── Status / error messages ────────────────────────────────── -->
+  <template x-if="statusMessage">
+    <p class="mt-4 rounded-xl border border-emerald-900 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-200" x-text="statusMessage"></p>
+  </template>
+  <template x-if="errorMessage">
+    <p class="mt-4 rounded-xl border border-red-900 bg-red-950/40 px-4 py-3 text-sm text-red-200" x-text="errorMessage"></p>
+  </template>
+
+  <template x-if="currentProject && recentProjects.length > 0">
+    <div class="mt-6 rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Recent Projects</p>
+      <div class="mt-3 space-y-2">
+        <template x-for="project in recentProjects.slice(0, 3)" :key="project.path">
+          <button @click="openRecentProject(project.path)" class="block w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-left text-xs text-stone-300 transition hover:border-amber-400/60">
+            <p class="truncate" x-text="project.name"></p>
+          </button>
+        </template>
+      </div>
+    </div>
+  </template>
+</aside>

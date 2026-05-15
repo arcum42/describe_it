@@ -1,0 +1,51 @@
+<template x-if="keyboard.showShortcutsHelp">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+    <div class="relative max-h-[80vh] max-w-2xl overflow-auto rounded-2xl border border-stone-700 bg-stone-900 p-6 shadow-2xl">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-2xl font-bold text-amber-400">Keyboard Shortcuts</h2>
+        <button
+          @click="closeKeyboardShortcutsHelp()"
+          class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+        >
+          Close (Esc)
+        </button>
+      </div>
+
+      <template x-if="keyboard.shortcuts.editor && keyboard.shortcuts.editor.length > 0">
+        <div class="mb-6">
+          <h3 class="mb-3 text-lg font-semibold text-stone-200">Image Editor</h3>
+          <div class="grid gap-2 md:grid-cols-2">
+            <template x-for="shortcut in keyboard.shortcuts.editor" :key="shortcut.key">
+              <div class="rounded-lg border border-stone-800 bg-stone-950/50 px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-mono text-sm font-bold text-amber-300" x-text="shortcut.key"></p>
+                  <p class="text-sm text-stone-300" x-text="shortcut.description"></p>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <template x-if="keyboard.shortcuts.global && keyboard.shortcuts.global.length > 0">
+        <div class="mb-6">
+          <h3 class="mb-3 text-lg font-semibold text-stone-200">Global</h3>
+          <div class="grid gap-2 md:grid-cols-2">
+            <template x-for="shortcut in keyboard.shortcuts.global" :key="shortcut.key">
+              <div class="rounded-lg border border-stone-800 bg-stone-950/50 px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="font-mono text-sm font-bold text-amber-300" x-text="shortcut.key"></p>
+                  <p class="text-sm text-stone-300" x-text="shortcut.description"></p>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <div class="mt-6 rounded-lg border border-stone-800 bg-stone-950/50 p-3 text-xs text-stone-400">
+        <p><strong>Tip:</strong> Shortcuts are active when an image is selected in the editor tab. Press <span class="font-mono font-bold text-amber-300">?</span> from anywhere to toggle this help dialog.</p>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,0 +1,25 @@
+            <div class="rounded-2xl border border-stone-800 bg-stone-900 p-3 shadow-2xl shadow-black/20">
+              <div class="inline-flex gap-2 rounded-xl border border-stone-800 bg-stone-950/60 p-1">
+                <button
+                  @click="settingsTab = 'general'"
+                  class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                  :class="settingsTab === 'general' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                >
+                  General
+                </button>
+                <button
+                  @click="settingsTab = 'presets'; loadLLMPresets()"
+                  class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                  :class="settingsTab === 'presets' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                >
+                  Presets
+                </button>
+                <button
+                  @click="settingsTab = 'imageboards'; loadImageboardSettings()"
+                  class="rounded-lg px-3 py-2 text-xs font-medium uppercase tracking-[0.2em] transition"
+                  :class="settingsTab === 'imageboards' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                >
+                  Imageboards
+                </button>
+              </div>
+            </div>

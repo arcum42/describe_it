@@ -4,6 +4,60 @@ from backend.services.note_service import list_notes
 from backend.services.global_note_service import list_global_notes
 
 
+def _render_note_block(*, scope_label: str, title: str | None, tags: str | None, content: str) -> str:
+    header = f"[{scope_label}: {title}]" if title else f"[{scope_label}]"
+    if tags:
+        header += f" (tags: {tags})"
+    return f"{header}\n{content}"
+
+
+def _select_notes(*, notes: list, selected_ids: list[int] | None) -> list:
+    if selected_ids:
+        id_set = set(selected_ids)
+        return [note for note in notes if note.id in id_set]
+    return [note for note in notes if not note.is_archived]
+
+
+def _load_project_notes(*, project_path: str, log_entries: list[str]) -> list:
+    try:
+        return list_notes(project_path=project_path, include_archived=True)
+    except Exception as exc:  # noqa: BLE001
+        log_entries.append(f"Failed to load project notes: {exc}")
+        return []
+
+
+def _load_global_notes(*, log_entries: list[str]) -> list:
+    try:
+        return list_global_notes(include_archived=True)
+    except Exception as exc:  # noqa: BLE001
+        log_entries.append(f"Failed to load global notes: {exc}")
+        return []
+
+
+def _append_context_block(
+    *,
+    injected_parts: list[str],
+    log_entries: list[str],
+    section_title: str,
+    scope_label: str,
+    notes: list,
+    selection_label: str,
+) -> None:
+    if not notes:
+        return
+    blocks = [
+        _render_note_block(
+            scope_label=scope_label,
+            title=note.title,
+            tags=note.tags,
+            content=note.content,
+        )
+        for note in notes
+    ]
+    injected_parts.append(f"--- {section_title} ---\n" + "\n\n".join(blocks))
+    log_entries.append(f"Included {len(notes)} {selection_label} note(s) as context")
+
+
 def build_notes_context_parts(
     *,
     project_path: str | None = None,
@@ -28,52 +82,28 @@ def build_notes_context_parts(
     injected_parts: list[str] = []
     log_entries: list[str] = []
 
-    # --- Project notes ---
     if project_path and (include_project_notes or project_note_ids):
-        try:
-            all_notes = list_notes(project_path=project_path, include_archived=True)
-        except Exception as exc:  # noqa: BLE001
-            log_entries.append(f"Failed to load project notes: {exc}")
-            all_notes = []
+        all_notes = _load_project_notes(project_path=project_path, log_entries=log_entries)
+        selected_project_notes = _select_notes(notes=all_notes, selected_ids=project_note_ids)
+        _append_context_block(
+            injected_parts=injected_parts,
+            log_entries=log_entries,
+            section_title="Project Notes Context",
+            scope_label="Project Note",
+            notes=selected_project_notes,
+            selection_label="project",
+        )
 
-        if project_note_ids:
-            id_set = set(project_note_ids)
-            selected = [n for n in all_notes if n.id in id_set]
-        else:
-            selected = [n for n in all_notes if not n.is_archived]
-
-        if selected:
-            blocks: list[str] = []
-            for note in selected:
-                header = f"[Project Note: {note.title}]" if note.title else "[Project Note]"
-                if note.tags:
-                    header += f" (tags: {note.tags})"
-                blocks.append(f"{header}\n{note.content}")
-            injected_parts.append("--- Project Notes Context ---\n" + "\n\n".join(blocks))
-            log_entries.append(f"Included {len(selected)} project note(s) as context")
-
-    # --- Global notes ---
     if include_global_notes or global_note_ids:
-        try:
-            all_global = list_global_notes(include_archived=True)
-        except Exception as exc:  # noqa: BLE001
-            log_entries.append(f"Failed to load global notes: {exc}")
-            all_global = []
-
-        if global_note_ids:
-            id_set = set(global_note_ids)
-            selected_global = [n for n in all_global if n.id in id_set]
-        else:
-            selected_global = [n for n in all_global if not n.is_archived]
-
-        if selected_global:
-            blocks = []
-            for note in selected_global:
-                header = f"[Global Note: {note.title}]" if note.title else "[Global Note]"
-                if note.tags:
-                    header += f" (tags: {note.tags})"
-                blocks.append(f"{header}\n{note.content}")
-            injected_parts.append("--- Global Notes Context ---\n" + "\n\n".join(blocks))
-            log_entries.append(f"Included {len(selected_global)} global note(s) as context")
+        all_global_notes = _load_global_notes(log_entries=log_entries)
+        selected_global_notes = _select_notes(notes=all_global_notes, selected_ids=global_note_ids)
+        _append_context_block(
+            injected_parts=injected_parts,
+            log_entries=log_entries,
+            section_title="Global Notes Context",
+            scope_label="Global Note",
+            notes=selected_global_notes,
+            selection_label="global",
+        )
 
     return injected_parts, log_entries

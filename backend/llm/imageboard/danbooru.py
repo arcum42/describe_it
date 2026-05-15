@@ -179,19 +179,6 @@ class DanbooruClient(ImageboardClient):
 
         return sorted(normalized)
 
-    async def fetch_image_bytes(self, image_url: str) -> bytes:
-        """
-        Download image data from URL.
-
-        Args:
-            image_url: Direct URL to image file
-
-        Returns:
-            Image file contents as bytes
-        """
-        await self._ensure_http_client()
-        return await self.http_client.get_binary(image_url)
-
     async def close(self) -> None:
         """Close HTTP session."""
         if self.http_client:

@@ -30,11 +30,13 @@ class BatchJob:
     backend: str
     model: str
     extra_instructions: str
+    preset_prompt_suffix: str
     timeout_seconds: int
     make_active: bool
     output_mode: str
     skip_on_failure: bool
     retry_count: int
+    exclude_captioned: bool = False
     reasoning_mode: str = "off"
     reasoning_visibility: str = "hidden"
     created_at: float = field(default_factory=time.time)
@@ -106,11 +108,13 @@ class BatchService:
                     backend TEXT NOT NULL,
                     model TEXT NOT NULL,
                     extra_instructions TEXT NOT NULL,
+                    preset_prompt_suffix TEXT NOT NULL DEFAULT '',
                     timeout_seconds INTEGER NOT NULL,
                     make_active INTEGER NOT NULL,
                     output_mode TEXT NOT NULL,
                     skip_on_failure INTEGER NOT NULL,
                     retry_count INTEGER NOT NULL,
+                    exclude_captioned INTEGER NOT NULL DEFAULT 0,
                     reasoning_mode TEXT NOT NULL DEFAULT 'off',
                     reasoning_visibility TEXT NOT NULL DEFAULT 'hidden',
                     created_at REAL NOT NULL,
@@ -152,6 +156,10 @@ class BatchService:
                 connection.execute("ALTER TABLE batch_jobs ADD COLUMN reasoning_mode TEXT NOT NULL DEFAULT 'off'")
             if "reasoning_visibility" not in columns:
                 connection.execute("ALTER TABLE batch_jobs ADD COLUMN reasoning_visibility TEXT NOT NULL DEFAULT 'hidden'")
+            if "preset_prompt_suffix" not in columns:
+                connection.execute("ALTER TABLE batch_jobs ADD COLUMN preset_prompt_suffix TEXT NOT NULL DEFAULT ''")
+            if "exclude_captioned" not in columns:
+                connection.execute("ALTER TABLE batch_jobs ADD COLUMN exclude_captioned INTEGER NOT NULL DEFAULT 0")
             connection.commit()
 
     def _save_job(self, job: BatchJob) -> None:
@@ -160,14 +168,14 @@ class BatchService:
                 """
                 INSERT INTO batch_jobs (
                     id, project_path, target, use_preset, preset_id, backend, model,
-                    extra_instructions, timeout_seconds, make_active, output_mode,
-                    skip_on_failure, retry_count, reasoning_mode, reasoning_visibility, created_at, updated_at, status,
+                    extra_instructions, preset_prompt_suffix, timeout_seconds, make_active, output_mode,
+                    skip_on_failure, retry_count, exclude_captioned, reasoning_mode, reasoning_visibility, created_at, updated_at, status,
                     total, completed, succeeded, failed, current_index, current_image_id,
                     current_filename, current_generated_text, last_error,
                     pause_requested, cancel_requested, image_ids_json,
                     image_filenames_json, errors_json
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 ON CONFLICT(id) DO UPDATE SET
                     project_path=excluded.project_path,
@@ -177,11 +185,13 @@ class BatchService:
                     backend=excluded.backend,
                     model=excluded.model,
                     extra_instructions=excluded.extra_instructions,
+                    preset_prompt_suffix=excluded.preset_prompt_suffix,
                     timeout_seconds=excluded.timeout_seconds,
                     make_active=excluded.make_active,
                     output_mode=excluded.output_mode,
                     skip_on_failure=excluded.skip_on_failure,
                     retry_count=excluded.retry_count,
+                    exclude_captioned=excluded.exclude_captioned,
                     reasoning_mode=excluded.reasoning_mode,
                     reasoning_visibility=excluded.reasoning_visibility,
                     updated_at=excluded.updated_at,
@@ -210,11 +220,13 @@ class BatchService:
                     job.backend,
                     job.model,
                     job.extra_instructions,
+                    job.preset_prompt_suffix,
                     job.timeout_seconds,
                     1 if job.make_active else 0,
                     job.output_mode,
                     1 if job.skip_on_failure else 0,
                     job.retry_count,
+                    1 if job.exclude_captioned else 0,
                     job.reasoning_mode,
                     job.reasoning_visibility,
                     job.created_at,
@@ -302,11 +314,13 @@ class BatchService:
                 backend=row["backend"],
                 model=row["model"],
                 extra_instructions=row["extra_instructions"],
+                preset_prompt_suffix=str(row["preset_prompt_suffix"] or ""),
                 timeout_seconds=int(row["timeout_seconds"]),
                 make_active=bool(row["make_active"]),
                 output_mode=row["output_mode"],
                 skip_on_failure=bool(row["skip_on_failure"]),
                 retry_count=int(row["retry_count"]),
+                exclude_captioned=bool(row["exclude_captioned"]),
                 reasoning_mode=str(row["reasoning_mode"] or "off"),
                 reasoning_visibility=str(row["reasoning_visibility"] or "hidden"),
                 created_at=float(row["created_at"]),
@@ -343,11 +357,13 @@ class BatchService:
             "preset_id": job.preset_id,
             "backend": job.backend,
             "model": job.model,
+            "preset_prompt_suffix": job.preset_prompt_suffix,
             "timeout_seconds": job.timeout_seconds,
             "make_active": job.make_active,
             "output_mode": job.output_mode,
             "skip_on_failure": job.skip_on_failure,
             "retry_count": job.retry_count,
+            "exclude_captioned": job.exclude_captioned,
             "reasoning_mode": job.reasoning_mode,
             "reasoning_visibility": job.reasoning_visibility,
             "total": job.total,
@@ -364,16 +380,36 @@ class BatchService:
             "updated_at": job.updated_at,
         }
 
-    def _collect_images(self, *, project_path: str, target: str) -> tuple[list[int], dict[int, str]]:
+    def _collect_images(
+        self,
+        *,
+        project_path: str,
+        target: str,
+        filtered_image_ids: list[int] | None = None,
+        exclude_captioned: bool = False,
+    ) -> tuple[list[int], dict[int, str]]:
         images = list_project_images(project_path=project_path)
+        filtered_id_set = {
+            int(image_id)
+            for image_id in (filtered_image_ids or [])
+            if isinstance(image_id, int) and image_id > 0
+        }
         if target == "all":
             filtered = images
         elif target == "included":
             filtered = [item for item in images if item.included]
+        elif target == "excluded":
+            filtered = [item for item in images if not item.included]
+        elif target == "filtered":
+            filtered = [item for item in images if item.id in filtered_id_set]
         elif target == "uncaptioned":
-            filtered = [item for item in images if item.included and not (item.active_caption_preview or "").strip()]
+            filtered = [item for item in images if item.included]
+            exclude_captioned = True
         else:
             raise ValueError(f"Unsupported batch target: {target}")
+
+        if exclude_captioned:
+            filtered = [item for item in filtered if not (item.active_caption_preview or "").strip()]
 
         image_ids = [item.id for item in filtered]
         image_filenames = {item.id: item.filename for item in filtered}
@@ -387,6 +423,7 @@ class BatchService:
                 project_path=job.project_path,
                 image_id=image_id,
                 preset_id=job.preset_id,
+                preset_prompt_suffix=job.preset_prompt_suffix,
                 timeout_seconds=job.timeout_seconds,
             )
             backend = str(result.get("backend") or "")
@@ -526,11 +563,14 @@ class BatchService:
         *,
         project_path: str,
         target: str,
+        filtered_image_ids: list[int] | None,
+        exclude_captioned: bool,
         use_preset: bool,
         preset_id: int | None,
         backend: str,
         model: str,
         extra_instructions: str,
+        preset_prompt_suffix: str,
         timeout_seconds: int,
         make_active: bool,
         output_mode: str,
@@ -539,7 +579,12 @@ class BatchService:
         reasoning_mode: str,
         reasoning_visibility: str,
     ) -> dict[str, Any]:
-        image_ids, image_filenames = self._collect_images(project_path=project_path, target=target)
+        image_ids, image_filenames = self._collect_images(
+            project_path=project_path,
+            target=target,
+            filtered_image_ids=filtered_image_ids,
+            exclude_captioned=exclude_captioned,
+        )
         if not image_ids:
             raise ValueError("No images matched the selected batch target.")
 
@@ -552,11 +597,13 @@ class BatchService:
             backend=backend,
             model=model,
             extra_instructions=extra_instructions,
+            preset_prompt_suffix=str(preset_prompt_suffix or ""),
             timeout_seconds=timeout_seconds,
             make_active=make_active,
             output_mode=output_mode,
             skip_on_failure=skip_on_failure,
             retry_count=max(0, int(retry_count)),
+            exclude_captioned=exclude_captioned,
             reasoning_mode=reasoning_mode,
             reasoning_visibility=reasoning_visibility,
             image_ids=image_ids,

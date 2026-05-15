@@ -5,11 +5,10 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, UTC
 from pathlib import Path
 
-from sqlalchemy import select
-
 from backend.config import get_settings
 from backend.db.models import ProjectRecord
 from backend.db.session import create_sqlite_session_factory, initialize_database
+from backend.services.project_db_utils import load_project_record
 
 
 @dataclass
@@ -82,7 +81,9 @@ def _resolve_browser_path(raw_path: str | None) -> Path:
         except ValueError:
             continue
 
-    raise ValueError(f"Path is outside allowed browser roots: {candidate}")
+    # Graceful fallback keeps browser navigation usable when a remembered path
+    # points to a location outside the current allowed roots.
+    return get_settings().base_dir.resolve()
 
 
 def _read_recent_entries() -> list[RecentProjectEntry]:
@@ -165,9 +166,7 @@ def open_project(*, path: str) -> ProjectSummary:
 
     session_factory = create_sqlite_session_factory(project_path)
     with session_factory() as session:
-        record = session.scalar(select(ProjectRecord).limit(1))
-        if record is None:
-            raise ValueError(f"Project database has no project metadata: {project_path}")
+        record = load_project_record(session, project_path)
 
         summary = ProjectSummary(
             name=record.name,
@@ -201,9 +200,7 @@ def update_project_metadata(
 
     session_factory = create_sqlite_session_factory(project_path)
     with session_factory() as session:
-        record = session.scalar(select(ProjectRecord).limit(1))
-        if record is None:
-            raise ValueError(f"Project database has no project metadata: {project_path}")
+        record = load_project_record(session, project_path)
 
         record.name = name
         record.description = description

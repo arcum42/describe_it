@@ -1,6 +1,27 @@
 (function initDescribeItFeatureLlm(global) {
   const features = global.DescribeItFeatures || (global.DescribeItFeatures = {});
 
+  function normalizeLlmUxErrorMessage(error, fallbackMessage) {
+    const message = (error && typeof error.message === 'string' ? error.message.trim() : '') || fallbackMessage;
+    if (!message) {
+      return 'LLM request failed. Please try again.';
+    }
+
+    if (/timeout|timed out/i.test(message)) {
+      return 'LLM request timed out. Try again or increase the timeout setting.';
+    }
+
+    if (/network|failed to fetch|connection|unreachable|refused|offline/i.test(message)) {
+      return 'LLM backend is unreachable. Verify backend availability and try again.';
+    }
+
+    return message;
+  }
+
+  function setLlmUxError(app, error, fallbackMessage) {
+    app.errorMessage = normalizeLlmUxErrorMessage(error, fallbackMessage);
+  }
+
   function selectedLLMBackend(app) {
     return app.llm.backends.find((item) => item.name === app.llm.backend) || null;
   }
@@ -89,7 +110,7 @@
       app.syncNotesLLMSelection();
     } catch (error) {
       app.llm.backends = [];
-      app.errorMessage = error.message;
+      setLlmUxError(app, error, 'Failed to load LLM backends');
     }
   }
 
@@ -165,7 +186,7 @@
       }
       app.applyPresetPreference();
     } catch (error) {
-      app.errorMessage = error.message;
+      setLlmUxError(app, error, 'Failed to load presets');
     }
   }
 

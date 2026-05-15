@@ -13,6 +13,7 @@ from backend.services.caption_batch_service import (
     preview_batch_replace,
     undo_batch_replace,
 )
+from backend.services.caption_text_edit_service import caption_text_edit_service
 from backend.services.caption_service import (
     create_caption_candidate,
     delete_caption,
@@ -110,6 +111,21 @@ class TagBatchOperationRequest(BaseModel):
 
 class TagStatisticsRequest(BaseModel):
     project_path: str = Field(min_length=1)
+
+
+class StartDeleteEmptyCaptionsJobRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+
+
+class StartRemoveTagsJobRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    patterns: list[str] = Field(min_length=1)
+
+
+class StartAddCommonCaptionJobRequest(BaseModel):
+    project_path: str = Field(min_length=1)
+    caption_text: str = Field(min_length=1)
+    scope: str = Field(default="without_caption", pattern="^(all_images|without_caption)$")
 
 
 @router.post("/update-active")
@@ -278,5 +294,47 @@ def batch_tag_ops(request: TagBatchOperationRequest) -> dict[str, object]:
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/text-edit-jobs/delete-empty/start")
+def start_delete_empty_captions_job(request: StartDeleteEmptyCaptionsJobRequest) -> dict[str, object]:
+    try:
+        job = caption_text_edit_service.start_delete_empty_captions(project_path=request.project_path.strip())
+        return {"job": job}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/text-edit-jobs/remove-tags/start")
+def start_remove_tags_job(request: StartRemoveTagsJobRequest) -> dict[str, object]:
+    try:
+        job = caption_text_edit_service.start_remove_tags(
+            project_path=request.project_path.strip(),
+            patterns=request.patterns,
+        )
+        return {"job": job}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.post("/text-edit-jobs/add-common/start")
+def start_add_common_caption_job(request: StartAddCommonCaptionJobRequest) -> dict[str, object]:
+    try:
+        job = caption_text_edit_service.start_add_common_caption(
+            project_path=request.project_path.strip(),
+            caption_text=request.caption_text,
+            scope=request.scope,
+        )
+        return {"job": job}
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@router.get("/text-edit-jobs/{job_id}")
+def get_text_edit_job(job_id: str) -> dict[str, object]:
+    try:
+        return {"job": caption_text_edit_service.get_job(job_id=job_id.strip())}
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 

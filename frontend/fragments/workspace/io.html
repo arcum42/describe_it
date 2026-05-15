@@ -1,0 +1,151 @@
+            <section class="rounded-2xl border border-stone-800 bg-stone-900 p-6 shadow-2xl shadow-black/20">
+              <div class="mb-5 flex items-center justify-between">
+                <h2 class="text-lg font-medium">Data I/O</h2>
+                <span class="text-xs text-stone-500">Import from folders and export caption datasets</span>
+              </div>
+
+              <div class="space-y-6">
+                <div class="space-y-5 rounded-2xl border border-stone-800 bg-stone-950/60 p-6">
+                  <div class="mb-1 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-stone-200">Import Folder</h3>
+                    <span class="text-[11px] text-stone-500">image/text pairs</span>
+                  </div>
+                  <p class="text-xs text-stone-500">Bulk import images from a directory and optionally fill missing captions.</p>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Source Folder
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="importForm.source_folder" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set" />
+                      <button @click="openPathPicker('import_source_folder')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        <span>Browse</span>
+                        <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                      </button>
+                    </div>
+                  </label>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Default Caption (Optional)
+                    <textarea x-model="importForm.default_caption" rows="3" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Used only when an image has no sidecar .txt caption"></textarea>
+                  </label>
+                  <label class="field-checkbox">
+                    <input type="checkbox" x-model="importForm.replace_existing" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                    Replace existing images in project
+                  </label>
+                  <button @click="importFolder()" :disabled="isActive('importFolder') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2.5 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                    Import Folder
+                  </button>
+                  <div x-show="importProgress.active || importProgress.total > 0" class="space-y-2 rounded-xl border border-stone-800 bg-stone-900/60 px-3 py-3 text-xs text-stone-300">
+                    <div class="flex items-center justify-between">
+                      <span class="font-medium text-stone-200">Import Progress</span>
+                      <span x-text="importProgress.label || 'Preparing import...'"></span>
+                    </div>
+                    <div class="h-2 overflow-hidden rounded-full bg-stone-800">
+                      <div class="h-full bg-amber-400 transition-all" :style="`width: ${importProgress.percent}%`"></div>
+                    </div>
+                    <p x-show="importProgress.currentFilename" class="text-stone-400" x-text="`Current: ${importProgress.currentFilename}`"></p>
+                  </div>
+                </div>
+
+                <div class="space-y-5 rounded-2xl border border-stone-800 bg-stone-950/60 p-6">
+                  <div class="mb-1 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-stone-200">Imageboard</h3>
+                    <span class="text-[11px] text-stone-500">Derpibooru, e621, Danbooru...</span>
+                  </div>
+                  <p class="text-xs text-stone-500">Search remote boards and import selected images directly into this project.</p>
+                  <button @click="openImageboardImport()" :disabled="!currentProject"
+                          class="rounded-xl border border-amber-700/60 px-4 py-2.5 text-sm font-medium text-amber-300 transition hover:border-amber-400 hover:bg-amber-900/20 disabled:cursor-not-allowed disabled:opacity-60">
+                    Import from Imageboard
+                  </button>
+                </div>
+
+                <div class="space-y-5 rounded-2xl border border-stone-800 bg-stone-950/60 p-6">
+                  <div class="mb-1 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-stone-200">Single Image</h3>
+                    <span class="text-[11px] text-stone-500">optional sidecar .txt</span>
+                  </div>
+                  <p class="text-xs text-stone-500">Import one image quickly, using a matching sidecar caption file when available.</p>
+                  <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                    Image Path
+                    <div class="mt-2 flex items-center gap-2">
+                      <input x-model="importForm.source_image" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="practice_dataset/sample_set/img00.png" />
+                      <button @click="openPathPicker('import_source_image')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                        <span>Browse</span>
+                        <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                      </button>
+                    </div>
+                  </label>
+                  <button @click="importSingleImage()" :disabled="isActive('importSingleImage') || !currentProject" class="rounded-xl border border-stone-700 px-4 py-2.5 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                    Import Single Image
+                  </button>
+                </div>
+
+                <div class="space-y-5 rounded-2xl border border-stone-800 bg-stone-950/60 p-6">
+                  <button @click="togglePanel('ioExport', true)" class="mb-1 flex w-full items-center justify-between text-left">
+                    <span class="flex items-center gap-2">
+                      <span class="text-xs text-stone-500" x-text="panelTriangle('ioExport', true)"></span>
+                      <h3 class="text-sm font-medium text-stone-200">Export Dataset</h3>
+                    </span>
+                    <span class="text-[11px] text-stone-500">image + caption pairs</span>
+                  </button>
+                  <div x-show="isPanelOpen('ioExport', true)" class="space-y-4 pt-1">
+                <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  Output Folder
+                  <div class="mt-2 flex items-center gap-2">
+                    <input x-model="exportForm.output_folder" @input="clearExportPreview()" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="exports" />
+                    <button @click="openPathPicker('export_output_folder')" class="shrink-0 rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200" title="Browse for a folder">
+                      <span>Browse</span>
+                      <span class="ml-1 text-[9px] normal-case tracking-normal text-stone-500" x-text="browsePickerModeLabel()"></span>
+                    </button>
+                  </div>
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.create_new_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Export into a new subfolder
+                </label>
+                <label x-show="exportForm.create_new_folder" class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                  New Folder Name (Optional)
+                  <input x-model="exportForm.new_folder_name" @input="clearExportPreview()" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="my_export_run" />
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.included_only" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Export only included images
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.apply_trigger_word" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Apply project trigger word (if set)
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.include_metadata" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Write export metadata manifest (export_manifest.json)
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.include_project_notes" @change="clearExportPreview()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Export project notes as files (notes/ folder)
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.overwrite_existing" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Overwrite existing files in destination
+                </label>
+                <label class="field-checkbox">
+                  <input type="checkbox" x-model="exportForm.clean_output_folder" @change="clearExportPreview(); normalizeExportFormOptions()" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400" />
+                  Clean destination folder before export
+                </label>
+                <template x-if="exportPreview">
+                  <div class="space-y-2 rounded-xl border border-stone-800 bg-stone-900 px-3 py-3 text-xs text-stone-300">
+                    <p class="font-medium text-stone-100">Preview</p>
+                    <p>Destination: <span class="break-all" x-text="exportPreview.output_folder"></span></p>
+                    <p x-text="`${exportPreview.images_to_export} image(s) ready, ${exportPreview.excluded_images} excluded, ${exportPreview.blank_captions} blank caption(s).`"></p>
+                    <p x-show="exportPreview.would_overwrite" class="text-amber-300" x-text="`${exportPreview.existing_target_files} target file(s) already exist.`"></p>
+                    <p x-show="!exportPreview.trigger_word_will_apply && exportForm.apply_trigger_word" class="text-stone-400">Trigger word is enabled but not set on this project.</p>
+                  </div>
+                </template>
+                <div class="flex flex-wrap gap-3">
+                  <button @click="requestExportPreview()" :disabled="isSubmitting || !currentProject" class="rounded-xl border border-stone-700 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                    Preview Export
+                  </button>
+                  <button @click="exportProjectDataset()" :disabled="isActive('exportDataset') || !currentProject" class="rounded-xl bg-stone-200 px-4 py-2 text-sm font-medium text-stone-950 transition hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-60">
+                    Export Dataset
+                  </button>
+                </div>
+                  </div>
+                </div>
+              </div>
+            </section>

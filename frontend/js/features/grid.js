@@ -60,6 +60,66 @@
     }
   }
 
+  function filteredGridCards(app) {
+    let filtered = Array.isArray(app.gridCards) ? [...app.gridCards] : [];
+
+    if (app.gridFilter.searchText.trim()) {
+      const search = app.gridFilter.searchText.toLowerCase();
+      const mode = String(app.gridFilter.searchMode || 'filename');
+      filtered = filtered.filter((card) => {
+        const inFilename = card.label.toLowerCase().includes(search)
+          || (card.filename && card.filename.toLowerCase().includes(search));
+        const inCaption = (card.caption_search_text || card.active_caption_preview || '').toLowerCase().includes(search);
+        if (mode === 'caption') {
+          return inCaption;
+        }
+        if (mode === 'both') {
+          return inFilename || inCaption;
+        }
+        return inFilename;
+      });
+    }
+
+    if (app.gridFilter.inclusionStatus === 'included') {
+      filtered = filtered.filter((card) => card.included === true);
+    } else if (app.gridFilter.inclusionStatus === 'excluded') {
+      filtered = filtered.filter((card) => card.included === false);
+    }
+
+    if (app.gridFilter.captionStatus === 'with_captions') {
+      filtered = filtered.filter((card) => card.active_caption_preview && card.active_caption_preview.trim() !== '');
+    } else if (app.gridFilter.captionStatus === 'blank_captions') {
+      filtered = filtered.filter((card) => !card.active_caption_preview || card.active_caption_preview.trim() === '');
+    }
+
+    const sortBy = app.gridFilter.sortBy;
+    const sortOrder = app.gridFilter.sortOrder === 'desc' ? -1 : 1;
+
+    if (sortBy === 'name') {
+      filtered.sort((a, b) => sortOrder * a.label.localeCompare(b.label));
+    } else if (sortBy === 'status') {
+      const statusOrder = { excluded: 0, included: 1 };
+      filtered.sort((a, b) => {
+        const aStatus = statusOrder[a.status] ?? 2;
+        const bStatus = statusOrder[b.status] ?? 2;
+        return sortOrder * (aStatus - bStatus);
+      });
+    } else if (sortBy === 'caption_count') {
+      filtered.sort((a, b) => {
+        const aEmpty = !a.active_caption_preview || a.active_caption_preview.trim() === '' ? 0 : 1;
+        const bEmpty = !b.active_caption_preview || b.active_caption_preview.trim() === '' ? 0 : 1;
+        return sortOrder * (bEmpty - aEmpty);
+      });
+    }
+
+    if (app.gridFilter.pageSize && app.gridFilter.pageSize !== 'all') {
+      const pageSize = parseInt(app.gridFilter.pageSize, 10);
+      filtered = filtered.slice(0, pageSize);
+    }
+
+    return filtered;
+  }
+
   async function refreshGridAfterMutation(app, statusMessage) {
     const previousSelectedImageId = app.selectedImage?.id ?? null;
     await app.loadImages();
@@ -248,6 +308,7 @@
 
   features.grid = {
     onImagesLoaded,
+    filteredGridCards,
     isGridImageSelected,
     selectedGridCount,
     toggleGridSelectionMode,

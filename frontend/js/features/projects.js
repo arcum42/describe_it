@@ -1,6 +1,21 @@
 (function initDescribeItFeatureProjects(global) {
   const features = global.DescribeItFeatures || (global.DescribeItFeatures = {});
 
+  function createDefaultCaptionTextEditJobState() {
+    return {
+      id: '',
+      status: 'idle',
+      total: 0,
+      completed: 0,
+      affected: 0,
+      currentLabel: '',
+      lastError: '',
+      result: null,
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
   async function loadProjectSessionState(app, isStartup = false) {
     try {
       const response = await app.fetchWithRetry('/api/projects/session-state', {}, { attempts: isStartup ? 4 : 1, delayMs: 200 });
@@ -84,12 +99,37 @@
     app.projectSession.reopenLastProject = true;
     saveProjectSessionState(app);
     app.selectedImage = null;
+    app.editorView.subTab = 'caption';
+    app.resetEditorZoomToDefault();
     app.editorCaptionText = '';
     app.newCaptionText = '';
+    app.tagEditor.activeCaptionId = null;
+    app.tagEditor.tags = [];
+    app.tagEditor.newTagText = '';
+    app.tagEditor.editingTagIndex = null;
+    app.tagEditor.editingTagText = '';
+    app.tagEditor.dragTagIndex = null;
+    app.tagEditor.stats = {
+      total_tags: 0,
+      total_occurrences: 0,
+      top_tags: [],
+    };
+    app.tagEditor.batch.clearConfirm = false;
+    app.captionTextEdit.removeTagsPatternsText = '';
+    app.captionTextEdit.addCommonCaptionText = '';
+    app.captionTextEdit.addCommonScope = 'without_caption';
+    app.captionTextEdit.jobs.deleteEmpty = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.jobs.removeTags = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.jobs.addCommon = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.history.deleteEmpty = [];
+    app.captionTextEdit.history.removeTags = [];
+    app.captionTextEdit.history.addCommon = [];
     app.resetPresetForm();
     app.loadImageSummary();
     app.loadImages();
+    app.loadTagStatistics(true);
     app.loadLatestBatchJob();
+    app.batch.subTab = 'generate';
     app.loadProjectNotes();
   }
 
@@ -104,10 +144,23 @@
     app.currentProject = null;
     app.mainView = 'grid';
     app.selectedImage = null;
+    app.editorView.subTab = 'caption';
+    app.resetEditorZoomToDefault();
     app.images = [];
     app.gridCards = [];
     app.editorCaptionText = '';
     app.newCaptionText = '';
+    app.tagEditor.activeCaptionId = null;
+    app.tagEditor.tags = [];
+    app.tagEditor.newTagText = '';
+    app.tagEditor.editingTagIndex = null;
+    app.tagEditor.editingTagText = '';
+    app.tagEditor.dragTagIndex = null;
+    app.tagEditor.stats = {
+      total_tags: 0,
+      total_occurrences: 0,
+      top_tags: [],
+    };
     app.metadataForm = {
       path: '',
       name: '',
@@ -134,13 +187,36 @@
     }
     app.batch.jobId = '';
     app.batch.status = 'idle';
+    app.batch.subTab = 'generate';
     app.batch.history = [];
     app.batch.historyStatusFilter = 'all';
     app.batch.results = [];
+    app.captionTextEdit.jobs.deleteEmpty = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.jobs.removeTags = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.jobs.addCommon = createDefaultCaptionTextEditJobState();
+    app.captionTextEdit.history.deleteEmpty = [];
+    app.captionTextEdit.history.removeTags = [];
+    app.captionTextEdit.history.addCommon = [];
     app.notes.projectItems = [];
     app.notes.selectedNoteId = null;
     app.newNoteDraft();
     app.loadBrowser(app.projectSession.lastProjectDirectory || null);
+  }
+
+  function openSettings(app, tab = 'general') {
+    app.uiSection = 'settings';
+    app.settingsTab = tab;
+    app.errorMessage = '';
+    app.statusMessage = '';
+    app.checkRAGStatus();
+  }
+
+  function openPresetSettings(app) {
+    openSettings(app, 'presets');
+  }
+
+  function openWorkspace(app) {
+    app.uiSection = 'workspace';
   }
 
   async function loadRecentProjects(app, isStartup = false) {
@@ -217,6 +293,9 @@
     autoOpenLastProjectIfNeeded,
     applyProject,
     closeProject,
+    openSettings,
+    openPresetSettings,
+    openWorkspace,
     loadRecentProjects,
     createProject,
     openProject,

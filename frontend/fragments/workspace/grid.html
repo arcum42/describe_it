@@ -1,0 +1,264 @@
+              <template x-if="mainView === 'grid'">
+                <section class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+              <template x-if="currentProject">
+                <div class="space-y-4">
+                  <div class="grid gap-3 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-300 md:grid-cols-3">
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Images</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.count"></p>
+                    </div>
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">With Captions</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.non_empty_caption_count"></p>
+                    </div>
+                    <div>
+                      <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Blank Captions</p>
+                      <p class="mt-1 text-lg font-medium text-stone-100" x-text="imageSummary.blank_caption_count"></p>
+                    </div>
+                  </div>
+
+                  <!-- Grid Filter Controls -->
+                  <div class="space-y-3 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                  <button @click="togglePanel('gridSearch', true)" class="flex w-full items-center justify-between text-left">
+                    <span class="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-stone-500 hover:text-amber-200">
+                      <span x-text="panelTriangle('gridSearch', true)"></span>
+                      <span>Search and Filters</span>
+                    </span>
+                  </button>
+                  <div x-show="isPanelOpen('gridSearch', true)" class="space-y-0">
+                  <!-- Search -->
+                  <div>
+                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Search</label>
+                    <input 
+                      type="text" 
+                      x-model="gridFilter.searchText" 
+                      placeholder="Search by filename..." 
+                      class="w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" 
+                    />
+                  </div>
+
+                  <!-- Filters and Sort -->
+                  <div class="grid gap-3 md:grid-cols-3">
+                    <!-- Inclusion Status Filter -->
+                    <div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Status</label>
+                      <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900 p-1">
+                        <button 
+                          @click="gridFilter.inclusionStatus = 'all'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.inclusionStatus === 'all' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                        >
+                          All
+                        </button>
+                        <button 
+                          @click="gridFilter.inclusionStatus = 'included'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.inclusionStatus === 'included' ? 'bg-emerald-500 text-stone-950' : 'text-stone-300 hover:text-emerald-300'"
+                        >
+                          Included
+                        </button>
+                        <button 
+                          @click="gridFilter.inclusionStatus = 'excluded'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.inclusionStatus === 'excluded' ? 'bg-red-600 text-stone-950' : 'text-stone-300 hover:text-red-300'"
+                        >
+                          Excluded
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Caption Status Filter -->
+                    <div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Captions</label>
+                      <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900 p-1">
+                        <button 
+                          @click="gridFilter.captionStatus = 'all'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.captionStatus === 'all' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
+                        >
+                          All
+                        </button>
+                        <button 
+                          @click="gridFilter.captionStatus = 'with_captions'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.captionStatus === 'with_captions' ? 'bg-blue-500 text-stone-950' : 'text-stone-300 hover:text-blue-300'"
+                        >
+                          Full
+                        </button>
+                        <button 
+                          @click="gridFilter.captionStatus = 'blank_captions'" 
+                          class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
+                          :class="gridFilter.captionStatus === 'blank_captions' ? 'bg-yellow-600 text-stone-950' : 'text-stone-300 hover:text-yellow-300'"
+                        >
+                          Blank
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Sort -->
+                    <div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Sort</label>
+                      <div class="flex gap-1">
+                        <div class="select-wrapper flex-1">
+                          <select x-model="gridFilter.sortBy" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                            <option value="name">Name</option>
+                            <option value="status">Status</option>
+                            <option value="caption_count">Caption</option>
+                          </select>
+                        </div>
+                        <button 
+                          @click="gridFilter.sortOrder = gridFilter.sortOrder === 'asc' ? 'desc' : 'asc'" 
+                          class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 transition"
+                          :title="'Order: ' + gridFilter.sortOrder"
+                        >
+                          <span x-text="gridFilter.sortOrder === 'asc' ? '↑' : '↓'"></span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Page Size -->
+                    <div>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Show</label>
+                      <div class="select-wrapper">
+                        <select x-model="gridFilter.pageSize" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <option value="25">25 items</option>
+                          <option value="50">50 items</option>
+                          <option value="100">100 items</option>
+                          <option value="all">All items</option>
+                        </select>
+                      </div>
+                    </div>
+
+                  <!-- Reset Filters -->
+                  <div class="flex gap-2 items-center text-xs text-stone-500">
+                    <p class="flex-1">
+                      <template x-if="gridFilter.pageSize !== 'all'">
+                        <span x-text="`Showing ${filteredGridCards().length} images (limited to ${gridFilter.pageSize})`"></span>
+                      </template>
+                      <template x-if="gridFilter.pageSize === 'all'">
+                        <span x-text="`Showing ${filteredGridCards().length} of ${gridCards.length} images`"></span>
+                      </template>
+                    </p>
+                    <template x-if="gridFilter.searchText || gridFilter.inclusionStatus !== 'all' || gridFilter.captionStatus !== 'all'">
+                      <button 
+                        @click="gridFilter = {searchText: '', inclusionStatus: 'all', captionStatus: 'all', sortBy: 'name', sortOrder: 'asc', pageSize: 100}" 
+                        class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 transition"
+                      >
+                        Reset Filters
+                      </button>
+                    </template>
+                  </div>
+                  </div>
+                </div>
+
+                  <div class="flex flex-wrap items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3">
+                  <button
+                    @click="toggleGridSelectionMode()"
+                    class="rounded-lg border px-3 py-2 text-xs uppercase tracking-[0.18em] transition"
+                    :class="gridSelectionMode ? 'border-sky-500 text-sky-200' : 'border-stone-700 text-stone-200 hover:border-amber-400 hover:text-amber-200'"
+                  >
+                    <span x-text="gridSelectionMode ? 'Cancel Multi-Select' : 'Select Multiple'"></span>
+                  </button>
+                  <template x-if="gridSelectionMode">
+                    <span class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300" x-text="`${selectedGridCount()} selected`"></span>
+                  </template>
+                  <template x-if="gridSelectionMode">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button @click="selectFilteredGridImages()" :disabled="isSubmitting || filteredGridCards().length === 0" class="rounded-lg border border-sky-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-sky-200 transition hover:border-sky-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Select Filtered
+                      </button>
+                      <button @click="bulkIncludeSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-emerald-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-emerald-200 transition hover:border-emerald-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Include Selected
+                      </button>
+                      <button @click="bulkExcludeSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-red-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Exclude Selected
+                      </button>
+                      <button @click="bulkDuplicateSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Duplicate Selected
+                      </button>
+                      <button @click="bulkDeleteSelected()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-orange-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-orange-200 transition hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-60">
+                        Delete Selected
+                      </button>
+                      <button @click="clearGridSelection()" :disabled="isSubmitting || selectedGridCount() === 0" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        Unselect All
+                      </button>
+                    </div>
+                  </template>
+                  <div class="ml-auto flex items-center gap-2">
+                    <button @click="findDuplicateImages()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                      Find Duplicates
+                    </button>
+                  </div>
+                </div>
+                  <template x-if="duplicateCleanup.preview">
+                    <div class="space-y-3 rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">Duplicate Cleanup</p>
+                        <p class="mt-1 text-sm text-stone-300" x-text="`${duplicateCleanup.preview.duplicate_group_count} duplicate group(s), ${duplicateCleanup.preview.removable_image_count} removable image(s)`"></p>
+                      </div>
+                      <div class="flex flex-wrap items-center gap-2">
+                        <button @click="applyDuplicateCleanup('soft')" :disabled="isSubmitting || duplicateCleanup.preview.removable_image_count === 0" class="rounded-lg border border-orange-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-orange-200 transition hover:border-orange-400 disabled:cursor-not-allowed disabled:opacity-60">
+                          Apply Soft Cleanup
+                        </button>
+                        <button @click="applyDuplicateCleanup('hard')" :disabled="isSubmitting || duplicateCleanup.preview.removable_image_count === 0" class="rounded-lg border border-red-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60">
+                          Apply Hard Cleanup
+                        </button>
+                        <button @click="clearDuplicateCleanupPreview()" :disabled="isSubmitting" class="rounded-lg border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.18em] text-stone-300 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                    <p class="text-xs text-stone-500">Keeps the oldest image in each exact SHA-256 match group and merges unique captions from removed images onto the kept image.</p>
+                    <div class="space-y-2">
+                      <template x-for="group in duplicateCleanup.preview.groups" :key="group.hash">
+                        <div class="rounded-lg border border-stone-800 bg-stone-900/80 px-3 py-3 text-sm text-stone-300">
+                          <p class="text-xs uppercase tracking-[0.18em] text-stone-500" x-text="`Hash ${group.hash_prefix}`"></p>
+                          <p class="mt-1">
+                            Keep <span class="font-medium text-stone-100" x-text="group.kept_image.filename"></span>
+                            <span class="text-stone-500" x-text="`(${group.kept_image.caption_count} caption(s))`"></span>
+                          </p>
+                          <p class="mt-1 text-xs text-stone-400" x-text="`Remove ${group.duplicate_images.length} duplicate(s): ${group.duplicate_images.map((item) => item.filename).join(', ')}`"></p>
+                        </div>
+                      </template>
+                    </div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                <template x-for="card in filteredGridCards()" :key="card.id">
+                  <div class="group relative overflow-hidden rounded-2xl border border-stone-800 bg-stone-950 transition hover:-translate-y-0.5 hover:border-amber-400/50" :class="[selectedImage && selectedImage.id === card.id ? 'border-amber-400 ring-1 ring-amber-400/50' : '', gridSelectionMode && isGridImageSelected(card.id) ? 'ring-2 ring-sky-500/70' : '']">
+                    <template x-if="gridSelectionMode">
+                      <label class="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-stone-700 bg-stone-950/90 px-2 py-1 text-xs text-stone-200 shadow-lg shadow-black/30" @click.stop>
+                        <input type="checkbox" class="rounded border-stone-600 bg-stone-900 text-sky-400 focus:ring-sky-400" :checked="isGridImageSelected(card.id)" @change="toggleGridImageSelection(card.id)" />
+                        <span>Select</span>
+                      </label>
+                    </template>
+                    <button type="button" @click="selectImage(card.id, true)" class="block w-full text-left">
+                      <div class="aspect-square overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950">
+                        <img :src="imageSrc(card.id)" :alt="card.label" class="h-full w-full object-cover" loading="lazy" />
+                      </div>
+                      <div class="space-y-2 px-3 py-3">
+                        <div class="flex items-center justify-between gap-3 text-xs text-stone-400">
+                          <span class="min-w-0 flex-1 truncate" x-text="card.label"></span>
+                          <span class="shrink-0" x-text="card.status"></span>
+                        </div>
+                        <p class="text-sm text-stone-300" x-text="card.active_caption_preview || 'No active caption yet.'"></p>
+                      </div>
+                    </button>
+                  </div>
+                </template>
+                <template x-if="filteredGridCards().length === 0">
+                  <p class="col-span-full rounded-xl border border-stone-800 bg-stone-950/70 px-4 py-3 text-sm text-stone-400">
+                    <template x-if="gridCards.length === 0">
+                      <span>No images loaded yet. Import a folder to populate this grid.</span>
+                    </template>
+                    <template x-if="gridCards.length > 0">
+                      <span>No images match your filters. Try adjusting the search or filter criteria.</span>
+                    </template>
+                  </p>
+                </template>
+              </div>
+                </section>
+              </template>

@@ -129,12 +129,15 @@ class GenerateNoteTextRequest(BaseModel):
 
 class CreateBatchJobRequest(BaseModel):
     project_path: str = Field(min_length=1)
-    target: str = Field(default="included", pattern="^(included|uncaptioned|all)$")
+    target: str = Field(default="included", pattern="^(included|excluded|filtered|all|uncaptioned)$")
+    filtered_image_ids: list[int] | None = None
+    exclude_captioned: bool = False
     use_preset: bool = True
     preset_id: int | None = Field(default=None, ge=1)
     backend: str = ""
     model: str = ""
     extra_instructions: str = ""
+    preset_prompt_suffix: str = ""
     timeout_seconds: int = Field(default=120, ge=10, le=900)
     make_active: bool = True
     output_mode: str = Field(default="new_candidate", pattern="^(new_candidate|replace_active|append_active)$")
@@ -419,11 +422,14 @@ def create_batch_job(request: CreateBatchJobRequest) -> dict[str, object]:
         job = batch_service.create_job(
             project_path=request.project_path.strip(),
             target=request.target,
+            filtered_image_ids=request.filtered_image_ids,
+            exclude_captioned=request.exclude_captioned,
             use_preset=request.use_preset,
             preset_id=request.preset_id,
             backend=request.backend,
             model=request.model,
             extra_instructions=request.extra_instructions,
+            preset_prompt_suffix=request.preset_prompt_suffix,
             timeout_seconds=request.timeout_seconds,
             make_active=request.make_active,
             output_mode=request.output_mode,

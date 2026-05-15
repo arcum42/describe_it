@@ -141,6 +141,7 @@ def test_import_folder(tmp_path: Path) -> None:
     result = import_resp.json()["result"]
     assert result["imported_images"] == 3, f"Expected 3 imported, got {result['imported_images']}"
     assert result["captions_from_files"] == 3
+    assert result["default_captions_applied"] == 0
 
     images_resp = client.get("/api/images/list", params={"project_path": project_path})
     assert images_resp.status_code == 200, images_resp.text
@@ -150,6 +151,42 @@ def test_import_folder(tmp_path: Path) -> None:
     # Captions were loaded from the matching .txt files
     captions_present = [img["active_caption_preview"] for img in images]
     assert all(cap for cap in captions_present), f"Some images missing captions: {captions_present}"
+
+
+def test_import_folder_uses_default_caption_for_missing_sidecars(tmp_path: Path) -> None:
+    project_path = str(tmp_path / "smoke_import_default_caption.db")
+    source_folder = tmp_path / "images_default_caption"
+    source_folder.mkdir(parents=True, exist_ok=True)
+
+    (source_folder / "one.png").write_bytes(_make_png_bytes((10, 20, 30)))
+    (source_folder / "one.txt").write_text("caption from sidecar", encoding="utf-8")
+    (source_folder / "two.png").write_bytes(_make_png_bytes((40, 50, 60)))
+
+    client.post(
+        "/api/projects/create",
+        json={"path": project_path, "name": "Import Default Caption", "description": "", "trigger_word": "", "caption_mode": "description"},
+    )
+
+    import_resp = client.post(
+        "/api/projects/import-folder",
+        json={
+            "project_path": project_path,
+            "source_folder": str(source_folder),
+            "replace_existing": False,
+            "default_caption": "fallback caption",
+        },
+    )
+    assert import_resp.status_code == 200, import_resp.text
+    result = import_resp.json()["result"]
+    assert result["imported_images"] == 2
+    assert result["captions_from_files"] == 1
+    assert result["default_captions_applied"] == 1
+    assert result["blank_captions"] == 0
+
+    images_resp = client.get("/api/images/list", params={"project_path": project_path})
+    assert images_resp.status_code == 200, images_resp.text
+    previews = sorted((item["filename"], item["active_caption_preview"]) for item in images_resp.json()["images"])
+    assert previews == [("one.png", "caption from sidecar"), ("two.png", "fallback caption")]
 
 
 def test_import_single_image(tmp_path: Path) -> None:
