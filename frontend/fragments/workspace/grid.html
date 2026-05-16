@@ -32,7 +32,8 @@
                     <input 
                       type="text" 
                       x-model="gridFilter.searchText" 
-                      placeholder="Search by filename..." 
+                      @input="gridFilter.currentPage = 1"
+                      placeholder="Search by filename or caption..." 
                       class="w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" 
                     />
                   </div>
@@ -44,21 +45,21 @@
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Status</label>
                       <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900 p-1">
                         <button 
-                          @click="gridFilter.inclusionStatus = 'all'" 
+                          @click="gridFilter.inclusionStatus = 'all'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.inclusionStatus === 'all' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
                         >
                           All
                         </button>
                         <button 
-                          @click="gridFilter.inclusionStatus = 'included'" 
+                          @click="gridFilter.inclusionStatus = 'included'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.inclusionStatus === 'included' ? 'bg-emerald-500 text-stone-950' : 'text-stone-300 hover:text-emerald-300'"
                         >
                           Included
                         </button>
                         <button 
-                          @click="gridFilter.inclusionStatus = 'excluded'" 
+                          @click="gridFilter.inclusionStatus = 'excluded'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.inclusionStatus === 'excluded' ? 'bg-red-600 text-stone-950' : 'text-stone-300 hover:text-red-300'"
                         >
@@ -72,21 +73,21 @@
                       <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Captions</label>
                       <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900 p-1">
                         <button 
-                          @click="gridFilter.captionStatus = 'all'" 
+                          @click="gridFilter.captionStatus = 'all'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.captionStatus === 'all' ? 'bg-amber-400 text-stone-950' : 'text-stone-300 hover:text-amber-200'"
                         >
                           All
                         </button>
                         <button 
-                          @click="gridFilter.captionStatus = 'with_captions'" 
+                          @click="gridFilter.captionStatus = 'with_captions'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.captionStatus === 'with_captions' ? 'bg-blue-500 text-stone-950' : 'text-stone-300 hover:text-blue-300'"
                         >
                           Full
                         </button>
                         <button 
-                          @click="gridFilter.captionStatus = 'blank_captions'" 
+                          @click="gridFilter.captionStatus = 'blank_captions'; gridFilter.currentPage = 1" 
                           class="rounded-md px-2 py-1 text-xs font-medium uppercase tracking-[0.15em] transition"
                           :class="gridFilter.captionStatus === 'blank_captions' ? 'bg-yellow-600 text-stone-950' : 'text-stone-300 hover:text-yellow-300'"
                         >
@@ -118,13 +119,13 @@
 
                     <!-- Page Size -->
                     <div>
-                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Show</label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500 mb-2">Per Page</label>
                       <div class="select-wrapper">
-                        <select x-model="gridFilter.pageSize" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
-                          <option value="25">25 items</option>
-                          <option value="50">50 items</option>
-                          <option value="100">100 items</option>
-                          <option value="all">All items</option>
+                        <select x-model="gridFilter.pageSize" @change="gridFilter.currentPage = 1" class="w-full rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                          <option value="25">25</option>
+                          <option value="50">50</option>
+                          <option value="100">100</option>
+                          <option value="all">All</option>
                         </select>
                       </div>
                     </div>
@@ -133,15 +134,15 @@
                   <div class="flex gap-2 items-center text-xs text-stone-500">
                     <p class="flex-1">
                       <template x-if="gridFilter.pageSize !== 'all'">
-                        <span x-text="`Showing ${filteredGridCards().length} images (limited to ${gridFilter.pageSize})`"></span>
+                        <span x-text="`Page ${gridFilter.currentPage} of ${gridPageCount()} · ${filteredGridTotal()} image(s)`"></span>
                       </template>
                       <template x-if="gridFilter.pageSize === 'all'">
-                        <span x-text="`Showing ${filteredGridCards().length} of ${gridCards.length} images`"></span>
+                        <span x-text="`Showing ${filteredGridTotal()} of ${gridCards.length} images`"></span>
                       </template>
                     </p>
                     <template x-if="gridFilter.searchText || gridFilter.inclusionStatus !== 'all' || gridFilter.captionStatus !== 'all'">
                       <button 
-                        @click="gridFilter = {searchText: '', inclusionStatus: 'all', captionStatus: 'all', sortBy: 'name', sortOrder: 'asc', pageSize: 100}" 
+                        @click="gridFilter = {searchText: '', searchMode: 'both', inclusionStatus: 'all', captionStatus: 'all', sortBy: 'name', sortOrder: 'asc', pageSize: 50, currentPage: 1}" 
                         class="rounded-lg border border-stone-700 px-2 py-1 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 transition"
                       >
                         Reset Filters
@@ -235,6 +236,18 @@
                         <span>Select</span>
                       </label>
                     </template>
+                    <template x-if="!gridSelectionMode">
+                      <button
+                        type="button"
+                        @click.stop="toggleGridCardIncluded(card.id)"
+                        :disabled="isSubmitting"
+                        :title="card.included ? 'Click to exclude' : 'Click to include'"
+                        class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full border shadow-lg shadow-black/30 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60"
+                        :class="card.included ? 'border-emerald-600 bg-emerald-900/80 text-emerald-300 hover:bg-red-900/80 hover:border-red-600 hover:text-red-300' : 'border-red-700 bg-red-900/80 text-red-400 hover:bg-emerald-900/80 hover:border-emerald-600 hover:text-emerald-300'"
+                      >
+                        <span x-text="card.included ? '✓' : '✗'"></span>
+                      </button>
+                    </template>
                     <button type="button" @click="selectImage(card.id, true)" class="block w-full text-left">
                       <div class="aspect-square overflow-hidden bg-gradient-to-br from-stone-800 via-stone-900 to-stone-950">
                         <img :src="imageSrc(card.id)" :alt="card.label" class="h-full w-full object-cover" loading="lazy" />
@@ -260,5 +273,21 @@
                   </p>
                 </template>
               </div>
+              <!-- Pagination controls -->
+              <template x-if="gridFilter.pageSize !== 'all' && gridPageCount() > 1">
+                <div class="flex items-center justify-center gap-2 pt-2">
+                  <button
+                    @click="gridFilter.currentPage = Math.max(1, gridFilter.currentPage - 1)"
+                    :disabled="gridFilter.currentPage <= 1"
+                    class="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 transition disabled:cursor-not-allowed disabled:opacity-40"
+                  >← Prev</button>
+                  <span class="text-xs text-stone-400" x-text="`Page ${gridFilter.currentPage} of ${gridPageCount()}`"></span>
+                  <button
+                    @click="gridFilter.currentPage = Math.min(gridPageCount(), gridFilter.currentPage + 1)"
+                    :disabled="gridFilter.currentPage >= gridPageCount()"
+                    class="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 hover:border-amber-400 hover:text-amber-200 transition disabled:cursor-not-allowed disabled:opacity-40"
+                  >Next →</button>
+                </div>
+              </template>
                 </section>
               </template>

@@ -12,6 +12,8 @@ window.DescribeItFeatures.shortcuts = {
     'D': { action: 'duplicateImage', description: 'Duplicate selected image', context: 'editor' },
     'Delete': { action: 'deleteImage', description: 'Delete selected image', context: 'editor' },
     'Shift+D': { action: 'deleteImage', description: 'Delete selected image (alt)', context: 'editor' },
+    'ArrowLeft': { action: 'goToPreviousImage', description: 'Previous image', context: 'editor' },
+    'ArrowRight': { action: 'goToNextImage', description: 'Next image', context: 'editor' },
     'F': { action: 'flipImage', description: 'Apply flip to selected image', context: 'editor' },
     'R': { action: 'rotateImage', description: 'Apply rotation to selected image', context: 'editor' },
     'C': { action: 'cropImage', description: 'Apply crop to selected image', context: 'editor' },
@@ -41,9 +43,13 @@ window.DescribeItFeatures.shortcuts = {
    * @private
    */
   _handleKeyDown(e) {
-    // Ignore if user is typing in an input/textarea and it's not a global shortcut
     const target = e.target;
-    const isInputElement = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT';
+    const isTypingTarget = !!(target && (
+      target.closest('input, textarea, select')
+      || target.isContentEditable
+      || target.closest('[contenteditable="true"]')
+    ));
+    const inEditorContext = this.app?.mainView === 'editor' && !!this.app?.selectedImage;
     
     // Get the key combination string
     const key = this._getKeyString(e);
@@ -52,8 +58,13 @@ window.DescribeItFeatures.shortcuts = {
     const binding = this.bindings[key];
     if (!binding) return;
 
-    // Check if we should skip this (e.g., user typing in input)
-    if (isInputElement && binding.context !== 'global') {
+    // Do not fire non-global shortcuts while typing in a form field.
+    if (isTypingTarget && binding.context !== 'global') {
+      return;
+    }
+
+    // Editor shortcuts only run while editor view is active.
+    if (binding.context === 'editor' && !inEditorContext) {
       return;
     }
 

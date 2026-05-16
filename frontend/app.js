@@ -150,12 +150,13 @@ function createDefaultGridFilterState() {
 
   return {
     searchText: '',
-    searchMode: 'filename', // 'filename', 'caption', 'both'
+    searchMode: 'both', // 'filename', 'caption', 'both'
     inclusionStatus: 'all', // 'all', 'included', 'excluded'
     captionStatus: 'all', // 'all', 'with_captions', 'blank_captions'
     sortBy: 'name', // 'name', 'status', 'caption_count'
     sortOrder: 'asc', // 'asc', 'desc'
-    pageSize: 100, // Items per page: 25, 50, 100, all
+    pageSize: 50, // Items per page: 25, 50, 100, all
+    currentPage: 1, // Current page (1-based)
   };
 }
 
@@ -216,7 +217,7 @@ function describeItApp() {
     uiSection: 'workspace',
     settingsTab: 'general',
     images: [],
-    mainView: 'grid',
+    mainView: 'project',
     editorView: {
       subTab: 'caption', // caption, image, batch_tags
       zoomMode: 'fit', // fit, full, percent
@@ -860,6 +861,28 @@ function describeItApp() {
         return gridFeature.filteredGridCards(this);
       }
       return Array.isArray(this.gridCards) ? [...this.gridCards] : [];
+    },
+    gridPageCount() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.gridPageCount === 'function') {
+        return gridFeature.gridPageCount(this);
+      }
+      return 1;
+    },
+    filteredGridTotal() {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.filteredGridTotal === 'function') {
+        return gridFeature.filteredGridTotal(this);
+      }
+      return Array.isArray(this.gridCards) ? this.gridCards.length : 0;
+    },
+    async toggleGridCardIncluded(imageId) {
+      const gridFeature = window.DescribeItFeatures?.grid;
+      if (gridFeature && typeof gridFeature.toggleGridCardIncluded === 'function') {
+        await gridFeature.toggleGridCardIncluded(this, imageId);
+        return;
+      }
+      this.errorMessage = 'Grid module unavailable. Refresh and try again.';
     },
     editorNavigationImages() {
       const editorFeature = window.DescribeItFeatures?.editor;

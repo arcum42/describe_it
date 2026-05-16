@@ -60,12 +60,12 @@
     }
   }
 
-  function filteredGridCards(app) {
+  function applyGridFilters(app) {
     let filtered = Array.isArray(app.gridCards) ? [...app.gridCards] : [];
 
     if (app.gridFilter.searchText.trim()) {
       const search = app.gridFilter.searchText.toLowerCase();
-      const mode = String(app.gridFilter.searchMode || 'filename');
+      const mode = String(app.gridFilter.searchMode || 'both');
       filtered = filtered.filter((card) => {
         const inFilename = card.label.toLowerCase().includes(search)
           || (card.filename && card.filename.toLowerCase().includes(search));
@@ -112,12 +112,66 @@
       });
     }
 
+    return filtered;
+  }
+
+  function filteredGridCards(app) {
+    const filtered = applyGridFilters(app);
+
     if (app.gridFilter.pageSize && app.gridFilter.pageSize !== 'all') {
       const pageSize = parseInt(app.gridFilter.pageSize, 10);
-      filtered = filtered.slice(0, pageSize);
+      const currentPage = Math.max(1, parseInt(app.gridFilter.currentPage, 10) || 1);
+      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+      const safePage = Math.min(currentPage, totalPages);
+      const start = (safePage - 1) * pageSize;
+      return filtered.slice(start, start + pageSize);
     }
 
     return filtered;
+  }
+
+  function filteredGridTotal(app) {
+    return applyGridFilters(app).length;
+  }
+
+  function gridPageCount(app) {
+    if (!app.gridFilter.pageSize || app.gridFilter.pageSize === 'all') {
+      return 1;
+    }
+    const pageSize = parseInt(app.gridFilter.pageSize, 10);
+    if (!pageSize || pageSize <= 0) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(applyGridFilters(app).length / pageSize));
+  }
+
+  async function toggleGridCardIncluded(app, imageId) {
+    if (!app.currentProject?.path) {
+      return;
+    }
+    const card = (app.gridCards || []).find((c) => c.id === imageId);
+    if (!card) {
+      return;
+    }
+    await app.withSubmitting(async () => {
+      const response = await fetch(`/api/images/${imageId}/included`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_path: app.currentProject.path,
+          included: !card.included,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.detail ?? 'Failed to update include state');
+      }
+      // Update the card in-place so the icon reflects the new state without a full reload
+      card.included = payload.included;
+      app.statusMessage = payload.included ? 'Image included in export set.' : 'Image excluded from export set.';
+      await app.loadImages();
+      await app.loadImageSummary();
+    }, 'toggleGridCardIncluded');
   }
 
   async function refreshGridAfterMutation(app, statusMessage) {
@@ -309,6 +363,9 @@
   features.grid = {
     onImagesLoaded,
     filteredGridCards,
+    filteredGridTotal,
+    gridPageCount,
+    toggleGridCardIncluded,
     isGridImageSelected,
     selectedGridCount,
     toggleGridSelectionMode,

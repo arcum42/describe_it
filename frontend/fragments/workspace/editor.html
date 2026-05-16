@@ -57,6 +57,9 @@
                           &gt;|
                         </button>
                       </div>
+                      <button @click="mainView = 'grid'" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 transition" title="Return to Grid">
+                        &#8592; Grid
+                      </button>
                       <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
                         <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
                       </button>
