@@ -166,20 +166,71 @@
   }
 
   function editorNavigationImages(app) {
-    if (!app.editorNavigationUseFilteredGrid) {
-      return Array.isArray(app.images) ? app.images : [];
-    }
     if (!Array.isArray(app.images) || app.images.length === 0) {
       return [];
     }
+
     const imagesById = new Map(app.images.map((image) => [image.id, image]));
-    const filteredCards = app.filteredGridCards();
-    if (!Array.isArray(filteredCards) || filteredCards.length === 0) {
+    let cards = Array.isArray(app.gridCards) ? [...app.gridCards] : [];
+
+    if (cards.length === 0) {
       return app.images;
     }
-    const ordered = filteredCards
+
+    if (app.editorNavigationUseFilteredGrid) {
+      const search = (app.gridFilter?.searchText || '').trim().toLowerCase();
+      const mode = String(app.gridFilter?.searchMode || 'both');
+      if (search) {
+        cards = cards.filter((card) => {
+          const inFilename = (card.label || '').toLowerCase().includes(search)
+            || ((card.filename || '').toLowerCase().includes(search));
+          const inCaption = (card.caption_search_text || card.active_caption_preview || '').toLowerCase().includes(search);
+          if (mode === 'caption') {
+            return inCaption;
+          }
+          if (mode === 'both') {
+            return inFilename || inCaption;
+          }
+          return inFilename;
+        });
+      }
+
+      if (app.gridFilter?.inclusionStatus === 'included') {
+        cards = cards.filter((card) => card.included === true);
+      } else if (app.gridFilter?.inclusionStatus === 'excluded') {
+        cards = cards.filter((card) => card.included === false);
+      }
+
+      if (app.gridFilter?.captionStatus === 'with_captions') {
+        cards = cards.filter((card) => card.active_caption_preview && card.active_caption_preview.trim() !== '');
+      } else if (app.gridFilter?.captionStatus === 'blank_captions') {
+        cards = cards.filter((card) => !card.active_caption_preview || card.active_caption_preview.trim() === '');
+      }
+    }
+
+    const sortBy = app.gridFilter?.sortBy || 'name';
+    const sortOrder = app.gridFilter?.sortOrder === 'desc' ? -1 : 1;
+    if (sortBy === 'name') {
+      cards.sort((a, b) => sortOrder * String(a.label || '').localeCompare(String(b.label || '')));
+    } else if (sortBy === 'status') {
+      const statusOrder = { excluded: 0, included: 1 };
+      cards.sort((a, b) => {
+        const aStatus = statusOrder[a.status] ?? 2;
+        const bStatus = statusOrder[b.status] ?? 2;
+        return sortOrder * (aStatus - bStatus);
+      });
+    } else if (sortBy === 'caption_count') {
+      cards.sort((a, b) => {
+        const aHasCaption = a.active_caption_preview && a.active_caption_preview.trim() !== '' ? 1 : 0;
+        const bHasCaption = b.active_caption_preview && b.active_caption_preview.trim() !== '' ? 1 : 0;
+        return sortOrder * (bHasCaption - aHasCaption);
+      });
+    }
+
+    const ordered = cards
       .map((card) => imagesById.get(card.id))
       .filter(Boolean);
+
     return ordered.length > 0 ? ordered : app.images;
   }
 
@@ -197,7 +248,7 @@
 
   function hasNextImage(app) {
     const index = currentImageIndex(app);
-    return index >= 0 && index < (app.images.length - 1);
+    return index >= 0 && index < (editorNavigationImages(app).length - 1);
   }
 
   async function goToFirstImage(app) {

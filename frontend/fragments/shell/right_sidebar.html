@@ -1,0 +1,325 @@
+<aside class="rounded-2xl border border-stone-800 bg-stone-900 p-5 shadow-2xl shadow-black/20">
+  <div class="mb-3">
+    <button @click="togglePanel('sidebarRightBookmarks', true)" class="flex w-full items-center justify-between text-left">
+      <h2 class="text-lg font-medium">Bookmarks</h2>
+      <span class="text-xs text-stone-500" x-text="panelTriangle('sidebarRightBookmarks', true)"></span>
+    </button>
+    <p class="mt-1 text-xs text-stone-500">Quick jump list for bookmarked images.</p>
+  </div>
+
+  <div x-show="isPanelOpen('sidebarRightBookmarks', true)" class="space-y-2">
+    <template x-if="bookmarkedImages().length === 0">
+      <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-sm text-stone-500">No bookmarks yet.</p>
+    </template>
+
+    <template x-for="img in bookmarkedImages()" :key="img.id">
+      <button
+        @click="goToBookmarkedImage(img.id)"
+        class="flex w-full items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-left text-xs text-stone-200 transition hover:border-amber-400/60"
+      >
+        <img :src="imageSrc(img.id)" :alt="img.filename" class="h-8 w-8 rounded border border-stone-700 object-cover" />
+        <span class="truncate" x-text="img.filename"></span>
+      </button>
+    </template>
+  </div>
+
+  <div class="mt-6 border-t border-stone-800 pt-4">
+    <div class="mb-3">
+      <button @click="togglePanel('sidebarRightScratchpad', true)" class="flex w-full items-center justify-between text-left">
+        <h3 class="text-sm font-medium text-stone-100">Scratchpad</h3>
+        <span class="text-xs text-stone-500" x-text="panelTriangle('sidebarRightScratchpad', true)"></span>
+      </button>
+      <p class="mt-1 text-xs text-stone-500">Store reusable snippets and copy quickly.</p>
+    </div>
+    <div x-show="isPanelOpen('sidebarRightScratchpad', true)">
+    <div class="mb-3 flex items-center gap-2">
+      <input
+        x-model="scratchpad.input"
+        @keydown.enter.prevent="addScratchpadItem()"
+        class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none"
+        placeholder="Add quick text"
+      />
+      <button
+        @click="addScratchpadItem()"
+        class="rounded-xl border border-stone-700 px-3 py-2 text-[10px] uppercase tracking-[0.18em] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+      >
+        Add
+      </button>
+    </div>
+    <div class="space-y-2">
+      <template x-if="scratchpad.items.length === 0">
+        <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-sm text-stone-500">No scratchpad items yet.</p>
+      </template>
+      <template x-for="(item, index) in scratchpad.items" :key="`scratch-${index}`">
+        <div
+          draggable="true"
+          @dragstart="startScratchpadDrag(index)"
+          @dragover.prevent
+          @drop.prevent="dropScratchpadAt(index)"
+          @dragend="onScratchpadDragEnd()"
+          class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2"
+          :class="scratchpad.dragIndex === index ? 'border-amber-500 ring-1 ring-amber-500/40' : ''"
+        >
+          <p class="mb-2 break-words text-xs text-stone-200" x-text="item"></p>
+          <div class="flex items-center justify-end gap-2">
+            <button
+              @click="useScratchpadInCaption(item)"
+              class="rounded-lg border border-emerald-700 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-emerald-300 hover:border-emerald-500 hover:text-emerald-200"
+              title="Insert into active caption"
+            >
+              Use
+            </button>
+            <button
+              @click="copyScratchpadItem(item)"
+              class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+            >
+              Copy
+            </button>
+            <button
+              @click="removeScratchpadItem(index)"
+              class="rounded-lg border border-red-700 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-red-300 hover:border-red-500 hover:text-red-200"
+            >
+              Remove
+            </button>
+          </div>
+          <p class="mt-2 text-[10px] uppercase tracking-[0.16em] text-stone-500">Drag to reorder</p>
+        </div>
+      </template>
+    </div>
+    </div>
+  </div>
+
+  <div class="mt-6 border-t border-stone-800 pt-4">
+    <div class="mb-3 flex items-center justify-between gap-2">
+      <div class="min-w-0 flex-1">
+        <button @click="togglePanel('sidebarRightNotes', true)" class="flex w-full items-center justify-between text-left">
+          <h3 class="text-sm font-medium text-stone-100">Notes</h3>
+          <span class="text-xs text-stone-500" x-text="panelTriangle('sidebarRightNotes', true)"></span>
+        </button>
+        <p class="mt-1 text-xs text-stone-500">Jump to notes without leaving the sidebar.</p>
+      </div>
+      <button
+        @click="loadProjectNotes(); loadGlobalNotes();"
+        class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+      >
+        Refresh
+      </button>
+    </div>
+
+    <div x-show="isPanelOpen('sidebarRightNotes', true)" class="space-y-3">
+      <div>
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-[10px] uppercase tracking-[0.18em] text-stone-500">Project</p>
+          <span class="text-[10px] text-stone-500" x-text="`${notes.projectItems.length}`"></span>
+        </div>
+        <div class="space-y-2 max-h-36 overflow-auto pr-1">
+          <template x-if="!currentProject">
+            <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">Open a project to see project notes.</p>
+          </template>
+          <template x-if="currentProject && notes.projectItems.length === 0">
+            <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">No project notes.</p>
+          </template>
+          <template x-for="note in sidebarOrderedNotes('project').slice(0, 12)" :key="`p-${note.id}`">
+            <div class="flex items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 transition hover:border-amber-400/60">
+              <button
+                @click="openSidebarNote(note, 'project')"
+                class="min-w-0 flex-1 text-left text-xs text-stone-200"
+              >
+                <div class="flex items-center gap-2">
+                  <p class="truncate font-medium text-stone-100" x-text="note.title || 'Untitled'"></p>
+                  <span x-show="isSidebarNoteRecent(note, 'project')" class="rounded-full border border-stone-700 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-stone-400">recent</span>
+                </div>
+              </button>
+              <button
+                @click="toggleSidebarNotePinned(note, 'project')"
+                class="rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+                :title="isSidebarNotePinned(note, 'project') ? 'Unpin' : 'Pin'"
+                x-text="isSidebarNotePinned(note, 'project') ? '★' : '☆'"
+              ></button>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div>
+        <div class="mb-2 flex items-center justify-between">
+          <p class="text-[10px] uppercase tracking-[0.18em] text-stone-500">Global</p>
+          <span class="text-[10px] text-stone-500" x-text="`${notes.globalItems.length}`"></span>
+        </div>
+        <div class="space-y-2 max-h-36 overflow-auto pr-1">
+          <template x-if="notes.globalItems.length === 0">
+            <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">No global notes.</p>
+          </template>
+          <template x-for="note in sidebarOrderedNotes('global').slice(0, 12)" :key="`g-${note.id}`">
+            <div class="flex items-center gap-2 rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 transition hover:border-amber-400/60">
+              <button
+                @click="openSidebarNote(note, 'global')"
+                class="min-w-0 flex-1 text-left text-xs text-stone-200"
+              >
+                <div class="flex items-center gap-2">
+                  <p class="truncate font-medium text-stone-100" x-text="note.title || 'Untitled'"></p>
+                  <span x-show="isSidebarNoteRecent(note, 'global')" class="rounded-full border border-stone-700 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.14em] text-stone-400">recent</span>
+                </div>
+              </button>
+              <button
+                @click="toggleSidebarNotePinned(note, 'global')"
+                class="rounded-md border border-stone-700 px-1.5 py-0.5 text-[10px] text-stone-300 hover:border-amber-400 hover:text-amber-200"
+                :title="isSidebarNotePinned(note, 'global') ? 'Unpin' : 'Pin'"
+                x-text="isSidebarNotePinned(note, 'global') ? '★' : '☆'"
+              ></button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 border-t border-stone-800 pt-4">
+    <div class="mb-3">
+      <button @click="togglePanel('sidebarRightQuickChat', false)" class="flex w-full items-center justify-between text-left">
+        <h3 class="text-sm font-medium text-stone-100">Quick LLM Chat</h3>
+        <span class="text-xs text-stone-500" x-text="panelTriangle('sidebarRightQuickChat', false)"></span>
+      </button>
+      <p class="mt-1 text-xs text-stone-500">Ask a quick question and optionally save the response as a note.</p>
+    </div>
+
+    <div x-show="isPanelOpen('sidebarRightQuickChat', false)">
+
+    <div class="grid gap-2 md:grid-cols-2">
+      <label class="block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+        Provider
+        <div class="mt-1 select-wrapper">
+          <select x-model="quickChat.backend" @change="onQuickChatBackendChanged()" class="w-full rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+            <template x-for="backend in quickChatBackends()" :key="`quick-chat-backend-${backend.name}`">
+              <option :value="backend.name" x-text="backend.name"></option>
+            </template>
+          </select>
+        </div>
+      </label>
+      <label class="block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+        Model
+        <div class="mt-1 select-wrapper">
+          <select x-model="quickChat.model" class="w-full rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+            <template x-for="modelInfo in quickChatModels()" :key="`quick-chat-model-${modelInfo.name}`">
+              <option :value="modelInfo.name" x-text="modelOptionLabel(modelInfo)"></option>
+            </template>
+          </select>
+        </div>
+      </label>
+    </div>
+
+    <label class="mt-2 field-checkbox">
+      <input type="checkbox" x-model="quickChat.includeSelectedImage" :disabled="!selectedImage" class="rounded border-stone-700 bg-stone-900 text-amber-400 focus:ring-amber-400 disabled:opacity-60" />
+      Include selected image from Editor
+    </label>
+
+    <label class="mt-3 block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+      Prompt
+      <textarea x-model="quickChat.prompt" class="mt-1 min-h-24 w-full rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Type your quick prompt"></textarea>
+    </label>
+
+    <div class="mt-3 flex items-center gap-2">
+      <button @click="generateQuickChatResponse()" :disabled="isActive('quickChatGenerate')" class="rounded-xl bg-amber-400 px-3 py-2 text-xs font-medium text-stone-950 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60">
+        Generate
+      </button>
+      <span class="text-[10px] text-stone-500" x-show="quickChat.includeSelectedImage && selectedImage" x-text="`Image: ${selectedImage.filename}`"></span>
+    </div>
+
+    <label class="mt-3 block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+      Response
+      <textarea x-model="quickChat.response" readonly class="mt-1 min-h-24 w-full rounded-xl border border-stone-800 bg-stone-950/40 px-3 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Response will appear here"></textarea>
+    </label>
+
+    <div class="mt-3">
+      <div class="mb-2 flex items-center justify-between">
+        <p class="text-[10px] uppercase tracking-[0.18em] text-stone-500">Recent Chats</p>
+        <span class="text-[10px] text-stone-500" x-text="`${quickChat.history.length}/5`"></span>
+      </div>
+      <div class="space-y-2 max-h-40 overflow-auto pr-1">
+        <template x-if="quickChat.history.length === 0">
+          <p class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2 text-xs text-stone-500">No quick chat history yet.</p>
+        </template>
+        <template x-for="entry in quickChat.history" :key="entry.id || entry.createdAt">
+          <div class="rounded-xl border border-stone-800 bg-stone-950/60 px-3 py-2">
+            <p class="truncate text-xs font-medium text-stone-100" x-text="entry.prompt || '(empty prompt)'"></p>
+            <p class="mt-1 text-[10px] text-stone-500" x-text="`${entry.backend || '?'} / ${entry.model || '?'}${entry.includeSelectedImage ? ' • image' : ''}`"></p>
+            <div class="mt-2 flex items-center justify-end">
+              <button @click="useQuickChatHistoryEntry(entry)" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.16em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+                Reuse
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="mt-3 flex flex-col gap-2">
+      <button @click="openQuickChatSaveDialog()" :disabled="isActive('quickChatSaveNote') || !quickChat.response.trim()" class="w-full rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.16em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+        Save Response As Note
+      </button>
+      <button
+        x-show="uiSection === 'workspace' && mainView === 'editor' && !!selectedImage"
+        @click="useScratchpadInCaption(quickChat.response)"
+        :disabled="!quickChat.response.trim()"
+        class="w-full rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.16em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
+        title="Append response to the active caption in the editor"
+      >
+        Insert Into Active Caption
+      </button>
+    </div>
+
+    <div
+      x-show="quickChat.saveDialogOpen"
+      x-cloak
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      @keydown.escape.window="closeQuickChatSaveDialog()"
+      @click.self="closeQuickChatSaveDialog()"
+    >
+      <div class="w-full max-w-lg rounded-2xl border border-stone-700 bg-stone-900 p-4 shadow-2xl">
+        <div class="mb-3 flex items-center justify-between">
+          <h3 class="text-sm font-semibold uppercase tracking-[0.16em] text-stone-100">Save Response As Note</h3>
+          <button @click="closeQuickChatSaveDialog()" class="rounded-lg border border-stone-700 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-stone-300 hover:border-amber-400 hover:text-amber-200">
+            Close
+          </button>
+        </div>
+
+        <div class="grid gap-2 md:grid-cols-2">
+          <label class="block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+            Note Scope
+            <div class="mt-1 select-wrapper">
+              <select x-model="quickChat.noteScope" class="w-full rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none">
+                <option value="project">Project</option>
+                <option value="global">Global</option>
+              </select>
+            </div>
+          </label>
+          <label class="block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+            Note Tags (optional)
+            <input x-model="quickChat.noteTags" class="mt-1 w-full rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="chat,llm" />
+          </label>
+        </div>
+
+        <label class="mt-2 block text-[10px] uppercase tracking-[0.18em] text-stone-500">
+          Note Title (optional)
+          <input
+            x-ref="quickChatNoteTitle"
+            x-model="quickChat.noteTitle"
+            @keydown.enter.prevent="if (!isActive('quickChatSaveNote') && quickChat.response.trim()) saveQuickChatResponseAsNote()"
+            class="mt-1 w-full rounded-xl border border-stone-800 bg-stone-950/60 px-2 py-2 text-xs text-stone-200 focus:border-amber-400 focus:outline-none"
+            placeholder="Auto-derived from prompt if blank"
+          />
+        </label>
+
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button @click="closeQuickChatSaveDialog()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.16em] text-stone-300 transition hover:border-stone-500 hover:text-stone-100">
+            Cancel
+          </button>
+          <button @click="saveQuickChatResponseAsNote()" :disabled="isActive('quickChatSaveNote') || !quickChat.response.trim()" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.16em] text-stone-200 transition hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+    </div>
+  </div>
+</aside>

@@ -5,6 +5,17 @@
             <h1 class="text-2xl font-semibold text-stone-50">Dataset Captioning Workbench</h1>
           </div>
           <div class="flex items-center gap-3 text-sm text-stone-400">
+            <div class="inline-flex rounded-lg border border-stone-700 bg-stone-900/60 p-0.5 text-xs">
+              <template x-for="mode in ['dark','light','system']" :key="mode">
+                <button
+                  @click="setColorMode(mode)"
+                  :class="colorMode === mode ? 'bg-stone-700 text-stone-100' : 'text-stone-400 hover:text-stone-200'"
+                  class="rounded-md px-2 py-1 capitalize transition"
+                  :title="{ dark: 'Dark mode', light: 'Light mode', system: 'Use OS preference' }[mode]"
+                  x-text="{ dark: '🌙', light: '☀️', system: '⚙' }[mode] + ' ' + mode.charAt(0).toUpperCase() + mode.slice(1)"
+                ></button>
+              </template>
+            </div>
             <div>
               <span>Backend:</span>
               <span class="ml-2 rounded-full border border-stone-700 px-3 py-1" x-text="healthLabel"></span>

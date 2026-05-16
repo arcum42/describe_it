@@ -29,7 +29,7 @@
                         />
                       </label>
                     </div>
-                    <div class="max-h-[72vh] overflow-auto rounded-xl border border-stone-800 bg-black/20 p-2">
+                    <div class="image-viewer-container max-h-[72vh] overflow-auto rounded-xl border border-stone-800 bg-black/20 p-2">
                       <img :src="imageSrc(selectedImage.id)" :alt="selectedImage.filename" :class="editorImageClasses()" :style="editorImageStyle()" />
                     </div>
                   </div>
@@ -57,12 +57,20 @@
                           &gt;|
                         </button>
                       </div>
+                      <span class="text-xs text-stone-400" x-text="`(${currentImageIndex() >= 0 ? currentImageIndex() + 1 : 0}/${editorNavigationImages().length})`"></span>
                       <button @click="mainView = 'grid'" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 transition" title="Return to Grid">
                         &#8592; Grid
                       </button>
                       <button @click="toggleIncluded()" :disabled="isSubmitting" class="rounded-xl border border-stone-700 px-3 py-2 text-xs uppercase tracking-[0.2em] text-stone-200 hover:border-amber-400 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-60" :class="selectedImage.included ? 'border-emerald-700 text-emerald-300' : 'border-red-700 text-red-300'">
                         <span x-text="selectedImage.included ? 'Included' : 'Excluded'"></span>
                       </button>
+                        <!-- Bookmark button -->
+                        <button @click="toggleBookmarkCurrentImage()" :disabled="!selectedImage" class="rounded-xl border px-3 py-2 text-xl transition"
+                          :class="isCurrentImageBookmarked() ? 'border-amber-400 text-amber-200 bg-amber-400/10' : 'border-stone-700 text-stone-300 hover:border-amber-400 hover:text-amber-200'"
+                          title="Bookmark/Unbookmark">
+                          <span x-show="!isCurrentImageBookmarked()">&#9734;</span>
+                          <span x-show="isCurrentImageBookmarked()">&#9733;</span>
+                        </button>
                     </div>
                   </div>
                   <div class="sticky top-2 z-20 inline-flex self-start rounded-xl border border-stone-800 bg-stone-950/95 p-1 backdrop-blur">

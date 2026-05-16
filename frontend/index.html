@@ -32,9 +32,10 @@
     <div x-data="describeItApp()" x-init="init()" class="min-h-screen">
       <div data-fragment="shell/app_header"></div>
 
-      <main class="mx-auto grid max-w-7xl gap-6 px-6 py-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+      <main class="mx-auto grid w-full max-w-[1800px] gap-6 px-3 py-6 md:px-4 lg:grid-cols-[280px_minmax(0,1fr)_280px]">
         <div data-fragment="shell/sidebar"></div>
         <div data-fragment="shell/content_host"></div>
+        <div data-fragment="shell/right_sidebar"></div>
       </main>
 
       <div data-fragment="shell/modal_host"></div>

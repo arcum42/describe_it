@@ -216,7 +216,492 @@ function describeItApp() {
     },
     uiSection: 'workspace',
     settingsTab: 'general',
+    colorMode: 'dark',
     images: [],
+    bookmarkedImageIds: [],
+    isCurrentImageBookmarked() {
+      return this.selectedImage && this.bookmarkedImageIds.includes(this.selectedImage.id);
+    },
+    toggleBookmarkCurrentImage() {
+      if (!this.selectedImage) return;
+      const id = this.selectedImage.id;
+      if (this.bookmarkedImageIds.includes(id)) {
+        this.bookmarkedImageIds = this.bookmarkedImageIds.filter((x) => x !== id);
+      } else {
+        this.bookmarkedImageIds = [...this.bookmarkedImageIds, id];
+      }
+      this.saveBookmarks();
+    },
+    saveBookmarks() {
+      try {
+        localStorage.setItem('describeIt.bookmarkedImageIds', JSON.stringify(this.bookmarkedImageIds));
+      } catch (e) {}
+    },
+    loadBookmarks() {
+      try {
+        const data = localStorage.getItem('describeIt.bookmarkedImageIds');
+        if (data) {
+          this.bookmarkedImageIds = JSON.parse(data);
+        }
+      } catch (e) {}
+    },
+    loadColorMode() {
+      try {
+        const saved = localStorage.getItem('describeIt.colorMode');
+        if (saved && ['dark', 'light', 'system'].includes(saved)) {
+          this.colorMode = saved;
+        }
+      } catch (e) {}
+      this.applyColorMode(this.colorMode);
+    },
+    applyColorMode(mode) {
+      document.documentElement.setAttribute('data-theme', mode);
+    },
+    setColorMode(mode) {
+      this.colorMode = mode;
+      this.applyColorMode(mode);
+      try { localStorage.setItem('describeIt.colorMode', mode); } catch (e) {}
+    },
+    cycleColorMode() {
+      const modes = ['dark', 'light', 'system'];
+      const next = modes[(modes.indexOf(this.colorMode) + 1) % modes.length];
+      this.setColorMode(next);
+    },
+    colorModeLabel() {
+      return { dark: '🌙 Dark', light: '☀️ Light', system: '⚙ System' }[this.colorMode] || 'Dark';
+    },
+    goToBookmarkedImage(imageId) {
+      if (!imageId) return;
+      this.selectImage(imageId, true);
+    },
+    bookmarkedImages() {
+      // Returns image objects for all bookmarks, in bookmark order
+      const byId = new Map((this.images || []).map(img => [img.id, img]));
+      return this.bookmarkedImageIds.map(id => byId.get(id)).filter(Boolean);
+    },
+    scratchpad: {
+      input: '',
+      items: [],
+      dragIndex: null,
+    },
+    sidebarNotes: {
+      pinnedProjectIds: [],
+      pinnedGlobalIds: [],
+      recentProjectIds: [],
+      recentGlobalIds: [],
+    },
+    quickChat: {
+      backend: '',
+      model: '',
+      includeSelectedImage: false,
+      prompt: '',
+      response: '',
+      noteScope: 'project',
+      noteTitle: '',
+      noteTags: '',
+      saveDialogOpen: false,
+      history: [],
+    },
+    loadQuickChatHistory() {
+      try {
+        const data = localStorage.getItem('describeIt.quickChatHistory');
+        if (!data) {
+          return;
+        }
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          this.quickChat.history = parsed
+            .filter((entry) => entry && typeof entry === 'object')
+            .slice(0, 5);
+        }
+      } catch (e) {}
+    },
+    saveQuickChatHistory() {
+      try {
+        localStorage.setItem('describeIt.quickChatHistory', JSON.stringify(this.quickChat.history.slice(0, 5)));
+      } catch (e) {}
+    },
+    addQuickChatHistoryEntry(entry) {
+      if (!entry || typeof entry !== 'object') {
+        return;
+      }
+      this.quickChat.history = [entry, ...this.quickChat.history].slice(0, 5);
+      this.saveQuickChatHistory();
+    },
+    useQuickChatHistoryEntry(entry) {
+      if (!entry || typeof entry !== 'object') {
+        return;
+      }
+      this.quickChat.backend = entry.backend || this.quickChat.backend;
+      this.quickChat.model = entry.model || this.quickChat.model;
+      this.quickChat.includeSelectedImage = entry.includeSelectedImage === true;
+      this.quickChat.prompt = entry.prompt || '';
+      this.quickChat.response = entry.response || '';
+      this.syncQuickChatSelection();
+    },
+    loadScratchpad() {
+      try {
+        const data = localStorage.getItem('describeIt.scratchpadItems');
+        if (!data) {
+          return;
+        }
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) {
+          this.scratchpad.items = parsed
+            .map((item) => String(item || '').trim())
+            .filter((item) => item.length > 0);
+        }
+      } catch (e) {}
+    },
+    saveScratchpad() {
+      try {
+        localStorage.setItem('describeIt.scratchpadItems', JSON.stringify(this.scratchpad.items));
+      } catch (e) {}
+    },
+    addScratchpadItem() {
+      const text = String(this.scratchpad.input || '').trim();
+      if (!text) {
+        return;
+      }
+      this.scratchpad.items = [text, ...this.scratchpad.items];
+      this.scratchpad.input = '';
+      this.saveScratchpad();
+    },
+    removeScratchpadItem(index) {
+      if (!Number.isInteger(index) || index < 0 || index >= this.scratchpad.items.length) {
+        return;
+      }
+      this.scratchpad.items = this.scratchpad.items.filter((_, i) => i !== index);
+      this.saveScratchpad();
+    },
+    startScratchpadDrag(index) {
+      if (!Number.isInteger(index) || index < 0 || index >= this.scratchpad.items.length) {
+        return;
+      }
+      this.scratchpad.dragIndex = index;
+    },
+    onScratchpadDragEnd() {
+      this.scratchpad.dragIndex = null;
+    },
+    dropScratchpadAt(targetIndex) {
+      const sourceIndex = this.scratchpad.dragIndex;
+      if (!Number.isInteger(sourceIndex)) {
+        return;
+      }
+      if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= this.scratchpad.items.length) {
+        this.scratchpad.dragIndex = null;
+        return;
+      }
+      if (sourceIndex === targetIndex) {
+        this.scratchpad.dragIndex = null;
+        return;
+      }
+
+      const next = [...this.scratchpad.items];
+      const [moved] = next.splice(sourceIndex, 1);
+      next.splice(targetIndex, 0, moved);
+      this.scratchpad.items = next;
+      this.scratchpad.dragIndex = null;
+      this.saveScratchpad();
+    },
+    async copyScratchpadItem(text) {
+      const value = String(text || '');
+      if (!value) {
+        return;
+      }
+      try {
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+          await navigator.clipboard.writeText(value);
+          this.statusMessage = 'Copied scratchpad text.';
+          return;
+        }
+      } catch (e) {}
+
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        this.statusMessage = 'Copied scratchpad text.';
+      } catch (e) {
+        this.errorMessage = 'Could not copy to clipboard.';
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    },
+    useScratchpadInCaption(text) {
+      const value = String(text || '').trim();
+      if (!value) {
+        return;
+      }
+      if (!this.selectedImage) {
+        this.errorMessage = 'Select an image in Editor first.';
+        return;
+      }
+
+      this.uiSection = 'workspace';
+      this.mainView = 'editor';
+      this.editorView.subTab = 'caption';
+
+      const current = String(this.editorCaptionText || '');
+      if (!current.trim()) {
+        this.editorCaptionText = value;
+      } else if (current.endsWith(' ') || current.endsWith('\n')) {
+        this.editorCaptionText = `${current}${value}`;
+      } else {
+        this.editorCaptionText = `${current}\n${value}`;
+      }
+      this.statusMessage = 'Inserted scratchpad text into active caption.';
+    },
+    loadSidebarNotesPrefs() {
+      try {
+        const data = localStorage.getItem('describeIt.sidebarNotesPrefs');
+        if (!data) {
+          return;
+        }
+        const parsed = JSON.parse(data);
+        this.sidebarNotes = {
+          pinnedProjectIds: Array.isArray(parsed?.pinnedProjectIds) ? parsed.pinnedProjectIds : [],
+          pinnedGlobalIds: Array.isArray(parsed?.pinnedGlobalIds) ? parsed.pinnedGlobalIds : [],
+          recentProjectIds: Array.isArray(parsed?.recentProjectIds) ? parsed.recentProjectIds : [],
+          recentGlobalIds: Array.isArray(parsed?.recentGlobalIds) ? parsed.recentGlobalIds : [],
+        };
+      } catch (e) {}
+    },
+    saveSidebarNotesPrefs() {
+      try {
+        localStorage.setItem('describeIt.sidebarNotesPrefs', JSON.stringify(this.sidebarNotes));
+      } catch (e) {}
+    },
+    isSidebarNotePinned(note, scope = 'project') {
+      if (!note?.id) {
+        return false;
+      }
+      const ids = scope === 'global' ? this.sidebarNotes.pinnedGlobalIds : this.sidebarNotes.pinnedProjectIds;
+      return ids.includes(note.id);
+    },
+    isSidebarNoteRecent(note, scope = 'project') {
+      if (!note?.id) {
+        return false;
+      }
+      const ids = scope === 'global' ? this.sidebarNotes.recentGlobalIds : this.sidebarNotes.recentProjectIds;
+      return ids.includes(note.id);
+    },
+    toggleSidebarNotePinned(note, scope = 'project') {
+      if (!note?.id) {
+        return;
+      }
+      const key = scope === 'global' ? 'pinnedGlobalIds' : 'pinnedProjectIds';
+      const ids = Array.isArray(this.sidebarNotes[key]) ? [...this.sidebarNotes[key]] : [];
+      if (ids.includes(note.id)) {
+        this.sidebarNotes[key] = ids.filter((id) => id !== note.id);
+      } else {
+        this.sidebarNotes[key] = [note.id, ...ids];
+      }
+      this.saveSidebarNotesPrefs();
+    },
+    markSidebarNoteUsed(note, scope = 'project') {
+      if (!note?.id) {
+        return;
+      }
+      const key = scope === 'global' ? 'recentGlobalIds' : 'recentProjectIds';
+      const ids = Array.isArray(this.sidebarNotes[key]) ? this.sidebarNotes[key].filter((id) => id !== note.id) : [];
+      this.sidebarNotes[key] = [note.id, ...ids].slice(0, 100);
+      this.saveSidebarNotesPrefs();
+    },
+    sidebarOrderedNotes(scope = 'project') {
+      const items = scope === 'global' ? (this.notes.globalItems || []) : (this.notes.projectItems || []);
+      const pinnedIds = scope === 'global' ? this.sidebarNotes.pinnedGlobalIds : this.sidebarNotes.pinnedProjectIds;
+      const recentIds = scope === 'global' ? this.sidebarNotes.recentGlobalIds : this.sidebarNotes.recentProjectIds;
+      const recentRank = new Map(recentIds.map((id, index) => [id, index]));
+
+      return [...items].sort((a, b) => {
+        const aPinned = pinnedIds.includes(a.id) ? 0 : 1;
+        const bPinned = pinnedIds.includes(b.id) ? 0 : 1;
+        if (aPinned !== bPinned) {
+          return aPinned - bPinned;
+        }
+
+        const aRecent = recentRank.has(a.id) ? recentRank.get(a.id) : null;
+        const bRecent = recentRank.has(b.id) ? recentRank.get(b.id) : null;
+        if (aRecent !== null && bRecent !== null && aRecent !== bRecent) {
+          return aRecent - bRecent;
+        }
+        if (aRecent !== null && bRecent === null) {
+          return -1;
+        }
+        if (aRecent === null && bRecent !== null) {
+          return 1;
+        }
+
+        const aTitle = String(a.title || '').toLowerCase();
+        const bTitle = String(b.title || '').toLowerCase();
+        return aTitle.localeCompare(bTitle);
+      });
+    },
+    quickChatBackends() {
+      return (this.llm.backends || []).filter((item) => item.available);
+    },
+    quickChatModels() {
+      if (!this.quickChat.backend) {
+        return [];
+      }
+      return this.availableModelsForBackend(this.quickChat.backend);
+    },
+    syncQuickChatSelection() {
+      const backends = this.quickChatBackends();
+      if (!backends.length) {
+        this.quickChat.backend = '';
+        this.quickChat.model = '';
+        return;
+      }
+
+      if (!this.quickChat.backend || !backends.some((item) => item.name === this.quickChat.backend)) {
+        this.quickChat.backend = this.llm.backend && backends.some((item) => item.name === this.llm.backend)
+          ? this.llm.backend
+          : backends[0].name;
+      }
+
+      const models = this.quickChatModels();
+      if (!models.some((item) => item.name === this.quickChat.model)) {
+        this.quickChat.model = this.llm.model && models.some((item) => item.name === this.llm.model)
+          ? this.llm.model
+          : (models[0]?.name || '');
+      }
+    },
+    onQuickChatBackendChanged() {
+      const models = this.quickChatModels();
+      this.quickChat.model = models[0]?.name || '';
+    },
+    async generateQuickChatResponse() {
+      this.syncQuickChatSelection();
+      if (!this.quickChat.backend || !this.quickChat.model) {
+        this.errorMessage = 'Select an available provider and model first.';
+        return;
+      }
+      if (!String(this.quickChat.prompt || '').trim()) {
+        this.errorMessage = 'Enter a prompt for Quick LLM Chat.';
+        return;
+      }
+      if (this.quickChat.includeSelectedImage && !this.selectedImage?.id) {
+        this.errorMessage = 'Select an image in Editor before enabling image context.';
+        return;
+      }
+
+      await this.withSubmitting(async () => {
+        const response = await fetch('/api/llm/generate-note-text', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            backend: this.quickChat.backend,
+            model: this.quickChat.model,
+            prompt: this.quickChat.prompt,
+            project_path: this.currentProject?.path || null,
+            image_id: this.quickChat.includeSelectedImage ? this.selectedImage?.id ?? null : null,
+            timeout_seconds: this.settings.llmTimeoutSeconds,
+            tools_enabled: [],
+            context_urls: [],
+            context_files: [],
+            include_project_notes: false,
+            include_global_notes: false,
+            reasoning_mode: 'off',
+            reasoning_visibility: 'hidden',
+          }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Quick LLM chat request failed'));
+        }
+        this.quickChat.response = payload.text || '';
+        this.addQuickChatHistoryEntry({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          createdAt: new Date().toISOString(),
+          backend: this.quickChat.backend,
+          model: this.quickChat.model,
+          includeSelectedImage: this.quickChat.includeSelectedImage === true,
+          prompt: this.quickChat.prompt,
+          response: this.quickChat.response,
+        });
+        this.statusMessage = `Quick LLM response generated with ${payload.backend || this.quickChat.backend}/${payload.model || this.quickChat.model}.`;
+      }, 'quickChatGenerate');
+    },
+    openQuickChatSaveDialog() {
+      const content = String(this.quickChat.response || '').trim();
+      if (!content) {
+        this.errorMessage = 'Generate a response before saving it as a note.';
+        return;
+      }
+      this.quickChat.saveDialogOpen = true;
+      this.$nextTick(() => {
+        if (this.$refs.quickChatNoteTitle && typeof this.$refs.quickChatNoteTitle.focus === 'function') {
+          this.$refs.quickChatNoteTitle.focus();
+        }
+      });
+    },
+    closeQuickChatSaveDialog() {
+      this.quickChat.saveDialogOpen = false;
+    },
+    async saveQuickChatResponseAsNote() {
+      const content = String(this.quickChat.response || '').trim();
+      if (!content) {
+        this.errorMessage = 'Generate a response before saving it as a note.';
+        return;
+      }
+      const scope = this.quickChat.noteScope === 'global' ? 'global' : 'project';
+      if (scope === 'project' && !this.currentProject?.path) {
+        this.errorMessage = 'Open a project or switch note scope to global.';
+        return;
+      }
+
+      const fallbackTitle = String(this.quickChat.prompt || '').trim().replace(/\s+/g, ' ').slice(0, 72);
+      const title = String(this.quickChat.noteTitle || '').trim() || (fallbackTitle ? (fallbackTitle.length >= 72 ? `${fallbackTitle}...` : fallbackTitle) : 'Quick LLM Chat');
+      const tags = String(this.quickChat.noteTags || '').trim();
+
+      await this.withSubmitting(async () => {
+        const endpoint = scope === 'global' ? '/api/global-notes/create' : '/api/notes/create';
+        const body = {
+          title,
+          content,
+          format: 'markdown',
+          tags,
+        };
+        if (scope === 'project') {
+          body.project_path = this.currentProject.path;
+        }
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(this.formatApiError(payload, 'Failed to save quick chat response as note'));
+        }
+
+        if (scope === 'global') {
+          await this.loadGlobalNotes();
+        } else {
+          await this.loadProjectNotes();
+        }
+        this.quickChat.saveDialogOpen = false;
+        this.statusMessage = 'Quick chat response saved as note.';
+      }, 'quickChatSaveNote');
+    },
+    openSidebarNote(note, scope = 'project') {
+      if (!note) {
+        return;
+      }
+      this.markSidebarNoteUsed(note, scope);
+      this.uiSection = 'workspace';
+      this.mainView = 'notes';
+      this.notes.scope = scope === 'global' ? 'global' : 'project';
+      this.selectNote(note);
+    },
     mainView: 'project',
     editorView: {
       subTab: 'caption', // caption, image, batch_tags
@@ -399,6 +884,12 @@ function describeItApp() {
       expects: 'directory',
     },
     panelState: {
+      sidebarProject: true,
+      sidebarRecentProjects: true,
+      sidebarRightBookmarks: true,
+      sidebarRightScratchpad: true,
+      sidebarRightNotes: true,
+      sidebarRightQuickChat: false,
       gridSearch: true,
       editorLLM: false,
       editorImageTools: true,
@@ -429,6 +920,11 @@ function describeItApp() {
     },
     gridFilter: createDefaultGridFilterState(),
     async init() {
+      this.loadColorMode();
+      this.loadBookmarks();
+      this.loadScratchpad();
+      this.loadSidebarNotesPrefs();
+      this.loadQuickChatHistory();
       // Initialize keyboard shortcuts
       if (window.DescribeItFeatures && window.DescribeItFeatures.shortcuts) {
         window.DescribeItFeatures.shortcuts.init(this);
@@ -1068,6 +1564,9 @@ function describeItApp() {
       const notesFeature = window.DescribeItFeatures?.notes;
       if (notesFeature && typeof notesFeature.selectNote === 'function') {
         notesFeature.selectNote(this, note);
+        if (note?.id) {
+          this.markSidebarNoteUsed(note, this.notes.scope === 'global' ? 'global' : 'project');
+        }
         return;
       }
       this.errorMessage = 'Notes module unavailable. Refresh and try again.';
@@ -1534,9 +2033,11 @@ function describeItApp() {
       const llmFeature = window.DescribeItFeatures?.llm;
       if (llmFeature && typeof llmFeature.loadLLMBackends === 'function') {
         await llmFeature.loadLLMBackends(this, isStartup);
+        this.syncQuickChatSelection();
         return;
       }
       this.llm.backends = [];
+      this.syncQuickChatSelection();
       this.errorMessage = 'LLM module unavailable. Refresh and try again.';
     },
     onLLMBackendChanged() {
@@ -2269,9 +2770,10 @@ function describeItApp() {
           form.apiKey = '';
           form.username = '';
         }
-        return;
+        return success;
       }
       this.errorMessage = 'Imageboard settings module unavailable.';
+      return false;
     },
     async deleteImageboardCredential(boardId) {
       const feature = window.DescribeItFeatures?.imageboardSettings;

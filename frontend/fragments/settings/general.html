@@ -45,71 +45,77 @@
                   </div>
                 </div>
 
-                <!-- Ollama -->
-                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">Ollama</p>
-                  <div class="space-y-3">
-                    <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Base URL
-                      <div class="mt-2 flex items-center gap-2">
-                        <input x-model="settings.ollamaBaseUrl" @input="connectionTest.ollama = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
-                        <button
-                          @click="testConnection('ollama')"
-                          :disabled="connectionTest.ollamaTesting"
-                          class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
-                          x-text="connectionTest.ollamaTesting ? 'Testing…' : 'Test'"
-                        ></button>
+                <div class="grid gap-3 md:grid-cols-2">
+                  <!-- Ollama -->
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                    <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">Ollama</p>
+                    <div class="space-y-3">
+                      <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Base URL
+                        <div class="mt-2 flex items-center gap-2">
+                          <input x-model="settings.ollamaBaseUrl" @input="connectionTest.ollama = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:11434" />
+                          <button
+                            @click="testConnection('ollama')"
+                            :disabled="connectionTest.ollamaTesting"
+                            class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                            aria-label="Test Ollama connection"
+                            title="Test Ollama connection"
+                            x-text="connectionTest.ollamaTesting ? 'Testing…' : 'Test'"
+                          ></button>
+                        </div>
+                        <template x-if="connectionTest.ollama !== null">
+                          <p
+                            class="mt-1 text-[11px]"
+                            :class="connectionTest.ollama.ok ? 'text-emerald-400' : 'text-red-400'"
+                            x-text="connectionTest.ollama.message"
+                          ></p>
+                        </template>
                       </div>
-                      <template x-if="connectionTest.ollama !== null">
-                        <p
-                          class="mt-1 text-[11px]"
-                          :class="connectionTest.ollama.ok ? 'text-emerald-400' : 'text-red-400'"
-                          x-text="connectionTest.ollama.message"
-                        ></p>
-                      </template>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Timeout Override (optional)
+                        <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Context Window Override (optional)
+                        <input type="number" min="256" max="262144" step="1" x-model="settings.ollamaNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses model default when blank" />
+                      </label>
                     </div>
-                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Timeout Override (optional)
-                      <input type="number" min="10" max="900" step="1" x-model="settings.ollamaTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
-                    </label>
-                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Context Window Override (optional)
-                      <input type="number" min="256" max="262144" step="1" x-model="settings.ollamaNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses model default when blank" />
-                    </label>
                   </div>
-                </div>
 
-                <!-- LM Studio -->
-                <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
-                  <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">LM Studio</p>
-                  <div class="space-y-3">
-                    <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Base URL
-                      <div class="mt-2 flex items-center gap-2">
-                        <input x-model="settings.lmstudioBaseUrl" @input="connectionTest.lmstudio = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
-                        <button
-                          @click="testConnection('lmstudio')"
-                          :disabled="connectionTest.lmstudioTesting"
-                          class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
-                          x-text="connectionTest.lmstudioTesting ? 'Testing…' : 'Test'"
-                        ></button>
+                  <!-- LM Studio -->
+                  <div class="rounded-2xl border border-stone-800 bg-stone-950/60 p-4">
+                    <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">LM Studio</p>
+                    <div class="space-y-3">
+                      <div class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Base URL
+                        <div class="mt-2 flex items-center gap-2">
+                          <input x-model="settings.lmstudioBaseUrl" @input="connectionTest.lmstudio = null" class="min-w-0 flex-1 rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="http://127.0.0.1:1234" />
+                          <button
+                            @click="testConnection('lmstudio')"
+                            :disabled="connectionTest.lmstudioTesting"
+                            class="shrink-0 rounded-lg border border-stone-700 px-2 py-2 text-[10px] uppercase tracking-[0.2em] text-stone-300 hover:border-amber-400 hover:text-amber-200 disabled:opacity-50"
+                            aria-label="Test LM Studio connection"
+                            title="Test LM Studio connection"
+                            x-text="connectionTest.lmstudioTesting ? 'Testing…' : 'Test'"
+                          ></button>
+                        </div>
+                        <template x-if="connectionTest.lmstudio !== null">
+                          <p
+                            class="mt-1 text-[11px]"
+                            :class="connectionTest.lmstudio.ok ? 'text-emerald-400' : 'text-red-400'"
+                            x-text="connectionTest.lmstudio.message"
+                          ></p>
+                        </template>
                       </div>
-                      <template x-if="connectionTest.lmstudio !== null">
-                        <p
-                          class="mt-1 text-[11px]"
-                          :class="connectionTest.lmstudio.ok ? 'text-emerald-400' : 'text-red-400'"
-                          x-text="connectionTest.lmstudio.message"
-                        ></p>
-                      </template>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Timeout Override (optional)
+                        <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
+                      </label>
+                      <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
+                        Context Window Override (optional)
+                        <input type="number" min="256" max="262144" step="1" x-model="settings.lmstudioNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Used when backend supports num_ctx" />
+                      </label>
                     </div>
-                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Timeout Override (optional)
-                      <input type="number" min="10" max="900" step="1" x-model="settings.lmstudioTimeoutSeconds" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Uses global timeout when blank" />
-                    </label>
-                    <label class="block text-xs uppercase tracking-[0.2em] text-stone-500">
-                      Context Window Override (optional)
-                      <input type="number" min="256" max="262144" step="1" x-model="settings.lmstudioNumCtx" class="mt-2 w-full rounded-xl border border-stone-800 bg-stone-900 px-3 py-2 text-sm text-stone-200 focus:border-amber-400 focus:outline-none" placeholder="Used when backend supports num_ctx" />
-                    </label>
                   </div>
                 </div>
 

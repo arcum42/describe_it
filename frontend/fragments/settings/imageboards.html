@@ -14,7 +14,7 @@
                 <template x-if="imageboards && imageboards.boards && imageboards.boards.length > 0">
                   <div class="space-y-3">
                     <template x-for="board in imageboards.boards" :key="board.board_id">
-                      <div class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
+                      <div x-data="{ editing: false }" class="rounded-xl border border-stone-800 bg-stone-950/70 p-4">
                         <div class="mb-3 flex items-center justify-between">
                           <div>
                             <p class="font-semibold text-stone-100" x-text="board.display_name"></p>
@@ -30,37 +30,38 @@
                           </template>
                         </div>
 
-                        <form @submit.prevent="saveImageboardCredential(board.board_id)" class="space-y-3">
-                          <div>
-                            <label class="block text-xs font-medium text-stone-400 mb-1">API Key</label>
-                            <input
-                              type="password"
-                              x-model="imageboards.forms[board.board_id].apiKey"
-                              placeholder="Enter API key"
-                              class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500 focus:outline-none"
-                            />
-                          </div>
-
-                          <template x-if="board.requires_username">
+                        <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key) && !editing">
+                          <div class="space-y-3">
                             <div>
-                              <label class="block text-xs font-medium text-stone-400 mb-1">Username</label>
+                              <label class="mb-1 block text-xs font-medium text-stone-400">API Key</label>
                               <input
                                 type="text"
-                                x-model="imageboards.forms[board.board_id].username"
-                                placeholder="Enter username"
-                                class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500 focus:outline-none"
+                                :value="imageboards.credentials.find(c => c.board_id === board.board_id)?.masked_key || '********'"
+                                disabled
+                                class="w-full cursor-not-allowed rounded-lg border border-stone-800 bg-stone-900/70 px-3 py-2 text-sm text-stone-400"
                               />
                             </div>
-                          </template>
 
-                          <div class="flex gap-2">
-                            <button
-                              type="submit"
-                              class="flex-1 rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300"
-                            >
-                              Save
-                            </button>
-                            <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key)">
+                            <template x-if="board.requires_username">
+                              <div>
+                                <label class="mb-1 block text-xs font-medium text-stone-400">Username</label>
+                                <input
+                                  type="text"
+                                  :value="imageboards.credentials.find(c => c.board_id === board.board_id)?.username || '(stored)'"
+                                  disabled
+                                  class="w-full cursor-not-allowed rounded-lg border border-stone-800 bg-stone-900/70 px-3 py-2 text-sm text-stone-400"
+                                />
+                              </div>
+                            </template>
+
+                            <div class="flex gap-2">
+                              <button
+                                type="button"
+                                @click="editing = true"
+                                class="flex-1 rounded-lg border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 transition hover:border-amber-400 hover:text-amber-200"
+                              >
+                                Update
+                              </button>
                               <button
                                 type="button"
                                 @click="deleteImageboardCredential(board.board_id)"
@@ -68,9 +69,53 @@
                               >
                                 Remove
                               </button>
-                            </template>
+                            </div>
                           </div>
-                        </form>
+                        </template>
+
+                        <template x-if="!imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key) || editing">
+                          <form @submit.prevent="saveImageboardCredential(board.board_id).then((ok) => { if (ok) editing = false; })" class="space-y-3">
+                            <div>
+                              <label class="mb-1 block text-xs font-medium text-stone-400">API Key</label>
+                              <input
+                                type="password"
+                                x-model="imageboards.forms[board.board_id].apiKey"
+                                :placeholder="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key) ? 'Enter new API key' : 'Enter API key'"
+                                class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500 focus:outline-none"
+                              />
+                            </div>
+
+                            <template x-if="board.requires_username">
+                              <div>
+                                <label class="mb-1 block text-xs font-medium text-stone-400">Username</label>
+                                <input
+                                  type="text"
+                                  x-model="imageboards.forms[board.board_id].username"
+                                  :placeholder="imageboards.credentials.find(c => c.board_id === board.board_id)?.username || 'Enter username'"
+                                  class="w-full rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-100 placeholder-stone-600 focus:border-amber-500 focus:outline-none"
+                                />
+                              </div>
+                            </template>
+
+                            <div class="flex gap-2">
+                              <button
+                                type="submit"
+                                class="flex-1 rounded-lg bg-amber-400 px-3 py-2 text-sm font-medium text-stone-950 transition hover:bg-amber-300"
+                              >
+                                Save
+                              </button>
+                              <template x-if="imageboards.credentials.find(c => c.board_id === board.board_id && c.has_key)">
+                                <button
+                                  type="button"
+                                  @click="editing = false"
+                                  class="flex-1 rounded-lg border border-stone-700 px-3 py-2 text-sm font-medium text-stone-200 transition hover:border-stone-500"
+                                >
+                                  Cancel
+                                </button>
+                              </template>
+                            </div>
+                          </form>
+                        </template>
                       </div>
                     </template>
                   </div>
