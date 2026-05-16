@@ -30,6 +30,24 @@ This project is a local-first dataset captioning tool for image training dataset
 - As `frontend/app.js` grows, split by feature area (for example project state, image editor, llm, batch, notes) into small modules.
 - Keep fetch/API utilities centralized and consistent in error handling.
 - Keep progressive enhancement mindset: core workflows should remain robust even if optional UI niceties fail.
+- Keep `frontend/app.js` primarily as orchestration/delegation glue; prefer feature modules in `frontend/js/features/*` for implementation logic.
+- Prefer fragment-based UI composition under `frontend/fragments/` for major sections instead of expanding large inline templates.
+- When adding new fragments, preserve Alpine boot ordering and keep fragment loading bounded/predictable.
+
+## UI/UX maintenance guidance
+
+- Favor collapsible sections for dense panels (especially sidebars and settings) to reduce scrolling and visual clutter.
+- Keep forms visually grouped by domain (for example LLM defaults, backend-specific settings, project behavior, debug) rather than one long flat form.
+- Use shared styling utilities (for example checkbox and select wrapper patterns) to keep controls consistent across views.
+- Prefer contextual dialogs for destructive or multi-field actions (save confirmations, credential updates) over expanding persistent inline clutter.
+- For stored secrets/credentials, show masked or read-only configured state by default; only show editable fields during explicit update flows.
+
+## Refactor and regression guidance
+
+- Prefer incremental refactors in small slices that preserve API and UI behavior.
+- After each meaningful slice, run focused validation (syntax checks + targeted pytest coverage) before continuing.
+- Add focused regression tests for delegate contracts and critical workflow behavior when modularizing code.
+- Avoid reintroducing duplicated helper logic when a shared utility/module already exists.
 
 ## Backend direction
 
@@ -57,6 +75,14 @@ This project is a local-first dataset captioning tool for image training dataset
 - Favor minimal end-to-end slices.
 - Add optional dependencies to `requirements-optional.txt` unless they are required for baseline app startup.
 - Preserve the existing folder layout unless there is a strong reason to change it.
+- Store planning and plan-style markdown documents in the repository root `planning/` folder.
 - Keep future CLI support in mind when writing backend services.
 - For behavior changes, add or update focused pytest coverage in `tests/` for API/service regressions.
 - Prefer safe file and DB operations; avoid destructive defaults for imports/exports/cleanup flows.
+
+## Documentation placement guidance
+
+- Keep end-user and project-entry documentation at repo root (for example `README.md` and `OVERVIEW.md`).
+- Store planning and implementation-tracking markdown docs in the root `planning/` folder.
+- Keep agent/developer workflow rules and conventions in `.github/instructions/`.
+- When adding new markdown docs, choose location based on intent (user-facing docs vs planning docs vs contributor instructions).
